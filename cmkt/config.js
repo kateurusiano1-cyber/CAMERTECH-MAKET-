@@ -1,5 +1,5 @@
 const CONFIG = {
-    SUPABASE_URL: "https://czrxdtacgbaccdsctle.supabase.co",
+    SUPABASE_URL: "https://czrxdtacgbaccdsctlxv.supabase.co",
     SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6cnhkdGFjZ2JhY2Nkc2N0bHh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MDcyNzEsImV4cCI6MjA5NzE4MzI3MX0.0pXS9iPbRqN9_7bqKogEZLgHlaLHcA-d1MuX-FTyXCU",
     BUCKET: "images",
     WA1: "237699781160",
