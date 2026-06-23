@@ -839,17 +839,25 @@ window.adminStep1 = () => {
 };
 
 window.adminStep2 = () => {
-    const code=document.getElementById('adm-code').value.trim();
-    const err=document.getElementById('adm-err');
-    if(!adminCodeTemp){err.textContent='❌ Code expiré. Recommencez.';return;}
-    if(code!==adminCodeTemp){err.textContent='❌ Code incorrect';return;}
-    isAdmin=true; currentAdmin=adminTemp;
+    const codeEl = document.getElementById('adm-code');
+    const err = document.getElementById('adm-err');
+    if (!codeEl) { console.error('Element adm-code introuvable'); return; }
+    const code = codeEl.value.trim();
+    if (!code) { err.textContent='❌ Entrez le code reçu'; return; }
+    if (!adminCodeTemp) { err.textContent='❌ Code expiré. Cliquez sur Retour et recommencez.'; return; }
+    if (code !== adminCodeTemp) { err.textContent='❌ Code incorrect'; return; }
+    isAdmin = true;
+    currentAdmin = adminTemp;
     afficherPanneauAdmin();
 };
 
 // ===== PANNEAU ADMIN (simplifié mais complet) =====
 async function afficherPanneauAdmin() {
-    const page=document.getElementById('admin-page');
+    let page = document.getElementById('admin-page');
+    if (!page) {
+        document.body.innerHTML = '<div id="admin-page" style="min-height:100vh;background:#f5f5f5"></div>';
+        page = document.getElementById('admin-page');
+    }
     page.style.display='block';
     page.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-family:Inter,sans-serif">Chargement du panneau...</div>';
 
