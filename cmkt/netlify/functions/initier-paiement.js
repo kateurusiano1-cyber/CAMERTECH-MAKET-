@@ -1,4 +1,3 @@
-// netlify/functions/initier-paiement.js
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -26,19 +25,21 @@ exports.handler = async (event) => {
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Clé Monetbil manquante' }) };
     }
 
-    // Utiliser le widget URL de Monetbil (plus fiable)
+    const url = `https://api.monetbil.com/widget/v2.1/${serviceKey}`;
+
     const params = new URLSearchParams({
-      service_key: serviceKey,
-      phonenumber: '237' + telephone,
       amount: Math.round(montant).toString(),
+      phone: '237' + telephone,
+      phone_lock: 'true',
+      locale: 'fr',
+      operator: operateur === 'mtn' ? 'CM_MTNMOBILEMONEY' : 'CM_ORANGEMONEY',
+      country: 'CM',
       currency: 'XAF',
       payment_ref: reference,
-      first_name: nom_client || 'Client',
-      country: 'CM',
-      operator: operateur === 'mtn' ? 'CM_MTN' : 'CM_ORANGE'
+      first_name: nom_client || 'Client'
     });
 
-    const response = await fetch('https://api.monetbil.com/payment/v1/request', {
+    const response = await fetch(url, {
       method: 'POST',
       body: params.toString(),
       headers: {
@@ -47,38 +48,30 @@ exports.handler = async (event) => {
       }
     });
 
-    // Lire la réponse comme texte d'abord
     const rawText = await response.text();
-    console.log('Monetbil raw response:', rawText.substring(0, 200));
+    console.log('Status:', response.status);
+    console.log('Response:', rawText.substring(0, 300));
 
     let result;
     try {
       result = JSON.parse(rawText);
     } catch(e) {
-      console.error('Monetbil HTML response:', rawText.substring(0, 500));
-      // Monetbil a renvoyé du HTML — essayer l'autre endpoint
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Réponse invalide de Monetbil', raw: rawText.substring(0, 100) }) };
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Réponse invalide: ' + rawText.substring(0, 100) }) };
     }
-
-    console.log('Monetbil result:', JSON.stringify(result));
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: result.status === 'success' || result.status === 1 || !!result.transaction_id,
-        transaction_id: result.transaction_id || result.transaction?.transaction_id || null,
+        transaction_id: result.transaction_id || null,
         message: result.message || null,
         status: result.status || null
       })
     };
 
   } catch (error) {
-    console.error('Erreur paiement:', error.message);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Erreur: ' + error.message })
-    };
+    console.error('Erreur:', error.message);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: error.message }) };
   }
 };
