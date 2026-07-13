@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAMERTECH MARKET — Achat en ligne de produits tech à Douala, Cameroun</title>
+    <meta name="description" content="CAMERTECH MARKET : boutique en ligne de produits tech (smartphones, accessoires, électronique) à Douala, Cameroun. Livraison rapide, paiement Mobile Money (MTN, Orange), retrait en agence dans tout Douala.">
+    <meta name="keywords" content="camertech market, achat tech Cameroun, boutique en ligne Douala, smartphone Douala, accessoires électroniques Cameroun, mobile money, livraison Douala">
+    <meta name="author" content="CAMERTECH MARKET">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://camertechmarket.com/">
+
+    <!-- Open Graph / réseaux sociaux -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="CAMERTECH MARKET">
+    <meta property="og:title" content="CAMERTECH MARKET — Achat en ligne de produits tech à Douala">
+    <meta property="og:description" content="Boutique en ligne de produits tech au Cameroun. Livraison à Douala et retrait en agence, paiement Mobile Money sécurisé.">
+    <meta property="og:image" content="https://camertechmarket.com/logo.png">
+    <meta property="og:url" content="https://camertechmarket.com/">
+    <meta property="og:locale" content="fr_FR">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="CAMERTECH MARKET — Achat en ligne de produits tech à Douala">
+    <meta name="twitter:description" content="Boutique en ligne de produits tech au Cameroun. Livraison à Douala et retrait en agence, paiement Mobile Money sécurisé.">
+    <meta name="twitter:image" content="https://camertechmarket.com/logo.png">
+
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+    <!-- Schema.org : identité de l'entreprise, lu par Google et les IA (AEO/GEO) -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "OnlineStore",
+        "name": "CAMERTECH MARKET",
+        "url": "https://camertechmarket.com/",
+        "logo": "https://camertechmarket.com/logo.png",
+        "image": "https://camertechmarket.com/logo.png",
+        "description": "Boutique en ligne de produits tech (smartphones, accessoires, électronique) livrant à Douala et proposant le retrait en agence dans tout le Cameroun.",
+        "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Douala",
+            "addressRegion": "Littoral",
+            "addressCountry": "CM"
+        },
+        "areaServed": {
+            "@type": "City",
+            "name": "Douala"
+        },
+        "telephone": "+237699781160",
+        "priceRange": "$$",
+        "paymentAccepted": "Mobile Money, MTN Mobile Money, Orange Money"
+    }
+    </script>
+</head>
+<body>
+
+<!-- SIDEBAR OVERLAY -->
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+<!-- SIDEBAR -->
+<aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+        <div style="display:flex;align-items:center;gap:10px">
+            <img src="logo.png" alt="Logo" class="sidebar-logo">
+            <span style="color:white;font-weight:700;font-size:0.9rem">CAMERTECH MARKET</span>
+        </div>
+        <button class="sidebar-close" id="sidebar-close">✕</button>
+    </div>
+    <nav class="sidebar-nav">
+        <a class="sidebar-link" id="sl-accueil">🏠 Accueil</a>
+        <a class="sidebar-link" id="sl-flash">⚡ Ventes Flash</a>
+        <a class="sidebar-link" id="sl-promo">🏷️ Promotions</a>
+        <a class="sidebar-link" id="sl-nouveautes">🆕 Nouveautés</a>
+        <a class="sidebar-link" id="sl-meilleures">⭐ Meilleures ventes</a>
+        <div class="sidebar-sep">Catégories</div>
+        <a class="sidebar-link" id="sl-tel">📱 Téléphonie</a>
+        <a class="sidebar-link" id="sl-acc">🎧 Accessoires</a>
+        <a class="sidebar-link" id="sl-elec">💻 Électronique</a>
+        <a class="sidebar-link" id="sl-res">📡 Réseau</a>
+        <a class="sidebar-link" id="sl-gam">🎮 Gaming</a>
+        <div class="sidebar-sep">Services</div>
+        <a class="sidebar-link" id="sl-suivi">🚚 Suivi de commande</a>
+        <a class="sidebar-link" id="sl-loc">🏪 Localisation boutique</a>
+        <a class="sidebar-link" href="https://wa.me/237699781160" target="_blank">📞 Nous contacter</a>
+        <div class="sidebar-sep">Préférences</div>
+        <div class="sidebar-pref">
+            <span>🌍 Langue</span>
+            <div class="lang-switch">
+                <button class="lang-btn active" id="btn-fr">FR</button>
+                <button class="lang-btn" id="btn-en">EN</button>
+            </div>
+        </div>
+        <div class="sidebar-pref">
+            <span>🌙 Mode sombre</span>
+            <label class="toggle-switch">
+                <input type="checkbox" id="theme-toggle">
+                <span class="toggle-thumb"></span>
+            </label>
+        </div>
+        <div class="sidebar-pref" style="flex-direction:column;align-items:flex-start;gap:6px">
+            <span>📍 Ma zone</span>
+            <select id="sidebar-zone" class="small-select">
+                <option value="">Choisir...</option>
+                <optgroup label="Zones livrées">
+                    <option value="Akwa">Akwa</option>
+                    <option value="Bonamoussadi">Bonamoussadi</option>
+                    <option value="Ndokoti">Ndokoti</option>
+                    <option value="PK14">PK14</option>
+                    <option value="Makepe">Makepe</option>
+                    <option value="Bassa">Bassa</option>
+                    <option value="Logbaba">Logbaba</option>
+                    <option value="Deido">Deido</option>
+                    <option value="Bonaberi">Bonaberi</option>
+                </optgroup>
+                <optgroup label="Autres quartiers (retrait agence)">
+                    <option value="Bonanjo">Bonanjo</option>
+                    <option value="Bali">Bali</option>
+                    <option value="New-Bell">New-Bell</option>
+                    <option value="Bépanda">Bépanda</option>
+                    <option value="Ndogpassi">Ndogpassi</option>
+                    <option value="Ndogbong">Ndogbong</option>
+                    <option value="Cité SIC">Cité SIC</option>
+                    <option value="Kotto">Kotto</option>
+                    <option value="PK8">PK8</option>
+                    <option value="PK9">PK9</option>
+                    <option value="PK10">PK10</option>
+                    <option value="PK12">PK12</option>
+                    <option value="PK16">PK16</option>
+                    <option value="PK21">PK21</option>
+                    <option value="Logpom">Logpom</option>
+                    <option value="Yassa">Yassa</option>
+                    <option value="Village">Village</option>
+                    <option value="Bonapriso">Bonapriso</option>
+                    <option value="Japoma">Japoma</option>
+                    <option value="Nyalla">Nyalla</option>
+                    <option value="Grand Moulin">Grand Moulin</option>
+                    <option value="Youpwe">Youpwe</option>
+                    <option value="Bonendale">Bonendale</option>
+                    <option value="Zone Industrielle Bassa">Zone Industrielle Bassa</option>
+                    <option value="Bwana Kumbo">Bwana Kumbo</option>
+                    <option value="Denver">Denver</option>
+                    <option value="Congelcam">Congelcam</option>
+                    <option value="Cité des Palmiers">Cité des Palmiers</option>
+                    <option value="Ngodi Bakoko">Ngodi Bakoko</option>
+                    <option value="Bonaloka">Bonaloka</option>
+                    <option value="Madagascar">Madagascar</option>
+                    <option value="Bonamikengue">Bonamikengue</option>
+                    <option value="Soppo Priso">Soppo Priso</option>
+                    <option value="Makea">Makea</option>
+                </optgroup>
+                <option value="retrait">🏪 Retrait gratuit</option>
+            </select>
+        </div>
+        <div class="sidebar-pref" style="flex-direction:column;align-items:flex-start;gap:6px">
+            <span>💰 Prix max (FCFA)</span>
+            <input type="number" id="prix-max-filter" placeholder="ex: 50000" class="small-input">
+        </div>
+    </nav>
+</aside>
+
+<!-- BANNIÈRE DÉFILANTE -->
+<div id="banniere-top" class="banniere-top" style="display:none">
+    <div id="banniere-text" class="banniere-text"></div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+    <div class="header-main">
+        <div class="header-left">
+            <button class="hamburger" id="hamburger">☰</button>
+            <div class="logo-zone">
+                <img src="logo.png" alt="Logo" class="logo-img">
+                <div class="logo-text">
+                    <span class="logo-name"><span class="logo-c">CAMER</span><span class="logo-t">TECH</span></span>
+                    <span class="logo-sub">MARKET</span>
+                </div>
+            </div>
+        </div>
+        <div class="header-search">
+            <input type="text" id="search-bar" placeholder="🔎 Rechercher un produit..." class="search-input">
+        </div>
+        <div class="header-right">
+            <div id="user-zone" style="display:none;align-items:center;gap:8px">
+                <span id="user-nom" class="user-nom"></span>
+                <button class="btn-icon" id="btn-commandes" title="Mes commandes">📋</button>
+                <button class="btn-icon btn-logout" id="btn-logout" title="Déconnexion">⏻</button>
+            </div>
+            <button class="btn-connexion" id="btn-auth-show">👤 Connexion</button>
+            <button class="btn-panier" id="panier-btn" style="display:none">
+                🛒 <span class="panier-badge" id="panier-count">0</span>
+            </button>
+        </div>
+    </div>
+    <div class="cat-bar">
+        <button class="cat-pill active" data-cat="tous">Tous</button>
+        <button class="cat-pill" data-cat="Téléphonie">📱 Téléphonie</button>
+        <button class="cat-pill" data-cat="Accessoires">🎧 Accessoires</button>
+        <button class="cat-pill" data-cat="Électronique">💻 Électronique</button>
+        <button class="cat-pill" data-cat="Réseau">📡 Réseau</button>
+        <button class="cat-pill" data-cat="Gaming">🎮 Gaming</button>
+        <button class="cat-pill" data-cat="Autre">📦 Autre</button>
+    </div>
+</header>
+
+<main>
+    <!-- SLIDER -->
+    <div class="slider-wrap" id="slider-wrap">
+        <div class="slider-track" id="slider-track">
+            <div class="slide slide-default">
+                <div class="slide-inner">
+                    <div class="slide-tag">🔥 BIENVENUE</div>
+                    <h2>Les meilleurs produits<br><span>Tech au Cameroun</span></h2>
+                    <p>Livraison rapide à Douala • Qualité garantie</p>
+                    <button class="slide-btn" id="slide-btn-decouvrir">Découvrir →</button>
+                </div>
+            </div>
+        </div>
+        <button class="slider-arrow slider-prev" id="slider-prev">‹</button>
+        <button class="slider-arrow slider-next" id="slider-next">›</button>
+        <div class="slider-dots" id="slider-dots"></div>
+    </div>
+
+    <!-- TUILES -->
+    <div class="tuiles-grid">
+        <div class="tuile t1" data-cat="Téléphonie"><span class="ti">📱</span><span>Téléphonie</span></div>
+        <div class="tuile t2" data-cat="Accessoires"><span class="ti">🎧</span><span>Accessoires</span></div>
+        <div class="tuile t3" data-cat="Électronique"><span class="ti">💻</span><span>Électronique</span></div>
+        <div class="tuile t4" data-cat="Gaming"><span class="ti">🎮</span><span>Gaming</span></div>
+        <div class="tuile t5" data-cat="Réseau"><span class="ti">📡</span><span>Réseau</span></div>
+        <div class="tuile t-flash" data-action="flash"><span class="ti">⚡</span><span>Flash</span></div>
+    </div>
+
+    <!-- FLASH -->
+    <section id="flash-section" style="display:none" class="section">
+        <div class="section-hdr">
+            <h2>⚡ Ventes Flash</h2>
+            <span id="flash-timer" class="flash-badge"></span>
+        </div>
+        <div id="flash-grid" class="grid"></div>
+    </section>
+
+    <!-- PRODUITS -->
+    <section class="section" id="produits">
+        <div class="section-hdr">
+            <h2>🛒 Nos Produits</h2>
+            <span id="prod-count" class="count-tag"></span>
+        </div>
+        <div id="loader" class="loader">Chargement...</div>
+        <div id="product-grid" class="grid"></div>
+    </section>
+</main>
+
+<footer class="footer">
+    <div class="footer-inner">
+        <div style="display:flex;align-items:center;gap:12px">
+            <img src="logo.png" style="height:44px;width:44px;border-radius:50%">
+            <div><div style="font-weight:700">CAMERTECH MARKET</div><div style="font-size:0.8rem;opacity:0.6">Votre boutique tech à Douala</div></div>
+        </div>
+        <div class="footer-links">
+            <a href="https://wa.me/237699781160" target="_blank">📱 699 781 160</a>
+            <a href="https://wa.me/237653756167" target="_blank">📱 653 756 167</a>
+        </div>
+    </div>
+    <div class="footer-copy">© 2025 CAMERTECH MARKET — Douala, Cameroun</div>
+</footer>
+
+<!-- MODAL AUTH -->
+<div class="modal-overlay" id="auth-overlay" style="display:none">
+    <div class="modal modal-auth">
+        <button class="modal-x" id="auth-close">✕</button>
+        <div class="auth-tabs">
+            <button class="atab active" id="atab-login">Connexion</button>
+            <button class="atab" id="atab-reg">Inscription</button>
+        </div>
+        <div id="form-login">
+            <h3>👤 Connexion</h3>
+            <input type="tel" id="login-tel" placeholder="Numéro téléphone (9 chiffres)" maxlength="9">
+            <input type="password" id="login-mdp" placeholder="Mot de passe">
+            <button class="btn-green" id="btn-login">Se connecter</button>
+            <p class="form-err" id="login-err"></p>
+            <button type="button" id="btn-mdp-oublie" style="background:none;border:none;color:var(--green);font-size:0.85rem;margin-top:8px;cursor:pointer;text-decoration:underline">Mot de passe oublié ?</button>
+        </div>
+        <div id="form-reg" style="display:none">
+            <h3>📝 Créer un compte</h3>
+            <input type="text" id="reg-nom" placeholder="Nom complet *">
+            <input type="tel" id="reg-tel" placeholder="Téléphone (9 chiffres) *" maxlength="9">
+            <input type="email" id="reg-email" placeholder="Email (optionnel)">
+            <input type="password" id="reg-mdp" placeholder="Mot de passe *">
+            <input type="password" id="reg-mdp2" placeholder="Confirmer mot de passe *">
+            <button class="btn-green" id="btn-register">Créer mon compte</button>
+            <p class="form-err" id="reg-err"></p>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL MOT DE PASSE OUBLIE -->
+<div class="modal-overlay" id="reset-overlay" style="display:none">
+    <div class="modal modal-auth">
+        <button class="modal-x" id="reset-close">✕</button>
+        <div id="reset-step1">
+            <h3>🔑 Mot de passe oublié</h3>
+            <input type="tel" id="reset-tel" placeholder="Votre numéro de téléphone (9 chiffres)" maxlength="9">
+            <label style="font-size:0.85rem;color:var(--text3);margin:10px 0 6px;display:block">Recevoir le code par :</label>
+            <div class="pay-methods">
+                <button type="button" class="pay-method active" data-methode="whatsapp" id="reset-m-wa">📱 WhatsApp</button>
+                <button type="button" class="pay-method" data-methode="email" id="reset-m-email">📧 Email</button>
+                <button type="button" class="pay-method" data-methode="sms" id="reset-m-sms">💬 SMS</button>
+            </div>
+            <button class="btn-green" id="btn-reset-envoyer" style="margin-top:14px">Envoyer le code</button>
+            <p class="form-err" id="reset-err1"></p>
+        </div>
+        <div id="reset-step2" style="display:none">
+            <h3>🔑 Entrez le code reçu</h3>
+            <input type="text" id="reset-code" placeholder="Code à 6 chiffres" maxlength="6">
+            <input type="password" id="reset-mdp1" placeholder="Nouveau mot de passe">
+            <input type="password" id="reset-mdp2" placeholder="Confirmer le nouveau mot de passe">
+            <button class="btn-green" id="btn-reset-confirmer">Réinitialiser le mot de passe</button>
+            <p class="form-err" id="reset-err2"></p>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PRODUIT -->
+<div class="modal-overlay" id="prod-overlay" style="display:none">
+    <div class="modal modal-prod">
+        <button class="modal-x" id="prod-close">✕</button>
+        <div class="prod-img-wrap">
+            <img id="prod-img" src="" alt="" style="display:none">
+            <div id="prod-flash-tag" class="prod-flash-tag" style="display:none">⚡ FLASH</div>
+        </div>
+        <div class="prod-body">
+            <span id="prod-cat-tag" class="cat-tag-badge"></span>
+            <div id="prod-new-tag" class="new-tag" style="display:none">🆕 Nouveau</div>
+            <h2 id="prod-name"></h2>
+            <p id="prod-desc" class="prod-desc"></p>
+            <div id="prod-prix-barre" class="prix-barre" style="display:none"></div>
+            <div id="prod-price" class="prod-price"></div>
+            <p id="prod-stock" class="prod-stock"></p>
+            <div id="prod-low-tag" class="low-tag" style="display:none">⚠️ Stock faible</div>
+            <div id="prod-actions" class="prod-actions" style="display:none">
+                <div class="qty-box">
+                    <button id="qty-minus">−</button>
+                    <span id="qty-val">1</span>
+                    <button id="qty-plus">+</button>
+                </div>
+                <button class="btn-green btn-cart" id="btn-add-cart">🛒 Ajouter au panier</button>
+            </div>
+            <p id="prod-login-hint" class="login-hint" style="display:none">Connectez-vous pour commander</p>
+            <a id="prod-wa" href="#" target="_blank" class="btn-wa">📱 Commander via WhatsApp</a>
+            <div id="cross-sell-zone"></div>
+            <div id="avis-zone"></div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PANIER -->
+<div class="modal-overlay" id="panier-overlay" style="display:none">
+    <div class="modal modal-panier">
+        <button class="modal-x" id="panier-close">✕</button>
+        <h2>🛒 Mon Panier</h2>
+        <div id="panier-items"></div>
+        <div class="livraison-box">
+            <label>📍 Zone de livraison</label>
+            <select id="zone-select">
+                <option value="">-- Choisir votre zone --</option>
+                <optgroup label="Zones livrées — 1 000 FCFA">
+                    <option value="Akwa">Akwa — 1 000 FCFA</option>
+                    <option value="Bonamoussadi">Bonamoussadi — 1 000 FCFA</option>
+                    <option value="Ndokoti">Ndokoti — 1 000 FCFA</option>
+                    <option value="PK14">PK14 — 1 000 FCFA</option>
+                    <option value="Makepe">Makepe — 1 000 FCFA</option>
+                    <option value="Bassa">Bassa — 1 000 FCFA</option>
+                    <option value="Logbaba">Logbaba — 1 000 FCFA</option>
+                    <option value="Deido">Deido — 1 000 FCFA</option>
+                    <option value="Bonaberi">Bonaberi — 1 000 FCFA</option>
+                </optgroup>
+                <optgroup label="Autres quartiers de Douala — retrait en agence">
+                    <option value="Bonanjo">Bonanjo</option>
+                    <option value="Bali">Bali</option>
+                    <option value="New-Bell">New-Bell</option>
+                    <option value="Bépanda">Bépanda</option>
+                    <option value="Ndogpassi">Ndogpassi</option>
+                    <option value="Ndogbong">Ndogbong</option>
+                    <option value="Cité SIC">Cité SIC</option>
+                    <option value="Kotto">Kotto</option>
+                    <option value="PK8">PK8</option>
+                    <option value="PK9">PK9</option>
+                    <option value="PK10">PK10</option>
+                    <option value="PK12">PK12</option>
+                    <option value="PK16">PK16</option>
+                    <option value="PK21">PK21</option>
+                    <option value="Logpom">Logpom</option>
+                    <option value="Yassa">Yassa</option>
+                    <option value="Village">Village</option>
+                    <option value="Bonapriso">Bonapriso</option>
+                    <option value="Japoma">Japoma</option>
+                    <option value="Nyalla">Nyalla</option>
+                    <option value="Grand Moulin">Grand Moulin</option>
+                    <option value="Youpwe">Youpwe</option>
+                    <option value="Bonendale">Bonendale</option>
+                    <option value="Zone Industrielle Bassa">Zone Industrielle Bassa</option>
+                    <option value="Bwana Kumbo">Bwana Kumbo</option>
+                    <option value="Denver">Denver</option>
+                    <option value="Congelcam">Congelcam</option>
+                    <option value="Cité des Palmiers">Cité des Palmiers</option>
+                    <option value="Ngodi Bakoko">Ngodi Bakoko</option>
+                    <option value="Bonaloka">Bonaloka</option>
+                    <option value="Madagascar">Madagascar</option>
+                    <option value="Bonamikengue">Bonamikengue</option>
+                    <option value="Soppo Priso">Soppo Priso</option>
+                    <option value="Makea">Makea</option>
+                </optgroup>
+                <option value="retrait">🏪 Retrait en boutique — GRATUIT</option>
+            </select>
+            <div id="livraison-info" style="display:none" class="livraison-info"></div>
+            <div id="zone-warning" style="display:none" class="livraison-info lv-warn"></div>
+        </div>
+        <div id="panier-totaux"></div>
+        <textarea id="note-cmd" placeholder="Note pour la commande (optionnel)..." rows="2"></textarea>
+        <button class="btn-green" id="btn-payer" style="display:none">💳 Payer maintenant (Mobile Money)</button>
+        <button class="btn-outline" id="btn-reserver" style="display:none">📋 Réserver (paiement à la livraison)</button>
+    </div>
+</div>
+
+<!-- MODAL PAIEMENT -->
+<div class="modal-overlay" id="pay-overlay" style="display:none">
+    <div class="modal modal-pay">
+        <button class="modal-x" id="pay-close">✕</button>
+        <div class="pay-header">
+            <div style="font-size:2.5rem;margin-bottom:8px">💳</div>
+            <h2>Paiement Mobile Money</h2>
+            <p style="color:var(--text3);font-size:0.85rem">Sécurisé par <strong>Monetbil</strong></p>
+        </div>
+        <div id="pay-amount" class="pay-amount"></div>
+        <div class="pay-methods">
+            <button class="pay-method active" data-op="mtn" id="pay-mtn">
+                <span style="font-size:1.4rem;display:block;margin-bottom:4px">📱</span>MTN MoMo
+            </button>
+            <button class="pay-method" data-op="orange" id="pay-orange">
+                <span style="font-size:1.4rem;display:block;margin-bottom:4px">🟠</span>Orange Money
+            </button>
+        </div>
+        <div class="pay-form">
+            <label>Numéro de téléphone</label>
+            <input type="tel" id="pay-tel" placeholder="6XXXXXXXX" maxlength="9">
+            <button class="btn-green" id="btn-pay-confirm">Payer maintenant</button>
+            <p id="pay-status" class="pay-status"></p>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CODE -->
+<div class="modal-overlay" id="code-overlay" style="display:none">
+    <div class="modal modal-code">
+        <h2>✅ Commande confirmée !</h2>
+        <p style="color:var(--text3)">Votre code de commande :</p>
+        <div id="code-display" class="code-display"></div>
+        <div id="code-recap"></div>
+        <button class="btn-green" id="btn-copier">📋 Copier le code</button>
+        <button class="btn-outline" id="btn-fermer-code" style="margin-top:10px;width:100%">Fermer</button>
+    </div>
+</div>
+
+<!-- MODAL SUCCES PAIEMENT -->
+<div class="modal-overlay" id="success-overlay" style="display:none">
+    <div class="modal modal-code">
+        <h2>✅ Merci pour votre paiement !</h2>
+        <p style="color:var(--text3)">Votre commande est validée.</p>
+        <div id="success-code-display" class="code-display"></div>
+        <div id="success-recap"></div>
+        <div id="success-agence-msg" class="livraison-info lv-ok" style="margin-top:14px;text-align:left"></div>
+        <button class="btn-green" id="btn-copier-success" style="margin-top:14px">📋 Copier le code</button>
+        <a id="success-wa" href="#" target="_blank" class="btn-outline" style="display:block;text-align:center;margin-top:10px;text-decoration:none">📱 Contacter par WhatsApp</a>
+        <button class="btn-outline" id="btn-fermer-success" style="margin-top:10px;width:100%">Fermer</button>
+    </div>
+</div>
+
+<!-- MODAL SUIVI -->
+<div class="modal-overlay" id="suivi-overlay" style="display:none">
+    <div class="modal modal-code">
+        <button class="modal-x" id="suivi-close">✕</button>
+        <h2>🚚 Suivi de commande</h2>
+        <input type="text" id="suivi-input" placeholder="Entrez votre code (ex: CMT-ABC-1234)" style="margin:16px 0">
+        <button class="btn-green" id="btn-suivi">Rechercher</button>
+        <div id="suivi-result" style="margin-top:14px"></div>
+    </div>
+</div>
+
+<!-- MODAL LOCALISATION -->
+<div class="modal-overlay" id="loc-overlay" style="display:none">
+    <div class="modal modal-code">
+        <button class="modal-x" id="loc-close">✕</button>
+        <h2>🏪 Notre Boutique</h2>
+        <div class="loc-box">
+            <p>📍 <strong>Douala, Cameroun</strong></p>
+            <p>📞 699 781 160 / 653 756 167</p>
+            <p>⏰ Lun-Sam : 8h00 — 19h00</p>
+        </div>
+        <iframe src="https://maps.google.com/maps?q=Douala,Cameroun&output=embed" width="100%" height="220" style="border:0;border-radius:10px;margin-top:14px" loading="lazy"></iframe>
+        <a href="https://wa.me/237699781160" target="_blank" class="btn-green" style="display:block;text-align:center;margin-top:12px;text-decoration:none">📱 WhatsApp</a>
+    </div>
+</div>
+
+<!-- MODAL COMMANDES -->
+<div class="modal-overlay" id="cmds-overlay" style="display:none">
+    <div class="modal modal-histo">
+        <button class="modal-x" id="cmds-close">✕</button>
+        <h2>📋 Mes Commandes</h2>
+        <div id="cmds-list"></div>
+    </div>
+</div>
+
+<!-- PAGE ADMIN -->
+<div id="admin-page" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:3000;overflow-y:auto"></div>
+
+<script src="config.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
