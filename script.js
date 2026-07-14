@@ -71,9 +71,20 @@ document.addEventListener('DOMContentLoaded', () => {
     document.documentElement.setAttribute('data-theme', theme);
     if ($('theme-toggle')) $('theme-toggle').checked = theme === 'dark';
 
-    if (window.emailjs && CONFIG.EMAILJS.PUBLIC_KEY) { try { emailjs.init(CONFIG.EMAILJS.PUBLIC_KEY); } catch(e){} }
+    if (window.emailjs && CONFIG.EMAILJS.PUBLIC_KEY) { try { emailjs.init({ publicKey: CONFIG.EMAILJS.PUBLIC_KEY }); } catch(e){ console.error('EmailJS init error:', e); } }
+
+    // Boutons "afficher/masquer" sur tous les champs mot de passe
+    document.querySelectorAll('.pwd-toggle').forEach(btn => {
+        btn.onclick = () => {
+            const input = $(btn.dataset.target);
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            btn.textContent = show ? '🙈' : '👁';
+        };
+    });
 
     setupSidebar();
+    setupTuilesCategories();
     setupAuth();
     setupResetPassword();
     setupCategories();
@@ -92,6 +103,25 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ===== SIDEBAR =====
+// Injecte une vraie photo par catégorie (si configurée) + effet de bascule 3D douce au survol
+function setupTuilesCategories() {
+    document.querySelectorAll('.tuile-photo').forEach(img => {
+        const url = CONFIG.CATEGORY_IMAGES && CONFIG.CATEGORY_IMAGES[img.dataset.catImg];
+        if (url) { img.src = url; img.style.display = 'block'; }
+        else { img.closest('.tuile-photo-wrap').style.display = 'none'; }
+    });
+
+    document.querySelectorAll('.tuile').forEach(tuile => {
+        tuile.addEventListener('mousemove', e => {
+            const r = tuile.getBoundingClientRect();
+            const x = (e.clientX - r.left) / r.width - 0.5;
+            const y = (e.clientY - r.top) / r.height - 0.5;
+            tuile.style.transform = `perspective(900px) rotateY(${x * 10}deg) rotateX(${-y * 10}deg) translateY(-3px) scale(1.03)`;
+        });
+        tuile.addEventListener('mouseleave', () => { tuile.style.transform = ''; });
+    });
+}
+
 function setupSidebar() {
     $('hamburger').onclick = () => { $('sidebar').classList.add('open'); $('sidebar-overlay').classList.add('active'); };
     $('sidebar-close').onclick = closeSidebar;
@@ -221,7 +251,6 @@ function setupResetPassword() {
 
     $('reset-m-wa').onclick = () => selectResetMethode('whatsapp');
     $('reset-m-email').onclick = () => selectResetMethode('email');
-    $('reset-m-sms').onclick = () => selectResetMethode('sms');
 
     $('btn-reset-envoyer').onclick = envoyerCodeReset;
     $('btn-reset-confirmer').onclick = confirmerNouveauMdp;
@@ -231,7 +260,9 @@ function selectResetMethode(m) {
     resetMethode = m;
     $('reset-m-wa').classList.toggle('active', m === 'whatsapp');
     $('reset-m-email').classList.toggle('active', m === 'email');
-    $('reset-m-sms').classList.toggle('active', m === 'sms');
+    $('reset-methode-info').textContent = m === 'email'
+        ? "📧 Le code sera envoyé à l'adresse email enregistrée sur votre compte."
+        : "📱 Une conversation WhatsApp va s'ouvrir avec notre équipe pour recevoir votre code.";
 }
 
 async function envoyerCodeReset() {
@@ -270,7 +301,9 @@ async function envoyerCodeReset() {
             });
             err.style.color = 'var(--success)'; err.textContent = '✅ Code envoyé à ' + user.email;
         } catch (e) {
-            err.textContent = '❌ Erreur d\'envoi de l\'email. Réessayez ou choisissez WhatsApp.';
+            console.error('EmailJS erreur:', e);
+            const detail = (e && (e.text || e.message)) ? (' (' + (e.text || e.message) + ')') : '';
+            err.textContent = '❌ Erreur d\'envoi' + detail + '. Réessayez ou choisissez WhatsApp.';
             $('btn-reset-envoyer').textContent = 'Envoyer le code'; $('btn-reset-envoyer').disabled = false;
             return;
         }
@@ -648,7 +681,11 @@ async function openModal(productId) {
         $('prod-prix-barre').style.display = 'block';
     } else { $('prod-prix-barre').style.display = 'none'; }
     const img = $('prod-img');
-    if (p.image_url) { img.src = p.image_url; img.style.display = 'block'; } else img.style.display = 'none';
+    if (p.image_url) {
+        img.style.opacity = '0';
+        img.onload = () => { img.style.opacity = '1'; };
+        img.src = p.image_url; img.style.display = 'block';
+    } else img.style.display = 'none';
     const waMsg = encodeURIComponent(`Bonjour CAMERTECH MARKET, intéressé par : ${p.name} (${fmt(prix)} FCFA)`);
     $('prod-wa').href = `https://wa.me/${CONFIG.WA1}?text=${waMsg}`;
     if (currentUser) { $('prod-actions').style.display='flex'; $('prod-login-hint').style.display='none'; }
