@@ -26,7 +26,7 @@
     <meta name="twitter:image" content="https://camertechmarket.com/logo.png">
 
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 
@@ -225,13 +225,13 @@
     </div>
 
     <!-- TUILES -->
-    <div class="tuiles-grid">
-        <div class="tuile t1" data-cat="Téléphonie"><span class="ti">📱</span><span>Téléphonie</span></div>
-        <div class="tuile t2" data-cat="Accessoires"><span class="ti">🎧</span><span>Accessoires</span></div>
-        <div class="tuile t3" data-cat="Électronique"><span class="ti">💻</span><span>Électronique</span></div>
-        <div class="tuile t4" data-cat="Gaming"><span class="ti">🎮</span><span>Gaming</span></div>
-        <div class="tuile t5" data-cat="Réseau"><span class="ti">📡</span><span>Réseau</span></div>
-        <div class="tuile t-flash" data-action="flash"><span class="ti">⚡</span><span>Flash</span></div>
+    <div class="tuiles-grid" id="tuiles-grid">
+        <div class="tuile t1" data-cat="Téléphonie"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Téléphonie" alt="Téléphonie"></div><span>Téléphonie</span></div>
+        <div class="tuile t2" data-cat="Accessoires"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Accessoires" alt="Accessoires"></div><span>Accessoires</span></div>
+        <div class="tuile t3" data-cat="Électronique"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Électronique" alt="Électronique"></div><span>Électronique</span></div>
+        <div class="tuile t4" data-cat="Gaming"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Gaming" alt="Gaming"></div><span>Gaming</span></div>
+        <div class="tuile t5" data-cat="Réseau"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Réseau" alt="Réseau"></div><span>Réseau</span></div>
+        <div class="tuile t-flash" data-action="flash"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Flash" alt="Flash"></div><span>Flash</span></div>
     </div>
 
     <!-- FLASH -->
@@ -279,7 +279,7 @@
         <div id="form-login">
             <h3>👤 Connexion</h3>
             <input type="tel" id="login-tel" placeholder="Numéro téléphone (9 chiffres)" maxlength="9">
-            <input type="password" id="login-mdp" placeholder="Mot de passe">
+            <div class="pwd-wrap"><input type="password" id="login-mdp" placeholder="Mot de passe"><button type="button" class="pwd-toggle" data-target="login-mdp">👁</button></div>
             <button class="btn-green" id="btn-login">Se connecter</button>
             <p class="form-err" id="login-err"></p>
             <button type="button" id="btn-mdp-oublie" style="background:none;border:none;color:var(--green);font-size:0.85rem;margin-top:8px;cursor:pointer;text-decoration:underline">Mot de passe oublié ?</button>
@@ -289,8 +289,8 @@
             <input type="text" id="reg-nom" placeholder="Nom complet *">
             <input type="tel" id="reg-tel" placeholder="Téléphone (9 chiffres) *" maxlength="9">
             <input type="email" id="reg-email" placeholder="Email (optionnel)">
-            <input type="password" id="reg-mdp" placeholder="Mot de passe *">
-            <input type="password" id="reg-mdp2" placeholder="Confirmer mot de passe *">
+            <div class="pwd-wrap"><input type="password" id="reg-mdp" placeholder="Mot de passe *"><button type="button" class="pwd-toggle" data-target="reg-mdp">👁</button></div>
+            <div class="pwd-wrap"><input type="password" id="reg-mdp2" placeholder="Confirmer mot de passe *"><button type="button" class="pwd-toggle" data-target="reg-mdp2">👁</button></div>
             <button class="btn-green" id="btn-register">Créer mon compte</button>
             <p class="form-err" id="reg-err"></p>
         </div>
@@ -308,16 +308,17 @@
             <div class="pay-methods">
                 <button type="button" class="pay-method active" data-methode="whatsapp" id="reset-m-wa">📱 WhatsApp</button>
                 <button type="button" class="pay-method" data-methode="email" id="reset-m-email">📧 Email</button>
-                <button type="button" class="pay-method" data-methode="sms" id="reset-m-sms">💬 SMS</button>
+                <button type="button" class="pay-method" data-methode="sms" id="reset-m-sms" disabled style="opacity:0.5;cursor:not-allowed">💬 SMS<br><span style="font-size:0.7rem;font-weight:400">Bientôt</span></button>
             </div>
+            <p id="reset-methode-info" style="font-size:0.8rem;color:var(--text3);margin-top:8px"></p>
             <button class="btn-green" id="btn-reset-envoyer" style="margin-top:14px">Envoyer le code</button>
             <p class="form-err" id="reset-err1"></p>
         </div>
         <div id="reset-step2" style="display:none">
             <h3>🔑 Entrez le code reçu</h3>
             <input type="text" id="reset-code" placeholder="Code à 6 chiffres" maxlength="6">
-            <input type="password" id="reset-mdp1" placeholder="Nouveau mot de passe">
-            <input type="password" id="reset-mdp2" placeholder="Confirmer le nouveau mot de passe">
+            <div class="pwd-wrap"><input type="password" id="reset-mdp1" placeholder="Nouveau mot de passe"><button type="button" class="pwd-toggle" data-target="reset-mdp1">👁</button></div>
+            <div class="pwd-wrap"><input type="password" id="reset-mdp2" placeholder="Confirmer le nouveau mot de passe"><button type="button" class="pwd-toggle" data-target="reset-mdp2">👁</button></div>
             <button class="btn-green" id="btn-reset-confirmer">Réinitialiser le mot de passe</button>
             <p class="form-err" id="reset-err2"></p>
         </div>
