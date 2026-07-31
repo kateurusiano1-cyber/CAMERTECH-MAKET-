@@ -354,18 +354,22 @@ async function confirmerNouveauMdp() {
     if (mdp1 !== mdp2) { err.textContent = '❌ Mots de passe différents'; return; }
 
     $('btn-reset-confirmer').textContent = 'Vérification...'; $('btn-reset-confirmer').disabled = true;
-    const { data: reset } = await db.from('password_resets').select('*')
-        .eq('utilisateur_id', resetUserFound.id).eq('code', code).eq('utilise', false)
-        .order('created_at', { ascending: false }).limit(1).single();
-
-    if (!reset || new Date(reset.expire_at) < new Date()) {
-        err.textContent = '❌ Code invalide ou expiré. Redemandez un code.';
+    try {
+        const resp = await fetch('/api/reset-password', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ utilisateur_id: resetUserFound.id, code, nouveau_mdp: mdp1 })
+        });
+        const result = await resp.json();
+        if (!resp.ok || !result.success) {
+            err.textContent = '❌ ' + (result.error || 'Code invalide ou expiré. Redemandez un code.');
+            $('btn-reset-confirmer').textContent = 'Réinitialiser le mot de passe'; $('btn-reset-confirmer').disabled = false;
+            return;
+        }
+    } catch (e) {
+        err.textContent = '❌ Erreur réseau, réessayez.';
         $('btn-reset-confirmer').textContent = 'Réinitialiser le mot de passe'; $('btn-reset-confirmer').disabled = false;
         return;
     }
-
-    await db.from('utilisateurs').update({ mot_de_passe: mdp1 }).eq('id', resetUserFound.id);
-    await db.from('password_resets').update({ utilise: true }).eq('id', reset.id);
 
     $('btn-reset-confirmer').textContent = 'Réinitialiser le mot de passe'; $('btn-reset-confirmer').disabled = false;
     closeOverlay('reset-overlay');
@@ -437,13 +441,14 @@ function initSlider(slidesData) {
             const slide = document.createElement('div');
             slide.className = 'slide';
             if (s.image_url) {
-                slide.style.cssText = `background-image:url(${s.image_url});background-size:cover;background-position:center`;
-                slide.innerHTML = `<div class="slide-inner" style="background:linear-gradient(90deg,rgba(0,0,0,0.65),transparent)">
+                slide.style.cssText = `background:linear-gradient(135deg, var(--green-dark), var(--green) 60%, var(--green-light))`;
+                slide.innerHTML = `<div class="slide-inner">
                     <div class="slide-tag">${s.tag||'🔥 PROMO'}</div>
                     <h2>${s.titre||''}<br><span>${s.sous_titre||''}</span></h2>
                     <p>${s.message||''}</p>
                     ${s.btn_texte?`<button class="slide-btn">${s.btn_texte}</button>`:''}
-                </div>`;
+                </div>
+                <div class="slide-media"><img src="${s.image_url}" class="slide-product-img" alt="${s.titre||'Promotion'}"></div>`;
             } else {
                 slide.className = 'slide slide-default';
                 slide.innerHTML = `<div class="slide-inner">
@@ -1184,7 +1189,7 @@ async function afficherPanneauAdmin() {
                 <button onclick="showTab('tab-avis')" class="adm-tab" id="tb-avis">⭐ Avis(${(avisListe||[]).length})</button>
                 <button onclick="showTab('tab-mktg')" class="adm-tab" id="tb-mktg">📢 Marketing</button>
                 <button onclick="showTab('tab-param')" class="adm-tab" id="tb-param">⚙️ Paramètres</button>
-                <button onclick="document.getElementById('admin-page').style.display='none';isAdmin=true;renderProducts(allProducts)" class="adm-tab">🏪 Site</button>
+                <button onclick="window.location.href='/'" class="adm-tab">🏪 Site</button>
             </div>
         </div>
         <div style="max-width:1200px;margin:0 auto;padding:20px 16px">
