@@ -25,5 +25,14 @@ const CONFIG = {
         PUBLIC_KEY: "b1FiU2dX42MRGVVUI",
         SERVICE_ID: "service_6pduwrq",
         TEMPLATE_ID: "template_acxekdc"
+    },
+    // ⚠️ À compléter : URL d'une vraie photo pour chaque catégorie (depuis Unsplash/Pexels ou tes propres photos produits)
+    CATEGORY_IMAGES: {
+        "Téléphonie": "",
+        "Accessoires": "",
+        "Électronique": "",
+        "Gaming": "",
+        "Réseau": "",
+        "Flash": ""
     }
 };

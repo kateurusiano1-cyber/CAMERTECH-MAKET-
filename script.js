@@ -55,7 +55,7 @@ function openOverlay(id) { const el=$(id); if(el){el.style.display='flex'; docum
 function closeOverlay(id) { const el=$(id); if(el){el.style.display='none'; document.body.style.overflow='';} }
 
 // ===== DOM READY =====
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Vérifier page admin
     const path = window.location.pathname.replace(/\//g,'').replace('.html','');
     if (path === CONFIG.ADMIN_PATH) { afficherLoginAdmin(); return; }
@@ -82,6 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.textContent = show ? '🙈' : '👁';
         };
     });
+
+    await chargerParametres();
 
     setupSidebar();
     setupTuilesCategories();
@@ -120,6 +122,27 @@ function setupTuilesCategories() {
         });
         tuile.addEventListener('mouseleave', () => { tuile.style.transform = ''; });
     });
+}
+
+// ===== PARAMETRES (modifiables par l'admin, sans toucher au code) =====
+const CAT_SLUGS = { "Téléphonie":"telephonie", "Accessoires":"accessoires", "Électronique":"electronique", "Gaming":"gaming", "Réseau":"reseau", "Flash":"flash" };
+
+async function chargerParametres() {
+    try {
+        const { data } = await db.from('parametres').select('*');
+        if (!data) return;
+        const slugToCat = Object.fromEntries(Object.entries(CAT_SLUGS).map(([k,v])=>[v,k]));
+        data.forEach(({ cle, valeur }) => {
+            if (!valeur) return;
+            if (cle === 'agence_adresse') CONFIG.AGENCE_ADRESSE = valeur;
+            else if (cle === 'agence_tel') CONFIG.AGENCE_TEL = valeur;
+            else if (cle.startsWith('cat_img_')) {
+                const slug = cle.replace('cat_img_', '');
+                const cat = slugToCat[slug];
+                if (cat) CONFIG.CATEGORY_IMAGES[cat] = valeur;
+            }
+        });
+    } catch (e) { console.error('Erreur chargement paramètres:', e); }
 }
 
 function setupSidebar() {
@@ -362,12 +385,26 @@ async function chargerBanniere() {
 // ===== POPUP =====
 async function afficherPopup() {
     const { data: msgs } = await db.from('bannières').select('*').eq('actif', true).eq('type', 'popup');
-    const { data: flash } = await db.from('products').select('*').eq('flash_active', true).limit(4);
-    if (!msgs?.length && !flash?.length) return;
-    const msg = msgs?.[0]?.message || '🎉 Bienvenue sur CAMERTECH MARKET !';
-    const prods = flash?.length ? `<p style="font-weight:700;color:var(--orange);margin:14px 0 8px">⚡ Ventes Flash</p>
+    const popupMsg = msgs?.[0];
+
+    let vitrine = [];
+    if (popupMsg?.produits_ids?.length) {
+        const { data: choisis } = await db.from('products').select('*').in('id', popupMsg.produits_ids);
+        vitrine = choisis || [];
+    } else {
+        const { data: flash } = await db.from('products').select('*').eq('flash_active', true).limit(4);
+        vitrine = flash || [];
+    }
+    if (!popupMsg && !vitrine.length) return;
+
+    const msg = popupMsg?.message || '🎉 Bienvenue sur CAMERTECH MARKET !';
+    const titreVitrine = popupMsg?.produits_ids?.length ? '🛍️ Sélection du moment' : '⚡ Ventes Flash';
+    const flyerHtml = popupMsg?.image_url
+        ? `<img src="${popupMsg.image_url}" ${popupMsg.lien ? `onclick="closePopup();window.open('${popupMsg.lien}','_blank')" style="cursor:pointer;` : 'style="'}width:100%;border-radius:12px;margin-bottom:14px;display:block">`
+        : `<img src="logo.png" style="height:55px;width:55px;border-radius:50%;margin-bottom:12px">`;
+    const prods = vitrine.length ? `<p style="font-weight:700;color:var(--orange);margin:14px 0 8px">${titreVitrine}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-        ${flash.map(p=>`<div onclick="closePopup();openModal('${p.id}')" style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px;cursor:pointer;text-align:center">
+        ${vitrine.map(p=>`<div onclick="closePopup();openModal('${p.id}')" style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px;cursor:pointer;text-align:center">
             ${p.image_url?`<img src="${p.image_url}" style="width:100%;height:55px;object-fit:cover;border-radius:6px;margin-bottom:6px">`:''}
             <div style="font-size:0.75rem;font-weight:600">${p.name}</div>
             <div style="font-size:0.8rem;color:var(--orange);font-weight:700">${fmt(getPrix(p))} F</div>
@@ -376,9 +413,9 @@ async function afficherPopup() {
     el.id = 'popup-overlay';
     el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)';
     el.innerHTML = `<div style="background:var(--card);border-radius:18px;padding:28px;max-width:400px;width:100%;text-align:center;position:relative;max-height:90vh;overflow-y:auto">
-        <button onclick="closePopup()" style="position:absolute;top:12px;right:12px;background:var(--bg);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:0.9rem;color:var(--text)">✕</button>
-        <img src="logo.png" style="height:55px;width:55px;border-radius:50%;margin-bottom:12px">
-        <h2 style="font-family:Poppins,sans-serif;color:var(--green);margin-bottom:8px">CAMERTECH MARKET</h2>
+        <button onclick="closePopup()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.9);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:0.9rem;color:var(--text);z-index:1">✕</button>
+        ${flyerHtml}
+        ${!popupMsg?.image_url ? `<h2 style="font-family:Poppins,sans-serif;color:var(--green);margin-bottom:8px">CAMERTECH MARKET</h2>` : ''}
         <p style="color:var(--text2);line-height:1.6;margin-bottom:10px">${msg}</p>
         ${prods}
         <button onclick="closePopup()" style="background:var(--green);color:white;border:none;padding:12px 28px;border-radius:10px;font-weight:700;cursor:pointer;font-size:0.95rem;font-family:Inter,sans-serif">Explorer →</button>
@@ -1119,13 +1156,15 @@ async function afficherPanneauAdmin() {
     page.style.display='block';
     page.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-family:Inter,sans-serif">Chargement du panneau...</div>';
 
-    const [{data:prods},{data:users},{data:reservations},{data:avisListe},{data:bannieres}]=await Promise.all([
+    const [{data:prods},{data:users},{data:reservations},{data:avisListe},{data:bannieres},{data:params}]=await Promise.all([
         db.from('products').select('*').order('created_at',{ascending:false}),
         db.from('utilisateurs').select('*').order('created_at',{ascending:false}),
         db.from('reservations').select('*').order('created_at',{ascending:false}),
         db.from('avis').select('*').eq('valide',false),
-        db.from('bannières').select('*').eq('actif',true)
+        db.from('bannières').select('*').eq('actif',true),
+        db.from('parametres').select('*')
     ]);
+    const paramMap = Object.fromEntries((params||[]).map(p=>[p.cle,p.valeur]));
 
     const totalV=(reservations||[]).reduce((s,r)=>s+parseFloat(r.total),0);
     const enAtt=(reservations||[]).filter(r=>r.statut==='en attente').length;
@@ -1144,6 +1183,7 @@ async function afficherPanneauAdmin() {
                 <button onclick="showTab('tab-users')" class="adm-tab" id="tb-users">👥 Clients</button>
                 <button onclick="showTab('tab-avis')" class="adm-tab" id="tb-avis">⭐ Avis(${(avisListe||[]).length})</button>
                 <button onclick="showTab('tab-mktg')" class="adm-tab" id="tb-mktg">📢 Marketing</button>
+                <button onclick="showTab('tab-param')" class="adm-tab" id="tb-param">⚙️ Paramètres</button>
                 <button onclick="document.getElementById('admin-page').style.display='none';isAdmin=true;renderProducts(allProducts)" class="adm-tab">🏪 Site</button>
             </div>
         </div>
@@ -1292,6 +1332,30 @@ async function afficherPanneauAdmin() {
                         <input type="url" id="mktg-img-url" placeholder="URL image de fond" class="adm-input">
                         <input type="text" id="mktg-btn-txt" placeholder="Texte bouton" class="adm-input">
                     </div>
+                    <div id="mktg-popup-extra" style="display:none;flex-direction:column;gap:10px">
+                        <div style="background:#f4f6f4;border:1.5px dashed #ddd;border-radius:8px;padding:14px">
+                            <p style="font-size:0.82rem;color:#888;margin-bottom:8px">🖼️ Flyer du popup (optionnel — ton visuel créé sur Canva, etc.)</p>
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                                <label style="background:white;border:1px solid #ddd;padding:9px 14px;border-radius:7px;cursor:pointer;font-size:0.85rem">
+                                    ⬆️ Uploader<input type="file" id="mktg-popup-file" accept="image/*" style="display:none" onchange="previewPopupFlyer(this)">
+                                </label>
+                                <input type="url" id="mktg-popup-img" placeholder="ou URL image" class="adm-input" style="flex:1;min-width:150px">
+                            </div>
+                            <div id="mktg-popup-preview" style="display:none;margin-top:10px">
+                                <img id="mktg-popup-preview-img" style="width:100%;max-height:140px;object-fit:cover;border-radius:8px">
+                            </div>
+                        </div>
+                        <input type="url" id="mktg-popup-lien" placeholder="Lien au clic sur le flyer (optionnel)" class="adm-input">
+                        <div style="background:#f4f6f4;border:1.5px solid #e8e8e8;border-radius:8px;padding:12px">
+                            <p style="font-size:0.82rem;color:#888;margin-bottom:8px">🛍️ Produits à mettre en avant dans le popup (max 4 — sinon les ventes flash s'affichent automatiquement)</p>
+                            <input type="text" id="mktg-prod-search" placeholder="Rechercher un produit..." class="adm-input" style="margin-bottom:8px" oninput="filtrerProduitsPopup()">
+                            <div id="mktg-prod-liste" style="max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
+                                ${(prods||[]).map(p=>`<label class="mktg-prod-item" data-nom="${(p.name||'').toLowerCase()}" style="display:flex;align-items:center;gap:8px;padding:6px;border-radius:6px;font-size:0.82rem;cursor:pointer">
+                                    <input type="checkbox" value="${p.id}" class="mktg-prod-chk"> ${p.image_url?`<img src="${p.image_url}" style="width:28px;height:28px;object-fit:cover;border-radius:4px">`:'📦'} ${p.name} <span style="color:#888;margin-left:auto">${fmt(getPrix(p))} F</span>
+                                </label>`).join('')}
+                            </div>
+                        </div>
+                    </div>
                     <button onclick="publierMessage()" style="background:#1a5c2a;color:white;border:none;padding:12px;border-radius:9px;font-weight:700;cursor:pointer">Publier</button>
                     <p id="mktg-res" style="min-height:18px;font-size:0.82rem"></p>
                 </div>
@@ -1300,11 +1364,43 @@ async function afficherPanneauAdmin() {
                 <h2 style="font-size:1rem;margin-bottom:14px">Messages actifs</h2>
                 <div id="mktg-liste">${(bannieres||[]).length?
                     (bannieres||[]).map(b=>`<div style="background:#f8f8f8;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-                        <div><span style="background:${b.type==='popup'?'#0088ff':b.type==='slider'?'#ff6600':'#1a5c2a'};color:white;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700">${b.type.toUpperCase()}</span><span style="margin-left:8px;font-size:0.88rem">${b.message}</span></div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            ${b.image_url?`<img src="${b.image_url}" style="width:44px;height:44px;object-fit:cover;border-radius:6px">`:''}
+                            <div><span style="background:${b.type==='popup'?'#0088ff':b.type==='slider'?'#ff6600':'#1a5c2a'};color:white;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700">${b.type.toUpperCase()}</span><span style="margin-left:8px;font-size:0.88rem">${b.message}</span>${b.produits_ids?.length?`<span style="margin-left:8px;color:#888;font-size:0.72rem">🛍️ ${b.produits_ids.length} produit(s)</span>`:''}</div>
+                        </div>
                         <button onclick="desactiverBanniere('${b.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">Désactiver</button>
                     </div>`).join(''):'<p style="color:#888">Aucun message actif.</p>'}
                 </div>
             </div>
+        </div>
+
+        <!-- PARAMETRES -->
+        <div id="tab-param" style="display:none">
+            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+                <h2 style="font-size:1rem;margin-bottom:6px">⚙️ Coordonnées de l'agence</h2>
+                <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Utilisées dans le message de succès paiement et le mot de passe oublié.</p>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    <input type="text" id="param-adresse" class="adm-input" placeholder="Adresse de l'agence" value="${paramMap.agence_adresse || CONFIG.AGENCE_ADRESSE || ''}">
+                    <input type="text" id="param-tel" class="adm-input" placeholder="Téléphone agence (format 2376XXXXXXXX)" value="${paramMap.agence_tel || CONFIG.AGENCE_TEL || ''}">
+                </div>
+            </div>
+            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+                <h2 style="font-size:1rem;margin-bottom:6px">🖼️ Photos des catégories (page d'accueil)</h2>
+                <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Une vraie photo par catégorie, affichée sur les tuiles de l'accueil.</p>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px">
+                    ${Object.keys(CAT_SLUGS).map(cat=>`<div style="text-align:center">
+                        <div style="width:100%;aspect-ratio:1;border-radius:50%;overflow:hidden;background:#f4f6f4;margin:0 auto 8px;border:1px solid #e8e8e8">
+                            <img id="param-cat-preview-${CAT_SLUGS[cat]}" src="${paramMap['cat_img_'+CAT_SLUGS[cat]] || CONFIG.CATEGORY_IMAGES[cat] || ''}" style="width:100%;height:100%;object-fit:cover;${(paramMap['cat_img_'+CAT_SLUGS[cat]] || CONFIG.CATEGORY_IMAGES[cat]) ? '' : 'display:none'}" onerror="this.style.display='none'">
+                        </div>
+                        <p style="font-size:0.78rem;font-weight:600;margin-bottom:6px">${cat}</p>
+                        <label style="background:#f4f6f4;border:1px solid #ddd;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;display:inline-block">
+                            ⬆️ Choisir<input type="file" accept="image/*" style="display:none" onchange="previewParamCatImg(this,'${CAT_SLUGS[cat]}')">
+                        </label>
+                    </div>`).join('')}
+                </div>
+            </div>
+            <button onclick="sauvegarderParametres()" style="background:#1a5c2a;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">💾 Enregistrer les paramètres</button>
+            <p id="param-res" style="min-height:18px;font-size:0.82rem;margin-top:8px"></p>
         </div>
 
         </div>
@@ -1313,12 +1409,69 @@ async function afficherPanneauAdmin() {
         .adm-tab{background:rgba(255,255,255,0.15);color:white;border:none;padding:7px 12px;border-radius:7px;cursor:pointer;font-size:0.78rem;font-weight:600;font-family:Inter,sans-serif}
         .adm-tab:hover,.adm-tab.active{background:#ff6600}
         .adm-input{background:#f4f6f4;border:1.5px solid #e8e8e8;padding:12px;color:#1a1a1a;border-radius:9px;font-size:0.9rem;width:100%;font-family:Inter,sans-serif}
+        .mktg-prod-item:hover{background:#eee}
     </style>`;
 
     document.getElementById('mktg-type').onchange = function() {
         document.getElementById('mktg-slider-extra').style.display = this.value==='slider'?'flex':'none';
+        document.getElementById('mktg-popup-extra').style.display = this.value==='popup'?'flex':'none';
     };
 }
+
+let popupFlyerFile = null;
+window.previewPopupFlyer = (input) => {
+    popupFlyerFile = input.files[0];
+    if (!popupFlyerFile) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.getElementById('mktg-popup-preview-img').src = e.target.result;
+        document.getElementById('mktg-popup-preview').style.display = 'block';
+    };
+    reader.readAsDataURL(popupFlyerFile);
+};
+window.filtrerProduitsPopup = () => {
+    const q = document.getElementById('mktg-prod-search').value.toLowerCase();
+    document.querySelectorAll('.mktg-prod-item').forEach(el => {
+        el.style.display = el.dataset.nom.includes(q) ? 'flex' : 'none';
+    });
+};
+
+// ===== PARAMETRES ADMIN =====
+let paramCatFiles = {};
+window.previewParamCatImg = (input, slug) => {
+    const file = input.files[0];
+    if (!file) return;
+    paramCatFiles[slug] = file;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = document.getElementById('param-cat-preview-' + slug);
+        img.src = e.target.result; img.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+};
+
+window.sauvegarderParametres = async () => {
+    const res = document.getElementById('param-res');
+    res.style.color = '#888'; res.textContent = '⏳ Enregistrement...';
+    try {
+        const rows = [
+            { cle: 'agence_adresse', valeur: document.getElementById('param-adresse').value.trim() },
+            { cle: 'agence_tel', valeur: document.getElementById('param-tel').value.trim() }
+        ];
+        for (const slug of Object.values(CAT_SLUGS)) {
+            if (paramCatFiles[slug]) {
+                const url = await uploadImage(paramCatFiles[slug]);
+                rows.push({ cle: 'cat_img_' + slug, valeur: url });
+            }
+        }
+        const { error } = await db.from('parametres').upsert(rows, { onConflict: 'cle' });
+        if (error) throw error;
+        paramCatFiles = {};
+        res.style.color = '#2dc653'; res.textContent = '✅ Paramètres enregistrés — visibles immédiatement sur le site.';
+    } catch (e) {
+        res.style.color = '#e63946'; res.textContent = '❌ ' + e.message;
+    }
+};
 
 function renderCmdsAdmin(data) {
     if (!data.length) return '<p style="color:#888;text-align:center;padding:20px">Aucune commande.</p>';
@@ -1343,10 +1496,10 @@ function renderCmdsAdmin(data) {
 }
 
 window.showTab = id => {
-    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg'].forEach(t=>{
+    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param'].forEach(t=>{
         const el=document.getElementById(t); if(el) el.style.display=t===id?'block':'none';
     });
-    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg'].forEach(b=>{
+    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param'].forEach(b=>{
         const el=document.getElementById(b); if(el) el.classList.toggle('active', b==='tb-'+id.replace('tab-',''));
     });
 };
@@ -1434,9 +1587,22 @@ window.publierMessage = async () => {
     if(!msg){res.style.color='#e63946';res.textContent='❌ Message vide';return;}
     const payload={message:msg,type,actif:true};
     if(type==='slider'){payload.titre=document.getElementById('mktg-titre').value;payload.tag=document.getElementById('mktg-tag').value;payload.image_url=document.getElementById('mktg-img-url').value;payload.btn_texte=document.getElementById('mktg-btn-txt').value;}
+    if(type==='popup'){
+        let flyerUrl = document.getElementById('mktg-popup-img').value.trim();
+        if (popupFlyerFile) {
+            res.style.color='#888'; res.textContent='⏳ Envoi de l\'image...';
+            try { flyerUrl = await uploadImage(popupFlyerFile); }
+            catch(e){ res.style.color='#e63946'; res.textContent='❌ Upload: '+e.message; return; }
+        }
+        payload.image_url = flyerUrl || null;
+        payload.lien = document.getElementById('mktg-popup-lien').value.trim() || null;
+        const idsChoisis = Array.from(document.querySelectorAll('.mktg-prod-chk:checked')).map(c=>c.value).slice(0,4);
+        payload.produits_ids = idsChoisis.length ? idsChoisis : null;
+    }
     const {error}=await db.from('bannières').insert([payload]);
     if(error){res.style.color='#e63946';res.textContent='❌ '+error.message;return;}
     res.style.color='#2dc653';res.textContent='✅ Publié !';
     document.getElementById('mktg-msg').value='';
+    popupFlyerFile = null;
     setTimeout(()=>afficherPanneauAdmin(),600);
 };
