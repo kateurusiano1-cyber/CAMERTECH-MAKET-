@@ -284,15 +284,18 @@ function selectResetMethode(m) {
     $('reset-m-wa').classList.toggle('active', m === 'whatsapp');
     $('reset-m-email').classList.toggle('active', m === 'email');
     $('reset-methode-info').textContent = m === 'email'
-        ? "📧 Le code sera envoyé à l'adresse email enregistrée sur votre compte."
+        ? "📧 Le code sera envoyé à cette adresse email si elle est associée à un compte."
         : "📱 Une conversation WhatsApp va s'ouvrir avec notre équipe pour recevoir votre code.";
+    const input = $('reset-tel');
+    if (m === 'email') { input.type = 'email'; input.placeholder = 'Votre adresse email'; input.removeAttribute('maxlength'); }
+    else { input.type = 'text'; input.placeholder = 'Votre numéro de téléphone (9 chiffres)'; input.maxLength = 9; }
+    input.value = '';
 }
 
 async function envoyerCodeReset() {
-    const tel = $('reset-tel').value.trim();
+    const saisie = $('reset-tel').value.trim();
     const err = $('reset-err1');
     err.style.color = 'var(--danger)'; err.textContent = '';
-    if (tel.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
 
     // La livraison par SMS nécessite une passerelle SMS payante non configurée pour l'instant.
     if (resetMethode === 'sms') {
@@ -300,24 +303,27 @@ async function envoyerCodeReset() {
         return;
     }
 
-    $('btn-reset-envoyer').textContent = 'Envoi...'; $('btn-reset-envoyer').disabled = true;
-    const { data: user } = await db.from('utilisateurs').select('*').eq('telephone', tel).single();
+    let user;
+    if (resetMethode === 'email') {
+        if (!saisie.includes('@')) { err.textContent = '❌ Adresse email invalide'; return; }
+        $('btn-reset-envoyer').textContent = 'Envoi...'; $('btn-reset-envoyer').disabled = true;
+        ({ data: user } = await db.from('utilisateurs').select('*').eq('email', saisie).single());
+    } else {
+        if (saisie.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
+        $('btn-reset-envoyer').textContent = 'Envoi...'; $('btn-reset-envoyer').disabled = true;
+        ({ data: user } = await db.from('utilisateurs').select('*').eq('telephone', saisie).single());
+    }
     if (!user) {
-        err.textContent = '❌ Aucun compte trouvé avec ce numéro';
+        err.textContent = resetMethode === 'email' ? '❌ Aucun compte trouvé avec cet email' : '❌ Aucun compte trouvé avec ce numéro';
         $('btn-reset-envoyer').textContent = 'Envoyer le code'; $('btn-reset-envoyer').disabled = false;
         return;
     }
     resetUserFound = user;
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const expire = new Date(Date.now() + 15 * 60000).toISOString();
-    await db.from('password_resets').insert([{ utilisateur_id: user.id, contact: tel, methode: resetMethode, code, expire_at: expire }]);
+    await db.from('password_resets').insert([{ utilisateur_id: user.id, contact: saisie, methode: resetMethode, code, expire_at: expire }]);
 
     if (resetMethode === 'email') {
-        if (!user.email) {
-            err.textContent = "❌ Aucun email enregistré sur ce compte. Choisissez WhatsApp.";
-            $('btn-reset-envoyer').textContent = 'Envoyer le code'; $('btn-reset-envoyer').disabled = false;
-            return;
-        }
         try {
             await emailjs.send(CONFIG.EMAILJS.SERVICE_ID, CONFIG.EMAILJS.TEMPLATE_ID, {
                 to_email: user.email, to_name: user.nom, code
@@ -332,7 +338,7 @@ async function envoyerCodeReset() {
         }
     } else {
         // WhatsApp : ouvre une conversation avec notre équipe qui confirme le code au client.
-        const waMsg = encodeURIComponent(`Bonjour, je souhaite réinitialiser mon mot de passe CAMERTECH MARKET.\nMon numéro : ${tel}\nCode de vérification : ${code}`);
+        const waMsg = encodeURIComponent(`Bonjour, je souhaite réinitialiser mon mot de passe CAMERTECH MARKET.\nMon numéro : ${saisie}\nCode de vérification : ${code}`);
         window.open(`https://wa.me/${CONFIG.AGENCE_TEL}?text=${waMsg}`, '_blank');
         err.style.color = 'var(--text3)';
         err.textContent = '📱 Une conversation WhatsApp vient de s\'ouvrir avec notre équipe : ils vous confirment votre code. Entrez-le ci-dessous.';
@@ -1241,7 +1247,9 @@ async function afficherPanneauAdmin() {
                                 ⬆️ Uploader<input type="file" id="p-img-file" accept="image/*" style="display:none" onchange="previewAdminImg(this)">
                             </label>
                             <input type="url" id="p-img-url" placeholder="ou URL image" class="adm-input" style="flex:1;min-width:150px">
+                            <button type="button" id="btn-ia-analyser" onclick="analyserProduitIA()" style="background:#eef4ff;border:1px solid #cfe0ff;color:#0055bb;padding:9px 14px;border-radius:7px;cursor:pointer;font-size:0.85rem;white-space:nowrap">🤖 Analyser avec l'IA</button>
                         </div>
+                        <p id="ia-res" style="font-size:0.78rem;margin-top:6px;min-height:16px"></p>
                         <div id="adm-img-preview" style="display:none;margin-top:10px;position:relative;display:inline-block">
                             <img id="adm-img" src="" style="max-height:140px;border-radius:8px;max-width:100%">
                             <button onclick="resetAdminImg()" style="position:absolute;top:4px;right:4px;background:rgba(255,255,255,0.9);color:#e63946;border:none;border-radius:4px;padding:3px 7px;font-size:0.75rem;cursor:pointer">✕</button>
@@ -1296,7 +1304,7 @@ async function afficherPanneauAdmin() {
                         <td style="padding:10px">📞 ${u.telephone}</td>
                         <td style="padding:10px;color:#888">${u.email||'—'}</td>
                         <td style="padding:10px;color:#888;font-size:0.78rem">${new Date(u.created_at).toLocaleDateString('fr-FR')}</td>
-                        <td style="padding:10px"><button onclick="adminResetMdp('${u.id}','${u.nom.replace(/'/g,"\\'")}')" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer">🔑 Réinitialiser mdp</button></td>
+                        <td style="padding:10px"><button onclick="adminResetMdp('${u.id}','${u.nom.replace(/'/g,"\\'")}','${u.telephone}')" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer">🔑 Réinitialiser mdp</button></td>
                     </tr>`).join('')}</tbody>
                 </table></div>
             </div>
@@ -1524,7 +1532,7 @@ window.changerStatutAdmin = async (id, statut) => {
 window.validerAvisAdmin = async id => { await db.from('avis').update({valide:true}).eq('id',id); afficherPanneauAdmin(); };
 window.supprimerAvisAdmin = async id => { if(!confirm('Supprimer ?'))return; await db.from('avis').delete().eq('id',id); afficherPanneauAdmin(); };
 
-window.adminResetMdp = async (userId, nom) => {
+window.adminResetMdp = async (userId, nom, tel) => {
     if (!confirm(`Générer un nouveau mot de passe temporaire pour ${nom} ?\nL'ancien ne sera plus valide.`)) return;
     const tempMdp = Math.random().toString(36).slice(-8);
     try {
@@ -1534,7 +1542,8 @@ window.adminResetMdp = async (userId, nom) => {
         });
         const result = await resp.json();
         if (!resp.ok || !result.success) { alert('❌ ' + (result.error || 'Erreur')); return; }
-        alert(`✅ Nouveau mot de passe pour ${nom} :\n\n${tempMdp}\n\nCommunique-le au client par WhatsApp — il pourra le changer une fois connecté.`);
+        const msg = encodeURIComponent(`Bonjour ${nom}, votre mot de passe CAMERTECH MARKET a été réinitialisé.\n\nNouveau mot de passe temporaire : ${tempMdp}\n\nConnectez-vous puis changez-le si besoin.`);
+        window.open(`https://wa.me/237${tel}?text=${msg}`, '_blank');
     } catch (e) {
         alert('❌ Erreur réseau');
     }
@@ -1552,6 +1561,35 @@ window.resetAdminImg = () => {
     const f=document.getElementById('p-img-file'); if(f)f.value='';
     const u=document.getElementById('p-img-url'); if(u)u.value='';
     const p=document.getElementById('adm-img-preview'); if(p)p.style.display='none';
+};
+
+window.analyserProduitIA = async () => {
+    const res = document.getElementById('ia-res');
+    if (!selectedFile) { res.style.color = '#e63946'; res.textContent = '❌ Uploade d\'abord une photo.'; return; }
+    const btn = document.getElementById('btn-ia-analyser');
+    btn.disabled = true; btn.textContent = '⏳ Analyse...';
+    res.style.color = '#888'; res.textContent = 'L\'IA regarde la photo...';
+    try {
+        const reader = new FileReader();
+        const base64 = await new Promise((resolve, reject) => {
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(selectedFile);
+        });
+        const resp = await fetch('/api/analyser-produit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_base64: base64, media_type: selectedFile.type || 'image/jpeg' })
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error(data.error || 'Erreur IA');
+        if (data.name) document.getElementById('p-name').value = data.name;
+        if (data.description) document.getElementById('p-desc').value = data.description;
+        if (data.category) document.getElementById('p-cat').value = data.category;
+        res.style.color = '#2dc653'; res.textContent = '✅ Nom, catégorie et description pré-remplis — vérifie et ajoute le prix + la quantité.';
+    } catch (e) {
+        res.style.color = '#e63946'; res.textContent = '❌ ' + e.message;
+    }
+    btn.disabled = false; btn.textContent = "🤖 Analyser avec l'IA";
 };
 
 window.sauvegarderProduit = async () => {
