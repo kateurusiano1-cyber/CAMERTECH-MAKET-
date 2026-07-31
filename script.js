@@ -1290,12 +1290,13 @@ async function afficherPanneauAdmin() {
             <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
                 <h2 style="font-size:1rem;margin-bottom:14px">👥 Clients inscrits (${(users||[]).length})</h2>
                 <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.82rem">
-                    <thead><tr>${['Nom','Téléphone','Email','Inscrit le'].map(h=>`<th style="color:#888;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0f0;font-size:0.75rem">${h}</th>`).join('')}</tr></thead>
+                    <thead><tr>${['Nom','Téléphone','Email','Inscrit le','Action'].map(h=>`<th style="color:#888;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0f0;font-size:0.75rem">${h}</th>`).join('')}</tr></thead>
                     <tbody>${(users||[]).map(u=>`<tr style="border-bottom:1px solid #f8f8f8">
                         <td style="padding:10px"><strong>${u.nom}</strong></td>
                         <td style="padding:10px">📞 ${u.telephone}</td>
                         <td style="padding:10px;color:#888">${u.email||'—'}</td>
                         <td style="padding:10px;color:#888;font-size:0.78rem">${new Date(u.created_at).toLocaleDateString('fr-FR')}</td>
+                        <td style="padding:10px"><button onclick="adminResetMdp('${u.id}','${u.nom.replace(/'/g,"\\'")}')" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer">🔑 Réinitialiser mdp</button></td>
                     </tr>`).join('')}</tbody>
                 </table></div>
             </div>
@@ -1522,6 +1523,22 @@ window.changerStatutAdmin = async (id, statut) => {
 
 window.validerAvisAdmin = async id => { await db.from('avis').update({valide:true}).eq('id',id); afficherPanneauAdmin(); };
 window.supprimerAvisAdmin = async id => { if(!confirm('Supprimer ?'))return; await db.from('avis').delete().eq('id',id); afficherPanneauAdmin(); };
+
+window.adminResetMdp = async (userId, nom) => {
+    if (!confirm(`Générer un nouveau mot de passe temporaire pour ${nom} ?\nL'ancien ne sera plus valide.`)) return;
+    const tempMdp = Math.random().toString(36).slice(-8);
+    try {
+        const resp = await fetch('/api/admin-reset-password', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ utilisateur_id: userId, nouveau_mdp: tempMdp })
+        });
+        const result = await resp.json();
+        if (!resp.ok || !result.success) { alert('❌ ' + (result.error || 'Erreur')); return; }
+        alert(`✅ Nouveau mot de passe pour ${nom} :\n\n${tempMdp}\n\nCommunique-le au client par WhatsApp — il pourra le changer une fois connecté.`);
+    } catch (e) {
+        alert('❌ Erreur réseau');
+    }
+};
 window.desactiverBanniere = async id => { await db.from('bannières').update({actif:false}).eq('id',id); afficherPanneauAdmin(); };
 
 window.previewAdminImg = input => {
