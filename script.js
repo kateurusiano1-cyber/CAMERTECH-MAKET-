@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     await chargerParametres();
+    await verifierLienResetDansURL();
 
     setupSidebar();
     setupTuilesCategories();
@@ -341,6 +342,7 @@ function setupResetPassword() {
     $('reset-close').onclick = () => closeOverlay('reset-overlay');
     $('reset-overlay').onclick = e => { if (e.target === $('reset-overlay')) closeOverlay('reset-overlay'); };
     $('btn-reset-envoyer').onclick = envoyerLienReset;
+    $('btn-confirm-reset').onclick = confirmerNouveauMdpDepuisEmail;
 }
 
 async function envoyerLienReset() {
@@ -350,13 +352,52 @@ async function envoyerLienReset() {
     if (!email.includes('@')) { err.textContent = '❌ Adresse email invalide'; return; }
     $('btn-reset-envoyer').textContent = 'Envoi...'; $('btn-reset-envoyer').disabled = true;
     try {
-        await window.fbSendPasswordResetEmail(window.firebaseAuth, email);
+        // Le lien dans l'email renvoie sur notre propre domaine (au lieu d'une page firebaseapp.com brute)
+        await window.fbSendPasswordResetEmail(window.firebaseAuth, email, {
+            url: window.location.origin + '/',
+            handleCodeInApp: true
+        });
         err.style.color = 'var(--success)';
         err.textContent = '✅ Email envoyé à ' + email + ' — clique sur le lien pour choisir un nouveau mot de passe.';
     } catch (e) {
         err.textContent = '❌ ' + traduireErreurFirebase(e.code);
     }
     $('btn-reset-envoyer').textContent = 'Envoyer le lien'; $('btn-reset-envoyer').disabled = false;
+}
+
+// Traite le retour du lien de réinitialisation (arrivée sur notre propre domaine avec ?oobCode=...)
+let resetOobCode = null;
+async function verifierLienResetDansURL() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') !== 'resetPassword' || !params.get('oobCode')) return;
+    resetOobCode = params.get('oobCode');
+    try {
+        await window.fbVerifyPasswordResetCode(window.firebaseAuth, resetOobCode);
+        openOverlay('confirm-reset-overlay');
+    } catch (e) {
+        alert('❌ Ce lien de réinitialisation est invalide ou expiré. Redemandez-en un.');
+    }
+    // Nettoie l'URL pour ne pas garder le code affiché
+    window.history.replaceState({}, '', window.location.pathname);
+}
+
+async function confirmerNouveauMdpDepuisEmail() {
+    const mdp1 = $('confirm-reset-mdp1').value.trim();
+    const mdp2 = $('confirm-reset-mdp2').value.trim();
+    const err = $('confirm-reset-err');
+    err.textContent = '';
+    if (mdp1.length < 6) { err.textContent = '❌ Mot de passe trop court (6 min)'; return; }
+    if (mdp1 !== mdp2) { err.textContent = '❌ Mots de passe différents'; return; }
+    $('btn-confirm-reset').textContent = 'Validation...'; $('btn-confirm-reset').disabled = true;
+    try {
+        await window.fbConfirmPasswordReset(window.firebaseAuth, resetOobCode, mdp1);
+        closeOverlay('confirm-reset-overlay');
+        alert('✅ Mot de passe changé ! Tu peux te connecter.');
+        openOverlay('auth-overlay');
+    } catch (e) {
+        err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+    }
+    $('btn-confirm-reset').textContent = 'Valider le nouveau mot de passe'; $('btn-confirm-reset').disabled = false;
 }
 
 
@@ -1226,6 +1267,9 @@ async function afficherPanneauAdmin() {
                             <input type="url" id="p-img-url" placeholder="ou URL image" class="adm-input" style="flex:1;min-width:150px">
                             <button type="button" id="btn-ia-analyser" onclick="analyserProduitIA()" style="background:#eef4ff;border:1px solid #cfe0ff;color:#0055bb;padding:9px 14px;border-radius:7px;cursor:pointer;font-size:0.85rem;white-space:nowrap">🤖 Analyser avec l'IA</button>
                         </div>
+                        <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:#666;margin-top:8px">
+                            <input type="checkbox" id="ia-mode-lot"> Ce sont des <strong>produits différents</strong> (pas le même produit sous plusieurs angles) — l'IA créera une fiche par photo
+                        </label>
                         <p id="ia-res" style="font-size:0.78rem;margin-top:6px;min-height:16px"></p>
                         <div id="adm-img-preview" style="display:none;margin-top:10px;position:relative;display:inline-block">
                             <img id="adm-img" src="" style="max-height:140px;border-radius:8px;max-width:100%">
@@ -1233,6 +1277,7 @@ async function afficherPanneauAdmin() {
                         </div>
                         <div id="adm-img-extra" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center"></div>
                     </div>
+                    <div id="ia-lot-resultats" style="display:none;flex-direction:column;gap:10px"></div>
                     <div style="display:flex;gap:10px">
                         <button onclick="sauvegarderProduit()" style="flex:1;background:#1a5c2a;color:white;border:none;padding:12px;border-radius:9px;font-weight:700;cursor:pointer;font-size:0.95rem">Enregistrer</button>
                         <button id="btn-annuler-edit" onclick="annulerEdit()" style="display:none;background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:12px 16px;border-radius:9px;font-weight:600;cursor:pointer">Annuler</button>
@@ -1557,15 +1602,19 @@ window.resetAdminImg = () => {
     const u=document.getElementById('p-img-url'); if(u)u.value='';
     const p=document.getElementById('adm-img-preview'); if(p)p.style.display='none';
     const e=document.getElementById('adm-img-extra'); if(e)e.innerHTML='';
+    const l=document.getElementById('ia-lot-resultats'); if(l){l.style.display='none';l.innerHTML='';}
+    const c=document.getElementById('ia-mode-lot'); if(c)c.checked=false;
 };
 
 window.analyserProduitIA = async () => {
     const res = document.getElementById('ia-res');
+    const modeLot = document.getElementById('ia-mode-lot').checked;
     const fichiers = selectedFilesAll.length ? selectedFilesAll : (selectedFile ? [selectedFile] : []);
     if (!fichiers.length) { res.style.color = '#e63946'; res.textContent = '❌ Uploade d\'abord au moins une photo.'; return; }
+    if (modeLot && fichiers.length < 2) { res.style.color = '#e63946'; res.textContent = '❌ Le mode "produits différents" demande au moins 2 photos.'; return; }
     const btn = document.getElementById('btn-ia-analyser');
     btn.disabled = true; btn.textContent = '⏳ Analyse...';
-    res.style.color = '#888'; res.textContent = fichiers.length > 1 ? `L'IA regarde les ${fichiers.length} photos...` : 'L\'IA regarde la photo...';
+    res.style.color = '#888'; res.textContent = modeLot ? `L'IA regarde les ${fichiers.length} photos séparément...` : (fichiers.length > 1 ? `L'IA regarde les ${fichiers.length} photos...` : 'L\'IA regarde la photo...');
     try {
         const images = await Promise.all(fichiers.map(f => new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -1575,18 +1624,85 @@ window.analyserProduitIA = async () => {
         })));
         const resp = await fetch('/api/analyser-produit', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ images })
+            body: JSON.stringify({ images, mode: modeLot ? 'lot' : 'unique' })
         });
         const data = await resp.json();
         if (!resp.ok || data.error) throw new Error(data.error || 'Erreur IA');
-        if (data.name) document.getElementById('p-name').value = data.name;
-        if (data.description) document.getElementById('p-desc').value = data.description;
-        if (data.category) document.getElementById('p-cat').value = data.category;
-        res.style.color = '#2dc653'; res.textContent = '✅ Nom, catégorie et description pré-remplis — vérifie et ajoute le prix + la quantité.';
+
+        if (modeLot) {
+            const liste = Array.isArray(data) ? data : (data.produits || []);
+            afficherResultatsLot(liste, fichiers);
+            res.style.color = '#2dc653'; res.textContent = `✅ ${liste.length} produit(s) détecté(s) — complète le prix et la quantité de chacun ci-dessous.`;
+        } else {
+            if (data.name) document.getElementById('p-name').value = data.name;
+            if (data.description) document.getElementById('p-desc').value = data.description;
+            if (data.category) document.getElementById('p-cat').value = data.category;
+            res.style.color = '#2dc653'; res.textContent = '✅ Nom, catégorie et description pré-remplis — vérifie et ajoute le prix + la quantité.';
+        }
     } catch (e) {
         res.style.color = '#e63946'; res.textContent = '❌ ' + e.message;
     }
     btn.disabled = false; btn.textContent = "🤖 Analyser avec l'IA";
+};
+
+// Affiche une fiche éditable par produit détecté en mode lot, avec validation individuelle
+function afficherResultatsLot(produits, fichiers) {
+    const zone = document.getElementById('ia-lot-resultats');
+    zone.style.display = 'flex';
+    zone.innerHTML = produits.map((p, i) => `
+        <div class="ia-lot-carte" style="background:#f8f9fb;border:1px solid #e0e6f0;border-radius:10px;padding:14px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
+            <img id="ia-lot-img-${i}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;flex-shrink:0">
+            <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px">
+                <input type="text" id="ia-lot-name-${i}" class="adm-input" value="${(p.name||'').replace(/"/g,'&quot;')}" placeholder="Nom du produit">
+                <textarea id="ia-lot-desc-${i}" class="adm-input" rows="2" placeholder="Description">${p.description||''}</textarea>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+                    <select id="ia-lot-cat-${i}" class="adm-input"><option value="Téléphonie">📱 Téléphonie</option><option value="Accessoires">🎧 Accessoires</option><option value="Électronique">💻 Électronique</option><option value="Réseau">📡 Réseau</option><option value="Gaming">🎮 Gaming</option><option value="Autre">📦 Autre</option></select>
+                    <input type="number" id="ia-lot-vente-${i}" class="adm-input" placeholder="Prix vente *">
+                    <input type="number" id="ia-lot-qte-${i}" class="adm-input" placeholder="Quantité *">
+                </div>
+                <button onclick="validerProduitLot(${i})" id="ia-lot-btn-${i}" style="align-self:flex-start;background:#1a5c2a;color:white;border:none;padding:8px 16px;border-radius:7px;font-size:0.82rem;cursor:pointer;font-weight:600">✅ Ajouter ce produit</button>
+                <p id="ia-lot-res-${i}" style="font-size:0.76rem;min-height:14px"></p>
+            </div>
+        </div>`).join('');
+
+    // Preview + catégorie pré-sélectionnée pour chaque carte
+    produits.forEach((p, i) => {
+        const f = fichiers[i];
+        if (f) { const r = new FileReader(); r.onload = e => { document.getElementById(`ia-lot-img-${i}`).src = e.target.result; }; r.readAsDataURL(f); }
+        const sel = document.getElementById(`ia-lot-cat-${i}`);
+        if (sel && p.category) sel.value = p.category;
+    });
+
+    window._iaLotFichiers = fichiers;
+}
+
+window.validerProduitLot = async (i) => {
+    const res = document.getElementById(`ia-lot-res-${i}`);
+    const btn = document.getElementById(`ia-lot-btn-${i}`);
+    const name = document.getElementById(`ia-lot-name-${i}`).value.trim();
+    const desc = document.getElementById(`ia-lot-desc-${i}`).value.trim();
+    const cat = document.getElementById(`ia-lot-cat-${i}`).value;
+    const vente = parseFloat(document.getElementById(`ia-lot-vente-${i}`).value);
+    const qte = parseInt(document.getElementById(`ia-lot-qte-${i}`).value);
+    res.textContent = '';
+    if (!name) { res.style.color = '#e63946'; res.textContent = '❌ Nom requis'; return; }
+    if (!vente || vente <= 0) { res.style.color = '#e63946'; res.textContent = '❌ Prix de vente requis'; return; }
+    if (!qte || qte < 0) { res.style.color = '#e63946'; res.textContent = '❌ Quantité requise'; return; }
+    btn.disabled = true; btn.textContent = '⏳ Ajout...';
+    try {
+        const fichier = window._iaLotFichiers[i];
+        const imageUrl = fichier ? await uploadImage(fichier) : null;
+        const { error } = await db.from('products').insert([{
+            name, description: desc, category: cat,
+            resale_price: vente, quantity: qte, image_url: imageUrl
+        }]);
+        if (error) throw error;
+        res.style.color = '#2dc653'; res.textContent = '✅ Produit ajouté !';
+        btn.textContent = '✅ Ajouté'; btn.style.background = '#888'; btn.disabled = true;
+    } catch (e) {
+        res.style.color = '#e63946'; res.textContent = '❌ ' + e.message;
+        btn.disabled = false; btn.textContent = '✅ Ajouter ce produit';
+    }
 };
 
 window.sauvegarderProduit = async () => {

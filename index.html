@@ -31,7 +31,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode, signOut } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
         const firebaseConfig = {
             apiKey: "AIzaSyCTIOt_TEhQnfhIkLiDIu2HjjhSzAMH9iE",
             authDomain: "camertech-maket.firebaseapp.com",
@@ -47,6 +47,8 @@
         window.fbSignInWithEmail = signInWithEmailAndPassword;
         window.fbCreateUserWithEmail = createUserWithEmailAndPassword;
         window.fbSendPasswordResetEmail = sendPasswordResetEmail;
+        window.fbConfirmPasswordReset = confirmPasswordReset;
+        window.fbVerifyPasswordResetCode = verifyPasswordResetCode;
         window.fbSignOut = signOut;
     </script>
 
@@ -344,6 +346,17 @@
         <input type="email" id="reset-email" placeholder="Ton adresse email">
         <button class="btn-green" id="btn-reset-envoyer">Envoyer le lien</button>
         <p class="form-err" id="reset-err1"></p>
+    </div>
+</div>
+
+<!-- MODAL CONFIRMATION NOUVEAU MOT DE PASSE (arrivée depuis le lien email) -->
+<div class="modal-overlay" id="confirm-reset-overlay" style="display:none">
+    <div class="modal modal-auth">
+        <h3>🔑 Choisis ton nouveau mot de passe</h3>
+        <div class="pwd-wrap"><input type="password" id="confirm-reset-mdp1" placeholder="Nouveau mot de passe"><button type="button" class="pwd-toggle" data-target="confirm-reset-mdp1">👁</button></div>
+        <div class="pwd-wrap"><input type="password" id="confirm-reset-mdp2" placeholder="Confirmer le mot de passe"><button type="button" class="pwd-toggle" data-target="confirm-reset-mdp2">👁</button></div>
+        <button class="btn-green" id="btn-confirm-reset">Valider le nouveau mot de passe</button>
+        <p class="form-err" id="confirm-reset-err"></p>
     </div>
 </div>
 

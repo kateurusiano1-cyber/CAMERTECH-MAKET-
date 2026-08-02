@@ -13,20 +13,28 @@ module.exports = async (req, res) => {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    // Nouveau format : { images: [{data, media_type}, ...] }
+    // Nouveau format : { images: [{data, media_type}, ...], mode: 'unique' | 'lot' }
     // Rétro-compatible avec l'ancien format à une seule image.
     let images = body?.images;
     if (!images && body?.image_base64) images = [{ data: body.image_base64, media_type: body.media_type }];
     if (!images || !images.length) return res.status(400).json({ error: 'Image manquante' });
-    if (images.length > 5) images = images.slice(0, 5); // évite les requêtes trop lourdes
+    if (images.length > 8) images = images.slice(0, 8); // évite les requêtes trop lourdes
+    const modeLot = body?.mode === 'lot';
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({ error: "Clé IA non configurée côté serveur (GEMINI_API_KEY manquante dans Vercel)" });
     }
 
-    const prompt = images.length > 1
-      ? `Regarde ces ${images.length} photos du MÊME produit tech (sous différents angles) destiné à une boutique en ligne au Cameroun (CAMERTECH MARKET). Combine les informations visibles sur toutes les photos. Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : {"name":"nom court et vendeur du produit, en français","category":"une seule valeur parmi : Téléphonie, Accessoires, Électronique, Réseau, Gaming, Autre","description":"description commerciale de 1 à 2 phrases en français, sans inventer de caractéristiques techniques précises que tu ne peux pas voir sur les photos"}`
-      : 'Regarde cette photo d\'un produit tech destiné à une boutique en ligne au Cameroun (CAMERTECH MARKET). Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : {"name":"nom court et vendeur du produit, en français","category":"une seule valeur parmi : Téléphonie, Accessoires, Électronique, Réseau, Gaming, Autre","description":"description commerciale de 1 à 2 phrases en français, sans inventer de caractéristiques techniques précises que tu ne peux pas voir sur la photo"}';
+    const champsJson = '{"name":"nom court et vendeur du produit, en français","category":"une seule valeur parmi : Téléphonie, Accessoires, Électronique, Réseau, Gaming, Autre","description":"description commerciale de 1 à 2 phrases en français, sans inventer de caractéristiques techniques précises que tu ne peux pas voir sur la photo"}';
+
+    let prompt;
+    if (modeLot) {
+      prompt = `Voici ${images.length} photos de ${images.length} PRODUITS TECH DIFFÉRENTS (une photo = un produit distinct, dans l'ordre exact où elles sont fournies), destinés à une boutique en ligne au Cameroun (CAMERTECH MARKET). Analyse chaque photo indépendamment. Réponds UNIQUEMENT avec un tableau JSON valide de ${images.length} objets, un par photo dans le même ordre, sans aucun texte autour, chaque objet exactement sous cette forme : ${champsJson}`;
+    } else if (images.length > 1) {
+      prompt = `Regarde ces ${images.length} photos du MÊME produit tech (sous différents angles) destiné à une boutique en ligne au Cameroun (CAMERTECH MARKET). Combine les informations visibles sur toutes les photos. Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : ${champsJson}`;
+    } else {
+      prompt = `Regarde cette photo d'un produit tech destiné à une boutique en ligne au Cameroun (CAMERTECH MARKET). Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : ${champsJson}`;
+    }
 
     const parts = [
       { text: prompt },
@@ -51,6 +59,9 @@ module.exports = async (req, res) => {
     let parsed;
     try { parsed = JSON.parse(clean); }
     catch (e) { return res.status(500).json({ error: "Réponse IA illisible, réessaie" }); }
+
+    // En mode lot, on garantit toujours un tableau, même si l'IA n'a détecté qu'un seul produit.
+    if (modeLot && !Array.isArray(parsed)) parsed = [parsed];
 
     return res.status(200).json(parsed);
   } catch (e) {
