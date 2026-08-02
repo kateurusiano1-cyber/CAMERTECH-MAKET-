@@ -193,7 +193,7 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
         currentUser = profil;
         localStorage.setItem('cmkt_user', JSON.stringify(profil));
         showUserUI();
-        return true;
+        return { ok: true };
     }
     if (extra.telephone) {
         const { data, error } = await db.from('utilisateurs').insert([{
@@ -202,18 +202,18 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
             telephone: extra.telephone,
             email: fbUser.email
         }]).select().single();
-        if (error) return false;
+        if (error) { console.error('Erreur création profil Supabase:', error); return { ok: false, error }; }
         currentUser = data;
         localStorage.setItem('cmkt_user', JSON.stringify(data));
         showUserUI();
-        return true;
+        return { ok: true };
     }
     // Première connexion (Google) sans téléphone connu : on le demande.
     pendingFbUser = fbUser;
     $('tel-manquant-input').value = '';
     $('tel-manquant-err').textContent = '';
     openOverlay('tel-manquant-overlay');
-    return false;
+    return { ok: false, pending: true };
 }
 
 function traduireErreurFirebase(code) {
@@ -254,8 +254,9 @@ function setupAuth() {
         $('btn-login').textContent = 'Connexion...';
         try {
             const cred = await window.fbSignInWithEmail(window.firebaseAuth, email, mdp);
-            const ok = await creerOuChargerProfil(cred.user);
-            if (ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+            const r = await creerOuChargerProfil(cred.user);
+            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+            else if (!r.pending) { err.textContent = '❌ Profil introuvable : ' + (r.error?.message || 'contacte le support'); }
         } catch (e) {
             err.textContent = '❌ ' + traduireErreurFirebase(e.code);
         }
@@ -267,8 +268,9 @@ function setupAuth() {
         err.textContent = '';
         try {
             const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
-            const ok = await creerOuChargerProfil(cred.user);
-            if (ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+            const r = await creerOuChargerProfil(cred.user);
+            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+            else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || 'Erreur, réessaie'); }
         } catch (e) {
             err.textContent = '❌ ' + traduireErreurFirebase(e.code);
         }
@@ -278,9 +280,9 @@ function setupAuth() {
         const tel = $('tel-manquant-input').value.trim();
         const err = $('tel-manquant-err');
         if (tel.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
-        const ok = await creerOuChargerProfil(pendingFbUser, { telephone: tel });
-        if (ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); }
-        else { err.textContent = '❌ Erreur, réessaie'; }
+        const r = await creerOuChargerProfil(pendingFbUser, { telephone: tel });
+        if (r.ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); }
+        else { err.textContent = '❌ ' + (r.error?.message || 'Erreur, réessaie'); }
     };
 
     $('btn-register').onclick = async () => {
@@ -299,10 +301,10 @@ function setupAuth() {
         $('btn-register').textContent = 'Création...';
         try {
             const cred = await window.fbCreateUserWithEmail(window.firebaseAuth, email, mdp);
-            const ok = await creerOuChargerProfil(cred.user, { nom, telephone: tel });
+            const r = await creerOuChargerProfil(cred.user, { nom, telephone: tel });
             $('btn-register').textContent = 'Créer mon compte';
-            if (ok) { closeOverlay('auth-overlay'); }
-            else { err.textContent = '❌ Compte créé mais profil non enregistré, contacte le support.'; }
+            if (r.ok) { closeOverlay('auth-overlay'); }
+            else { err.textContent = '❌ Compte créé mais profil non enregistré : ' + (r.error?.message || 'contacte le support'); }
         } catch (e) {
             $('btn-register').textContent = 'Créer mon compte';
             err.textContent = '❌ ' + traduireErreurFirebase(e.code);
