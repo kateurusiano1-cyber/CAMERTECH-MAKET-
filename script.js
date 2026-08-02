@@ -4,7 +4,7 @@ const db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 // ===== ÉTAT =====
 let currentUser = null, isAdmin = false, currentAdmin = null;
 let allProducts = [], panier = [], modalProduct = null;
-let selectedFile = null, editingId = null, currentCat = "tous";
+let selectedFile = null, selectedFilesAll = [], editingId = null, currentCat = "tous";
 let userZone = "", fraisLivraison = 0;
 let slideIndex = 0, slideTimer = null, totalSlides = 1;
 let selectedOp = "mtn";
@@ -182,6 +182,54 @@ function setupSidebar() {
 }
 
 // ===== AUTH =====
+let pendingFbUser = null;
+
+// Crée ou charge le profil Supabase (nom/téléphone/email) lié à un compte Firebase.
+// Retourne true si le profil est prêt et currentUser est défini.
+async function creerOuChargerProfil(fbUser, extra = {}) {
+    const { data: profil } = await db.from('utilisateurs').select('*').eq('firebase_uid', fbUser.uid).single();
+    if (profil) {
+        delete profil.mot_de_passe;
+        currentUser = profil;
+        localStorage.setItem('cmkt_user', JSON.stringify(profil));
+        showUserUI();
+        return true;
+    }
+    if (extra.telephone) {
+        const { data, error } = await db.from('utilisateurs').insert([{
+            firebase_uid: fbUser.uid,
+            nom: extra.nom || fbUser.displayName || 'Client',
+            telephone: extra.telephone,
+            email: fbUser.email
+        }]).select().single();
+        if (error) return false;
+        currentUser = data;
+        localStorage.setItem('cmkt_user', JSON.stringify(data));
+        showUserUI();
+        return true;
+    }
+    // Première connexion (Google) sans téléphone connu : on le demande.
+    pendingFbUser = fbUser;
+    $('tel-manquant-input').value = '';
+    $('tel-manquant-err').textContent = '';
+    openOverlay('tel-manquant-overlay');
+    return false;
+}
+
+function traduireErreurFirebase(code) {
+    const map = {
+        'auth/invalid-email': 'Adresse email invalide',
+        'auth/user-not-found': 'Aucun compte avec cet email',
+        'auth/wrong-password': 'Mot de passe incorrect',
+        'auth/invalid-credential': 'Email ou mot de passe incorrect',
+        'auth/email-already-in-use': 'Un compte existe déjà avec cet email',
+        'auth/weak-password': 'Mot de passe trop court (6 min)',
+        'auth/too-many-requests': 'Trop de tentatives, réessaie plus tard',
+        'auth/popup-closed-by-user': 'Fenêtre Google fermée avant la fin'
+    };
+    return map[code] || 'Une erreur est survenue, réessaie';
+}
+
 function setupAuth() {
     $('btn-auth-show').onclick = () => openOverlay('auth-overlay');
     $('auth-close').onclick = () => closeOverlay('auth-overlay');
@@ -197,46 +245,72 @@ function setupAuth() {
     };
 
     $('btn-login').onclick = async () => {
-        const tel = $('login-tel').value.trim();
+        const email = $('login-email').value.trim();
         const mdp = $('login-mdp').value.trim();
         const err = $('login-err');
         err.textContent = '';
-        if (tel.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
+        if (!email.includes('@')) { err.textContent = '❌ Email invalide'; return; }
         if (!mdp) { err.textContent = '❌ Mot de passe requis'; return; }
         $('btn-login').textContent = 'Connexion...';
-        const { data, error } = await db.from('utilisateurs').select('*').eq('telephone', tel).eq('mot_de_passe', mdp).single();
+        try {
+            const cred = await window.fbSignInWithEmail(window.firebaseAuth, email, mdp);
+            const ok = await creerOuChargerProfil(cred.user);
+            if (ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+        } catch (e) {
+            err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+        }
         $('btn-login').textContent = 'Se connecter';
-        if (error || !data) { err.textContent = '❌ Numéro ou mot de passe incorrect'; return; }
-        currentUser = data;
-        localStorage.setItem('cmkt_user', JSON.stringify(data));
-        showUserUI();
-        closeOverlay('auth-overlay');
-        renderProducts(allProducts);
+    };
+
+    $('btn-google-login').onclick = async () => {
+        const err = $('login-err');
+        err.textContent = '';
+        try {
+            const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
+            const ok = await creerOuChargerProfil(cred.user);
+            if (ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+        } catch (e) {
+            err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+        }
+    };
+
+    $('btn-tel-manquant-confirmer').onclick = async () => {
+        const tel = $('tel-manquant-input').value.trim();
+        const err = $('tel-manquant-err');
+        if (tel.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
+        const ok = await creerOuChargerProfil(pendingFbUser, { telephone: tel });
+        if (ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); }
+        else { err.textContent = '❌ Erreur, réessaie'; }
     };
 
     $('btn-register').onclick = async () => {
         const nom = $('reg-nom').value.trim();
-        const tel = $('reg-tel').value.trim();
         const email = $('reg-email').value.trim();
+        const tel = $('reg-tel').value.trim();
         const mdp = $('reg-mdp').value.trim();
         const mdp2 = $('reg-mdp2').value.trim();
         const err = $('reg-err');
         err.textContent = '';
         if (!nom) { err.textContent = '❌ Nom obligatoire'; return; }
+        if (!email.includes('@')) { err.textContent = '❌ Email invalide'; return; }
         if (tel.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
         if (mdp.length < 6) { err.textContent = '❌ Mot de passe trop court (6 min)'; return; }
         if (mdp !== mdp2) { err.textContent = '❌ Mots de passe différents'; return; }
         $('btn-register').textContent = 'Création...';
-        const { data, error } = await db.from('utilisateurs').insert([{ nom, telephone: tel, email: email||null, mot_de_passe: mdp }]).select().single();
-        $('btn-register').textContent = 'Créer mon compte';
-        if (error) { err.textContent = error.message.includes('unique') ? '❌ Ce numéro existe déjà' : '❌ ' + error.message; return; }
-        currentUser = data;
-        localStorage.setItem('cmkt_user', JSON.stringify(data));
-        showUserUI();
-        closeOverlay('auth-overlay');
+        try {
+            const cred = await window.fbCreateUserWithEmail(window.firebaseAuth, email, mdp);
+            const ok = await creerOuChargerProfil(cred.user, { nom, telephone: tel });
+            $('btn-register').textContent = 'Créer mon compte';
+            if (ok) { closeOverlay('auth-overlay'); }
+            else { err.textContent = '❌ Compte créé mais profil non enregistré, contacte le support.'; }
+        } catch (e) {
+            $('btn-register').textContent = 'Créer mon compte';
+            err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+        }
     };
 
     $('btn-logout').onclick = () => {
+        window.fbSignOut(window.firebaseAuth).catch(()=>{});
         currentUser = null;
         localStorage.removeItem('cmkt_user');
         $('user-zone').style.display = 'none';
@@ -255,133 +329,34 @@ function showUserUI() {
 }
 
 // ===== MOT DE PASSE OUBLIE =====
-let resetMethode = 'whatsapp';
-let resetUserFound = null;
-
 function setupResetPassword() {
     $('btn-mdp-oublie').onclick = () => {
         closeOverlay('auth-overlay');
-        $('reset-step1').style.display = 'block';
-        $('reset-step2').style.display = 'none';
-        $('reset-tel').value = ''; $('reset-code').value = ''; $('reset-mdp1').value = ''; $('reset-mdp2').value = '';
+        $('reset-email').value = '';
         $('reset-err1').textContent = ''; $('reset-err1').style.color = 'var(--danger)';
-        $('reset-err2').textContent = '';
-        selectResetMethode('whatsapp');
         openOverlay('reset-overlay');
     };
     $('reset-close').onclick = () => closeOverlay('reset-overlay');
     $('reset-overlay').onclick = e => { if (e.target === $('reset-overlay')) closeOverlay('reset-overlay'); };
-
-    $('reset-m-wa').onclick = () => selectResetMethode('whatsapp');
-    $('reset-m-email').onclick = () => selectResetMethode('email');
-
-    $('btn-reset-envoyer').onclick = envoyerCodeReset;
-    $('btn-reset-confirmer').onclick = confirmerNouveauMdp;
+    $('btn-reset-envoyer').onclick = envoyerLienReset;
 }
 
-function selectResetMethode(m) {
-    resetMethode = m;
-    $('reset-m-wa').classList.toggle('active', m === 'whatsapp');
-    $('reset-m-email').classList.toggle('active', m === 'email');
-    $('reset-methode-info').textContent = m === 'email'
-        ? "📧 Le code sera envoyé à cette adresse email si elle est associée à un compte."
-        : "📱 Une conversation WhatsApp va s'ouvrir avec notre équipe pour recevoir votre code.";
-    const input = $('reset-tel');
-    if (m === 'email') { input.type = 'email'; input.placeholder = 'Votre adresse email'; input.removeAttribute('maxlength'); }
-    else { input.type = 'text'; input.placeholder = 'Votre numéro de téléphone (9 chiffres)'; input.maxLength = 9; }
-    input.value = '';
-}
-
-async function envoyerCodeReset() {
-    const saisie = $('reset-tel').value.trim();
+async function envoyerLienReset() {
+    const email = $('reset-email').value.trim();
     const err = $('reset-err1');
     err.style.color = 'var(--danger)'; err.textContent = '';
-
-    // La livraison par SMS nécessite une passerelle SMS payante non configurée pour l'instant.
-    if (resetMethode === 'sms') {
-        err.textContent = "❌ L'envoi par SMS n'est pas encore activé. Choisissez WhatsApp ou Email.";
-        return;
-    }
-
-    let user;
-    if (resetMethode === 'email') {
-        if (!saisie.includes('@')) { err.textContent = '❌ Adresse email invalide'; return; }
-        $('btn-reset-envoyer').textContent = 'Envoi...'; $('btn-reset-envoyer').disabled = true;
-        ({ data: user } = await db.from('utilisateurs').select('*').eq('email', saisie).single());
-    } else {
-        if (saisie.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
-        $('btn-reset-envoyer').textContent = 'Envoi...'; $('btn-reset-envoyer').disabled = true;
-        ({ data: user } = await db.from('utilisateurs').select('*').eq('telephone', saisie).single());
-    }
-    if (!user) {
-        err.textContent = resetMethode === 'email' ? '❌ Aucun compte trouvé avec cet email' : '❌ Aucun compte trouvé avec ce numéro';
-        $('btn-reset-envoyer').textContent = 'Envoyer le code'; $('btn-reset-envoyer').disabled = false;
-        return;
-    }
-    resetUserFound = user;
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const expire = new Date(Date.now() + 15 * 60000).toISOString();
-    await db.from('password_resets').insert([{ utilisateur_id: user.id, contact: saisie, methode: resetMethode, code, expire_at: expire }]);
-
-    if (resetMethode === 'email') {
-        try {
-            await emailjs.send(CONFIG.EMAILJS.SERVICE_ID, CONFIG.EMAILJS.TEMPLATE_ID, {
-                to_email: user.email, to_name: user.nom, code
-            });
-            err.style.color = 'var(--success)'; err.textContent = '✅ Code envoyé à ' + user.email;
-        } catch (e) {
-            console.error('EmailJS erreur:', e);
-            const detail = (e && (e.text || e.message)) ? (' (' + (e.text || e.message) + ')') : '';
-            err.textContent = '❌ Erreur d\'envoi' + detail + '. Réessayez ou choisissez WhatsApp.';
-            $('btn-reset-envoyer').textContent = 'Envoyer le code'; $('btn-reset-envoyer').disabled = false;
-            return;
-        }
-    } else {
-        // WhatsApp : ouvre une conversation avec notre équipe qui confirme le code au client.
-        const waMsg = encodeURIComponent(`Bonjour, je souhaite réinitialiser mon mot de passe CAMERTECH MARKET.\nMon numéro : ${saisie}\nCode de vérification : ${code}`);
-        window.open(`https://wa.me/${CONFIG.AGENCE_TEL}?text=${waMsg}`, '_blank');
-        err.style.color = 'var(--text3)';
-        err.textContent = '📱 Une conversation WhatsApp vient de s\'ouvrir avec notre équipe : ils vous confirment votre code. Entrez-le ci-dessous.';
-    }
-
-    $('btn-reset-envoyer').textContent = 'Envoyer le code'; $('btn-reset-envoyer').disabled = false;
-    $('reset-step1').style.display = 'none';
-    $('reset-step2').style.display = 'block';
-}
-
-async function confirmerNouveauMdp() {
-    const code = $('reset-code').value.trim();
-    const mdp1 = $('reset-mdp1').value.trim();
-    const mdp2 = $('reset-mdp2').value.trim();
-    const err = $('reset-err2');
-    err.textContent = '';
-    if (code.length !== 6) { err.textContent = '❌ Code invalide (6 chiffres)'; return; }
-    if (mdp1.length < 6) { err.textContent = '❌ Mot de passe trop court (6 min)'; return; }
-    if (mdp1 !== mdp2) { err.textContent = '❌ Mots de passe différents'; return; }
-
-    $('btn-reset-confirmer').textContent = 'Vérification...'; $('btn-reset-confirmer').disabled = true;
+    if (!email.includes('@')) { err.textContent = '❌ Adresse email invalide'; return; }
+    $('btn-reset-envoyer').textContent = 'Envoi...'; $('btn-reset-envoyer').disabled = true;
     try {
-        const resp = await fetch('/api/reset-password', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ utilisateur_id: resetUserFound.id, code, nouveau_mdp: mdp1 })
-        });
-        const result = await resp.json();
-        if (!resp.ok || !result.success) {
-            err.textContent = '❌ ' + (result.error || 'Code invalide ou expiré. Redemandez un code.');
-            $('btn-reset-confirmer').textContent = 'Réinitialiser le mot de passe'; $('btn-reset-confirmer').disabled = false;
-            return;
-        }
+        await window.fbSendPasswordResetEmail(window.firebaseAuth, email);
+        err.style.color = 'var(--success)';
+        err.textContent = '✅ Email envoyé à ' + email + ' — clique sur le lien pour choisir un nouveau mot de passe.';
     } catch (e) {
-        err.textContent = '❌ Erreur réseau, réessayez.';
-        $('btn-reset-confirmer').textContent = 'Réinitialiser le mot de passe'; $('btn-reset-confirmer').disabled = false;
-        return;
+        err.textContent = '❌ ' + traduireErreurFirebase(e.code);
     }
-
-    $('btn-reset-confirmer').textContent = 'Réinitialiser le mot de passe'; $('btn-reset-confirmer').disabled = false;
-    closeOverlay('reset-overlay');
-    alert('✅ Mot de passe réinitialisé avec succès ! Vous pouvez vous connecter.');
-    openOverlay('auth-overlay');
+    $('btn-reset-envoyer').textContent = 'Envoyer le lien'; $('btn-reset-envoyer').disabled = false;
 }
+
 
 // ===== BANNIÈRE =====
 async function chargerBanniere() {
@@ -1244,7 +1219,7 @@ async function afficherPanneauAdmin() {
                         <p style="font-size:0.82rem;color:#888;margin-bottom:8px">📷 Photo (compression automatique -90%)</p>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                             <label style="background:white;border:1px solid #ddd;padding:9px 14px;border-radius:7px;cursor:pointer;font-size:0.85rem">
-                                ⬆️ Uploader<input type="file" id="p-img-file" accept="image/*" style="display:none" onchange="previewAdminImg(this)">
+                                ⬆️ Uploader<input type="file" id="p-img-file" accept="image/*" multiple style="display:none" onchange="previewAdminImg(this)">
                             </label>
                             <input type="url" id="p-img-url" placeholder="ou URL image" class="adm-input" style="flex:1;min-width:150px">
                             <button type="button" id="btn-ia-analyser" onclick="analyserProduitIA()" style="background:#eef4ff;border:1px solid #cfe0ff;color:#0055bb;padding:9px 14px;border-radius:7px;cursor:pointer;font-size:0.85rem;white-space:nowrap">🤖 Analyser avec l'IA</button>
@@ -1254,6 +1229,7 @@ async function afficherPanneauAdmin() {
                             <img id="adm-img" src="" style="max-height:140px;border-radius:8px;max-width:100%">
                             <button onclick="resetAdminImg()" style="position:absolute;top:4px;right:4px;background:rgba(255,255,255,0.9);color:#e63946;border:none;border-radius:4px;padding:3px 7px;font-size:0.75rem;cursor:pointer">✕</button>
                         </div>
+                        <div id="adm-img-extra" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center"></div>
                     </div>
                     <div style="display:flex;gap:10px">
                         <button onclick="sauvegarderProduit()" style="flex:1;background:#1a5c2a;color:white;border:none;padding:12px;border-radius:9px;font-weight:700;cursor:pointer;font-size:0.95rem">Enregistrer</button>
@@ -1304,7 +1280,7 @@ async function afficherPanneauAdmin() {
                         <td style="padding:10px">📞 ${u.telephone}</td>
                         <td style="padding:10px;color:#888">${u.email||'—'}</td>
                         <td style="padding:10px;color:#888;font-size:0.78rem">${new Date(u.created_at).toLocaleDateString('fr-FR')}</td>
-                        <td style="padding:10px"><button onclick="adminResetMdp('${u.id}','${u.nom.replace(/'/g,"\\'")}','${u.telephone}')" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer">🔑 Réinitialiser mdp</button></td>
+                        <td style="padding:10px"><button onclick="adminResetMdp('${u.id}','${u.nom.replace(/'/g,"\\'")}','${u.email||''}')" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer">🔑 Réinitialiser mdp</button></td>
                     </tr>`).join('')}</tbody>
                 </table></div>
             </div>
@@ -1532,53 +1508,72 @@ window.changerStatutAdmin = async (id, statut) => {
 window.validerAvisAdmin = async id => { await db.from('avis').update({valide:true}).eq('id',id); afficherPanneauAdmin(); };
 window.supprimerAvisAdmin = async id => { if(!confirm('Supprimer ?'))return; await db.from('avis').delete().eq('id',id); afficherPanneauAdmin(); };
 
-window.adminResetMdp = async (userId, nom, tel) => {
-    if (!confirm(`Générer un nouveau mot de passe temporaire pour ${nom} ?\nL'ancien ne sera plus valide.`)) return;
-    const tempMdp = Math.random().toString(36).slice(-8);
+window.adminResetMdp = async (userId, nom, email) => {
+    if (!email) { alert(`❌ ${nom} n'a pas d'email enregistré, impossible d'envoyer un lien de réinitialisation.`); return; }
+    if (!confirm(`Envoyer un lien de réinitialisation de mot de passe à ${nom} (${email}) ?`)) return;
     try {
-        const resp = await fetch('/api/admin-reset-password', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ utilisateur_id: userId, nouveau_mdp: tempMdp })
-        });
-        const result = await resp.json();
-        if (!resp.ok || !result.success) { alert('❌ ' + (result.error || 'Erreur')); return; }
-        const msg = encodeURIComponent(`Bonjour ${nom}, votre mot de passe CAMERTECH MARKET a été réinitialisé.\n\nNouveau mot de passe temporaire : ${tempMdp}\n\nConnectez-vous puis changez-le si besoin.`);
-        window.open(`https://wa.me/237${tel}?text=${msg}`, '_blank');
+        await window.fbSendPasswordResetEmail(window.firebaseAuth, email);
+        alert(`✅ Email de réinitialisation envoyé à ${email}.`);
     } catch (e) {
-        alert('❌ Erreur réseau');
+        alert('❌ ' + traduireErreurFirebase(e.code));
     }
 };
 window.desactiverBanniere = async id => { await db.from('bannières').update({actif:false}).eq('id',id); afficherPanneauAdmin(); };
 
 window.previewAdminImg = input => {
-    selectedFile = input.files[0]; if(!selectedFile)return;
-    const reader=new FileReader();
-    reader.onload=e=>{document.getElementById('adm-img').src=e.target.result;document.getElementById('adm-img-preview').style.display='inline-block';};
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    selectedFilesAll = files;
+    selectedFile = files[0];
+
+    const reader = new FileReader();
+    reader.onload = e => { document.getElementById('adm-img').src = e.target.result; document.getElementById('adm-img-preview').style.display = 'inline-block'; };
     reader.readAsDataURL(selectedFile);
+
+    const extra = document.getElementById('adm-img-extra');
+    extra.innerHTML = '';
+    files.slice(1).forEach(f => {
+        const r = new FileReader();
+        r.onload = e => {
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.style.cssText = 'width:50px;height:50px;object-fit:cover;border-radius:6px;border:1px solid #ddd';
+            extra.appendChild(img);
+        };
+        r.readAsDataURL(f);
+    });
+    if (files.length > 1) {
+        const note = document.createElement('span');
+        note.style.cssText = 'font-size:0.72rem;color:#888';
+        note.textContent = `+${files.length - 1} photo(s) — utilisées pour l'analyse IA, la 1ère reste la photo principale du produit`;
+        extra.appendChild(note);
+    }
 };
 window.resetAdminImg = () => {
-    selectedFile=null;
+    selectedFile=null; selectedFilesAll=[];
     const f=document.getElementById('p-img-file'); if(f)f.value='';
     const u=document.getElementById('p-img-url'); if(u)u.value='';
     const p=document.getElementById('adm-img-preview'); if(p)p.style.display='none';
+    const e=document.getElementById('adm-img-extra'); if(e)e.innerHTML='';
 };
 
 window.analyserProduitIA = async () => {
     const res = document.getElementById('ia-res');
-    if (!selectedFile) { res.style.color = '#e63946'; res.textContent = '❌ Uploade d\'abord une photo.'; return; }
+    const fichiers = selectedFilesAll.length ? selectedFilesAll : (selectedFile ? [selectedFile] : []);
+    if (!fichiers.length) { res.style.color = '#e63946'; res.textContent = '❌ Uploade d\'abord au moins une photo.'; return; }
     const btn = document.getElementById('btn-ia-analyser');
     btn.disabled = true; btn.textContent = '⏳ Analyse...';
-    res.style.color = '#888'; res.textContent = 'L\'IA regarde la photo...';
+    res.style.color = '#888'; res.textContent = fichiers.length > 1 ? `L'IA regarde les ${fichiers.length} photos...` : 'L\'IA regarde la photo...';
     try {
-        const reader = new FileReader();
-        const base64 = await new Promise((resolve, reject) => {
-            reader.onload = () => resolve(reader.result.split(',')[1]);
+        const images = await Promise.all(fichiers.map(f => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve({ data: reader.result.split(',')[1], media_type: f.type || 'image/jpeg' });
             reader.onerror = reject;
-            reader.readAsDataURL(selectedFile);
-        });
+            reader.readAsDataURL(f);
+        })));
         const resp = await fetch('/api/analyser-produit', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image_base64: base64, media_type: selectedFile.type || 'image/jpeg' })
+            body: JSON.stringify({ images })
         });
         const data = await resp.json();
         if (!resp.ok || data.error) throw new Error(data.error || 'Erreur IA');
@@ -1628,11 +1623,12 @@ window.chargerEditProduit = id => {
 };
 
 window.annulerEdit = () => {
-    editingId=null; selectedFile=null;
+    editingId=null; selectedFile=null; selectedFilesAll=[];
     ['p-name','p-desc','p-qty','p-achat','p-vente','p-promo','p-img-url'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     const c=document.getElementById('p-promo-chk');if(c)c.checked=false;
     const f=document.getElementById('p-flash-chk');if(f)f.checked=false;
     const w=document.getElementById('adm-img-preview');if(w)w.style.display='none';
+    const ex=document.getElementById('adm-img-extra');if(ex)ex.innerHTML='';
     const t=document.getElementById('prod-form-title');if(t)t.textContent='➕ Ajouter un Produit';
     const b=document.getElementById('btn-annuler-edit');if(b)b.style.display='none';
 };

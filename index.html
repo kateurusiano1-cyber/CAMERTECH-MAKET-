@@ -29,6 +29,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
+        const firebaseConfig = {
+            apiKey: "AIzaSyCTIOt_TEhQnfhIkLiDIu2HjjhSzAMH9iE",
+            authDomain: "camertech-maket.firebaseapp.com",
+            projectId: "camertech-maket",
+            storageBucket: "camertech-maket.firebasestorage.app",
+            messagingSenderId: "54602735777",
+            appId: "1:54602735777:web:21dd6c4b25133d325a50e0"
+        };
+        const firebaseApp = initializeApp(firebaseConfig);
+        window.firebaseAuth = getAuth(firebaseApp);
+        window.googleProvider = new GoogleAuthProvider();
+        window.fbSignInWithPopup = signInWithPopup;
+        window.fbSignInWithEmail = signInWithEmailAndPassword;
+        window.fbCreateUserWithEmail = createUserWithEmailAndPassword;
+        window.fbSendPasswordResetEmail = sendPasswordResetEmail;
+        window.fbSignOut = signOut;
+    </script>
 
     <!-- Schema.org : identité de l'entreprise, lu par Google et les IA (AEO/GEO) -->
     <script type="application/ld+json">
@@ -278,17 +298,24 @@
         </div>
         <div id="form-login">
             <h3>👤 Connexion</h3>
-            <input type="tel" id="login-tel" placeholder="Numéro téléphone (9 chiffres)" maxlength="9">
+            <input type="email" id="login-email" placeholder="Adresse email">
             <div class="pwd-wrap"><input type="password" id="login-mdp" placeholder="Mot de passe"><button type="button" class="pwd-toggle" data-target="login-mdp">👁</button></div>
             <button class="btn-green" id="btn-login">Se connecter</button>
             <p class="form-err" id="login-err"></p>
             <button type="button" id="btn-mdp-oublie" style="background:none;border:none;color:var(--green);font-size:0.85rem;margin-top:8px;cursor:pointer;text-decoration:underline">Mot de passe oublié ?</button>
+            <div style="display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--text3);font-size:0.8rem">
+                <div style="flex:1;height:1px;background:var(--border)"></div>ou<div style="flex:1;height:1px;background:var(--border)"></div>
+            </div>
+            <button type="button" id="btn-google-login" style="width:100%;background:white;border:1.5px solid var(--border);padding:11px;border-radius:8px;cursor:pointer;font-size:0.88rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text)">
+                <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.71A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.71V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.04l2.99-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l2.99 2.33C4.66 5.16 6.65 3.58 9 3.58z"/></svg>
+                Continuer avec Google
+            </button>
         </div>
         <div id="form-reg" style="display:none">
             <h3>📝 Créer un compte</h3>
             <input type="text" id="reg-nom" placeholder="Nom complet *">
-            <input type="tel" id="reg-tel" placeholder="Téléphone (9 chiffres) *" maxlength="9">
-            <input type="email" id="reg-email" placeholder="Email (optionnel)">
+            <input type="email" id="reg-email" placeholder="Email *">
+            <input type="tel" id="reg-tel" placeholder="Téléphone (9 chiffres) — pour la livraison *" maxlength="9">
             <div class="pwd-wrap"><input type="password" id="reg-mdp" placeholder="Mot de passe *"><button type="button" class="pwd-toggle" data-target="reg-mdp">👁</button></div>
             <div class="pwd-wrap"><input type="password" id="reg-mdp2" placeholder="Confirmer mot de passe *"><button type="button" class="pwd-toggle" data-target="reg-mdp2">👁</button></div>
             <button class="btn-green" id="btn-register">Créer mon compte</button>
@@ -297,31 +324,26 @@
     </div>
 </div>
 
+<!-- MODAL TELEPHONE MANQUANT (première connexion Google) -->
+<div class="modal-overlay" id="tel-manquant-overlay" style="display:none">
+    <div class="modal modal-auth">
+        <h3>📞 Un dernier détail</h3>
+        <p style="color:var(--text3);font-size:0.88rem;margin-bottom:12px">Ton numéro de téléphone nous sert uniquement pour organiser la livraison de tes commandes.</p>
+        <input type="tel" id="tel-manquant-input" placeholder="Téléphone (9 chiffres)" maxlength="9">
+        <button class="btn-green" id="btn-tel-manquant-confirmer">Continuer</button>
+        <p class="form-err" id="tel-manquant-err"></p>
+    </div>
+</div>
+
 <!-- MODAL MOT DE PASSE OUBLIE -->
 <div class="modal-overlay" id="reset-overlay" style="display:none">
     <div class="modal modal-auth">
         <button class="modal-x" id="reset-close">✕</button>
-        <div id="reset-step1">
-            <h3>🔑 Mot de passe oublié</h3>
-            <input type="text" id="reset-tel" placeholder="Votre numéro de téléphone (9 chiffres)" maxlength="9">
-            <label style="font-size:0.85rem;color:var(--text3);margin:10px 0 6px;display:block">Recevoir le code par :</label>
-            <div class="pay-methods">
-                <button type="button" class="pay-method active" data-methode="whatsapp" id="reset-m-wa">📱 WhatsApp</button>
-                <button type="button" class="pay-method" data-methode="email" id="reset-m-email">📧 Email</button>
-                <button type="button" class="pay-method" data-methode="sms" id="reset-m-sms" disabled style="opacity:0.5;cursor:not-allowed">💬 SMS<br><span style="font-size:0.7rem;font-weight:400">Bientôt</span></button>
-            </div>
-            <p id="reset-methode-info" style="font-size:0.8rem;color:var(--text3);margin-top:8px"></p>
-            <button class="btn-green" id="btn-reset-envoyer" style="margin-top:14px">Envoyer le code</button>
-            <p class="form-err" id="reset-err1"></p>
-        </div>
-        <div id="reset-step2" style="display:none">
-            <h3>🔑 Entrez le code reçu</h3>
-            <input type="text" id="reset-code" placeholder="Code à 6 chiffres" maxlength="6">
-            <div class="pwd-wrap"><input type="password" id="reset-mdp1" placeholder="Nouveau mot de passe"><button type="button" class="pwd-toggle" data-target="reset-mdp1">👁</button></div>
-            <div class="pwd-wrap"><input type="password" id="reset-mdp2" placeholder="Confirmer le nouveau mot de passe"><button type="button" class="pwd-toggle" data-target="reset-mdp2">👁</button></div>
-            <button class="btn-green" id="btn-reset-confirmer">Réinitialiser le mot de passe</button>
-            <p class="form-err" id="reset-err2"></p>
-        </div>
+        <h3>🔑 Mot de passe oublié</h3>
+        <p style="color:var(--text3);font-size:0.85rem;margin-bottom:12px">Entre ton email, on t'envoie un lien pour choisir un nouveau mot de passe.</p>
+        <input type="email" id="reset-email" placeholder="Ton adresse email">
+        <button class="btn-green" id="btn-reset-envoyer">Envoyer le lien</button>
+        <p class="form-err" id="reset-err1"></p>
     </div>
 </div>
 
