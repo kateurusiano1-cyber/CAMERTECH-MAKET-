@@ -118,16 +118,6 @@ function setupTuilesCategories() {
         if (url) { img.src = url; img.style.display = 'block'; }
         else { img.closest('.tuile-photo-wrap').style.display = 'none'; }
     });
-
-    document.querySelectorAll('.tuile').forEach(tuile => {
-        tuile.addEventListener('mousemove', e => {
-            const r = tuile.getBoundingClientRect();
-            const x = (e.clientX - r.left) / r.width - 0.5;
-            const y = (e.clientY - r.top) / r.height - 0.5;
-            tuile.style.transform = `perspective(900px) rotateY(${x * 10}deg) rotateX(${-y * 10}deg) translateY(-3px) scale(1.03)`;
-        });
-        tuile.addEventListener('mouseleave', () => { tuile.style.transform = ''; });
-    });
 }
 
 // ===== PARAMETRES (modifiables par l'admin, sans toucher au code) =====
@@ -591,17 +581,21 @@ function initSlider(slidesData) {
             const slide = document.createElement('div');
             slide.className = 'slide';
             if (s.image_url) {
-                slide.style.cssText = `background:linear-gradient(135deg, var(--green-dark), var(--green) 60%, var(--green-light))`;
+                const prixHtml = s.prix_actuel ? `<div class="slide-prix-bloc">
+                    <span class="slide-prix-actuel">${fmt(s.prix_actuel)} FCFA</span>
+                    ${s.prix_ancien ? `<span class="slide-prix-ancien">${fmt(s.prix_ancien)} FCFA</span>` : ''}
+                </div>` : '';
                 slide.innerHTML = `<div class="slide-inner">
                     <div class="slide-tag">${s.tag||'🔥 PROMO'}</div>
                     <h2>${s.titre||''}<br><span>${s.sous_titre||''}</span></h2>
                     <p>${s.message||''}</p>
+                    ${prixHtml}
                     ${s.btn_texte?`<button class="slide-btn">${s.btn_texte}</button>`:''}
                 </div>
-                <div class="slide-media"><img src="${s.image_url}" class="slide-product-img img-blurup" loading="lazy" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
+                <div class="slide-media"><div class="slide-halo"></div><img src="${s.image_url}" class="slide-product-img img-blurup" loading="lazy" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
             } else {
                 slide.className = 'slide slide-default';
-                slide.innerHTML = `<div class="slide-inner">
+                slide.innerHTML = `<div class="slide-inner slide-inner-full">
                     <div class="slide-tag">🔥 BIENVENUE</div>
                     <h2>Les meilleurs produits<br><span>Tech au Cameroun</span></h2>
                     <p>Livraison rapide à Douala • Qualité garantie</p>
@@ -617,7 +611,7 @@ function initSlider(slidesData) {
     } else {
         const slide = document.createElement('div');
         slide.className = 'slide slide-default';
-        slide.innerHTML = `<div class="slide-inner">
+        slide.innerHTML = `<div class="slide-inner slide-inner-full">
             <div class="slide-tag">🔥 BIENVENUE</div>
             <h2>Les meilleurs produits<br><span>Tech au Cameroun</span></h2>
             <p>Livraison rapide à Douala • Qualité garantie</p>
@@ -1494,7 +1488,17 @@ async function afficherPanneauAdmin() {
                     <div id="mktg-slider-extra" style="display:none;flex-direction:column;gap:8px">
                         <input type="text" id="mktg-titre" placeholder="Titre du slide" class="adm-input">
                         <input type="text" id="mktg-tag" placeholder="Tag (ex: 🔥 PROMO)" class="adm-input">
-                        <input type="url" id="mktg-img-url" placeholder="URL image de fond" class="adm-input">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <label style="background:white;border:1px solid #ddd;padding:9px 14px;border-radius:7px;cursor:pointer;font-size:0.85rem">
+                                ⬆️ Uploader<input type="file" id="mktg-slider-file" accept="image/*" style="display:none" onchange="previewSliderImg(this)">
+                            </label>
+                            <input type="url" id="mktg-img-url" placeholder="ou URL image (idéalement PNG transparent)" class="adm-input" style="flex:1;min-width:150px">
+                        </div>
+                        <div id="mktg-slider-preview" style="display:none"><img id="mktg-slider-preview-img" style="max-height:100px;border-radius:8px"></div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                            <input type="number" id="mktg-prix-actuel" placeholder="Prix actuel (FCFA)" class="adm-input">
+                            <input type="number" id="mktg-prix-ancien" placeholder="Ancien prix (optionnel)" class="adm-input">
+                        </div>
                         <input type="text" id="mktg-btn-txt" placeholder="Texte bouton" class="adm-input">
                     </div>
                     <div id="mktg-popup-extra" style="display:none;flex-direction:column;gap:10px">
@@ -1593,6 +1597,17 @@ window.previewPopupFlyer = (input) => {
         document.getElementById('mktg-popup-preview').style.display = 'block';
     };
     reader.readAsDataURL(popupFlyerFile);
+};
+let sliderImgFile = null;
+window.previewSliderImg = (input) => {
+    sliderImgFile = input.files[0];
+    if (!sliderImgFile) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.getElementById('mktg-slider-preview-img').src = e.target.result;
+        document.getElementById('mktg-slider-preview').style.display = 'block';
+    };
+    reader.readAsDataURL(sliderImgFile);
 };
 window.filtrerProduitsPopup = () => {
     const q = document.getElementById('mktg-prod-search').value.toLowerCase();
@@ -1803,8 +1818,9 @@ function afficherResultatsLot(produits, fichiers) {
             <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px">
                 <input type="text" id="ia-lot-name-${i}" class="adm-input" value="${(p.name||'').replace(/"/g,'&quot;')}" placeholder="Nom du produit">
                 <textarea id="ia-lot-desc-${i}" class="adm-input" rows="2" placeholder="Description">${p.description||''}</textarea>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
                     <select id="ia-lot-cat-${i}" class="adm-input"><option value="Téléphonie">📱 Téléphonie</option><option value="Accessoires">🎧 Accessoires</option><option value="Électronique">💻 Électronique</option><option value="Réseau">📡 Réseau</option><option value="Gaming">🎮 Gaming</option><option value="Autre">📦 Autre</option></select>
+                    <input type="number" id="ia-lot-achat-${i}" class="adm-input" placeholder="Prix achat *">
                     <input type="number" id="ia-lot-vente-${i}" class="adm-input" placeholder="Prix vente *">
                     <input type="number" id="ia-lot-qte-${i}" class="adm-input" placeholder="Quantité *">
                 </div>
@@ -1830,10 +1846,12 @@ window.validerProduitLot = async (i) => {
     const name = document.getElementById(`ia-lot-name-${i}`).value.trim();
     const desc = document.getElementById(`ia-lot-desc-${i}`).value.trim();
     const cat = document.getElementById(`ia-lot-cat-${i}`).value;
+    const achat = parseFloat(document.getElementById(`ia-lot-achat-${i}`).value);
     const vente = parseFloat(document.getElementById(`ia-lot-vente-${i}`).value);
     const qte = parseInt(document.getElementById(`ia-lot-qte-${i}`).value);
     res.textContent = '';
     if (!name) { res.style.color = '#e63946'; res.textContent = '❌ Nom requis'; return; }
+    if (!achat || achat <= 0) { res.style.color = '#e63946'; res.textContent = '❌ Prix d\'achat requis'; return; }
     if (!vente || vente <= 0) { res.style.color = '#e63946'; res.textContent = '❌ Prix de vente requis'; return; }
     if (!qte || qte < 0) { res.style.color = '#e63946'; res.textContent = '❌ Quantité requise'; return; }
     btn.disabled = true; btn.textContent = '⏳ Ajout...';
@@ -1842,7 +1860,7 @@ window.validerProduitLot = async (i) => {
         const imageUrl = fichier ? await uploadImage(fichier) : null;
         const { error } = await db.from('products').insert([{
             name, description: desc, category: cat,
-            resale_price: vente, quantity: qte, image_url: imageUrl
+            purchase_price: achat, resale_price: vente, quantity: qte, image_url: imageUrl
         }]);
         if (error) throw error;
         res.style.color = '#2dc653'; res.textContent = '✅ Produit ajouté !';
@@ -1908,7 +1926,20 @@ window.publierMessage = async () => {
     const res=document.getElementById('mktg-res');
     if(!msg){res.style.color='#e63946';res.textContent='❌ Message vide';return;}
     const payload={message:msg,type,actif:true};
-    if(type==='slider'){payload.titre=document.getElementById('mktg-titre').value;payload.tag=document.getElementById('mktg-tag').value;payload.image_url=document.getElementById('mktg-img-url').value;payload.btn_texte=document.getElementById('mktg-btn-txt').value;}
+    if(type==='slider'){
+        let sliderUrl = document.getElementById('mktg-img-url').value.trim();
+        if (sliderImgFile) {
+            res.style.color='#888'; res.textContent='⏳ Envoi de l\'image...';
+            try { sliderUrl = await uploadImage(sliderImgFile); }
+            catch(e){ res.style.color='#e63946'; res.textContent='❌ Upload: '+e.message; return; }
+        }
+        payload.titre=document.getElementById('mktg-titre').value;
+        payload.tag=document.getElementById('mktg-tag').value;
+        payload.image_url=sliderUrl;
+        payload.btn_texte=document.getElementById('mktg-btn-txt').value;
+        const pa=document.getElementById('mktg-prix-actuel').value; payload.prix_actuel = pa?parseFloat(pa):null;
+        const pan=document.getElementById('mktg-prix-ancien').value; payload.prix_ancien = pan?parseFloat(pan):null;
+    }
     if(type==='popup'){
         let flyerUrl = document.getElementById('mktg-popup-img').value.trim();
         if (popupFlyerFile) {
@@ -1926,5 +1957,6 @@ window.publierMessage = async () => {
     res.style.color='#2dc653';res.textContent='✅ Publié !';
     document.getElementById('mktg-msg').value='';
     popupFlyerFile = null;
+    sliderImgFile = null;
     setTimeout(()=>afficherPanneauAdmin(),600);
 };
