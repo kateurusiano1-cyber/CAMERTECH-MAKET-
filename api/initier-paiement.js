@@ -1,3 +1,6 @@
+const { createClient } = require('@supabase/supabase-js');
+const { circuitOuvert, signalerEchec, signalerSucces } = require('./_lib/circuitBreaker');
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -7,6 +10,8 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Méthode non autorisée' });
   }
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
@@ -18,6 +23,12 @@ module.exports = async (req, res) => {
 
     if (montant < 100 || montant > 5000000) {
       return res.status(400).json({ error: 'Montant invalide' });
+    }
+
+    // Circuit breaker : si Monetbil échoue en boucle, on arrête de le solliciter un moment
+    const circuit = await circuitOuvert(supabase, 'monetbil');
+    if (circuit.ouvert) {
+      return res.status(503).json({ error: `Paiement temporairement indisponible, réessayez dans ${Math.ceil(circuit.retryAfterSeconds / 60)} min.` });
     }
 
     const serviceKey = process.env.MONETBIL_SERVICE_KEY;
@@ -56,8 +67,11 @@ module.exports = async (req, res) => {
     try {
       result = JSON.parse(rawText);
     } catch (e) {
+      await signalerEchec(supabase, 'monetbil');
       return res.status(500).json({ error: 'Réponse invalide: ' + rawText.substring(0, 100) });
     }
+
+    await signalerSucces(supabase, 'monetbil');
 
     return res.status(200).json({
       success: result.status === 'success' || result.status === 1 || !!result.transaction_id,
@@ -68,6 +82,7 @@ module.exports = async (req, res) => {
 
   } catch (error) {
     console.error('Erreur:', error.message);
+    try { await signalerEchec(supabase, 'monetbil'); } catch (e) {}
     return res.status(500).json({ error: error.message });
   }
 };
