@@ -19,14 +19,14 @@ async function compresserImage(file) {
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 let w = img.width, h = img.height;
-                const max = 800;
+                const max = 1600;
                 if (w > max || h > max) {
                     const r = Math.min(max/w, max/h);
                     w = Math.round(w*r); h = Math.round(h*r);
                 }
                 canvas.width = w; canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                canvas.toBlob(b => res(b), 'image/webp', 0.75);
+                canvas.toBlob(b => res(b), 'image/webp', 0.88);
             };
             img.src = e.target.result;
         };
@@ -85,6 +85,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await chargerParametres();
     await verifierLienResetDansURL();
+
+    // Applique la langue mémorisée (si déjà EN, met aussi à jour l'état visuel des boutons)
+    appliquerTraductionUI(currentLang);
+    $('btn-fr').classList.toggle('active', currentLang === 'fr');
+    $('btn-en').classList.toggle('active', currentLang === 'en');
 
     setupSidebar();
     setupTuilesCategories();
@@ -146,6 +151,127 @@ async function chargerParametres() {
     } catch (e) { console.error('Erreur chargement paramètres:', e); }
 }
 
+// ===== TRADUCTION (FR/EN) =====
+const I18N = {
+    fr: {
+        nav_accueil: '🏠 Accueil', nav_flash: '⚡ Ventes Flash', nav_promo: '🏷️ Promotions',
+        nav_nouveautes: '🆕 Nouveautés', nav_meilleures: '⭐ Meilleures ventes',
+        sep_categories: 'Catégories', sep_services: 'Services', sep_preferences: 'Préférences',
+        cat_telephonie_ic: '📱 Téléphonie', cat_accessoires_ic: '🎧 Accessoires', cat_electronique_ic: '💻 Électronique',
+        cat_reseau_ic: '📡 Réseau', cat_gaming_ic: '🎮 Gaming', cat_autre_ic: '📦 Autre',
+        cat_telephonie: 'Téléphonie', cat_accessoires: 'Accessoires', cat_electronique: 'Électronique',
+        cat_reseau: 'Réseau', cat_gaming: 'Gaming', cat_flash: 'Flash', cat_tous: 'Tous', cat_autre: 'Autre',
+        nav_suivi: '🚚 Suivi de commande', nav_loc: '🏪 Localisation boutique', nav_contact: '📞 Nous contacter',
+        pref_langue: '🌍 Langue', pref_sombre: '🌙 Mode sombre', pref_zone: '📍 Ma zone', pref_prixmax: '💰 Prix max (FCFA)',
+        choisir: 'Choisir...', retrait_gratuit: '🏪 Retrait gratuit',
+        rechercher_ph: '🔎 Rechercher un produit...', btn_connexion: '👤 Connexion',
+        titre_flash: '⚡ Ventes Flash', titre_produits: '🛒 Nos Produits', chargement: 'Chargement...',
+        footer_sub: 'Votre boutique tech à Douala', footer_copy: '© 2025 CAMERTECH MARKET — Douala, Cameroun',
+        tab_connexion: 'Connexion', tab_inscription: 'Inscription', titre_connexion: '👤 Connexion',
+        ph_email: 'Adresse email', ph_mdp: 'Mot de passe', btn_se_connecter: 'Se connecter',
+        btn_mdp_oublie: 'Mot de passe oublié ?', ou: 'ou', btn_google: 'Continuer avec Google',
+        titre_creer_compte: '📝 Créer un compte', ph_nom: 'Nom complet *', ph_email_req: 'Email *',
+        ph_tel_livraison: 'Téléphone (9 chiffres) — pour la livraison *', ph_mdp_req: 'Mot de passe *',
+        ph_confirmer_mdp: 'Confirmer mot de passe *', btn_creer_compte: 'Créer mon compte',
+        titre_tel_manquant: '📞 Un dernier détail', txt_tel_manquant: 'Ton numéro de téléphone nous sert uniquement pour organiser la livraison de tes commandes.',
+        ph_tel: 'Téléphone (9 chiffres)', btn_continuer: 'Continuer',
+        titre_mdp_oublie: '🔑 Mot de passe oublié', txt_mdp_oublie: 'Entre ton email, on t\'envoie un lien pour choisir un nouveau mot de passe.',
+        titre_panier: '🛒 Mon Panier', label_zone: '📍 Zone de livraison', choisir_zone: '-- Choisir votre zone --',
+        ph_note: 'Note pour la commande (optionnel)...', btn_payer: '💳 Payer maintenant (Mobile Money)',
+        btn_reserver: '📋 Réserver (paiement à la livraison)'
+    },
+    en: {
+        nav_accueil: '🏠 Home', nav_flash: '⚡ Flash Sales', nav_promo: '🏷️ Promotions',
+        nav_nouveautes: '🆕 New Arrivals', nav_meilleures: '⭐ Best Sellers',
+        sep_categories: 'Categories', sep_services: 'Services', sep_preferences: 'Preferences',
+        cat_telephonie_ic: '📱 Phones', cat_accessoires_ic: '🎧 Accessories', cat_electronique_ic: '💻 Electronics',
+        cat_reseau_ic: '📡 Network', cat_gaming_ic: '🎮 Gaming', cat_autre_ic: '📦 Other',
+        cat_telephonie: 'Phones', cat_accessoires: 'Accessories', cat_electronique: 'Electronics',
+        cat_reseau: 'Network', cat_gaming: 'Gaming', cat_flash: 'Flash', cat_tous: 'All', cat_autre: 'Other',
+        nav_suivi: '🚚 Track Order', nav_loc: '🏪 Store Location', nav_contact: '📞 Contact Us',
+        pref_langue: '🌍 Language', pref_sombre: '🌙 Dark Mode', pref_zone: '📍 My Area', pref_prixmax: '💰 Max Price (FCFA)',
+        choisir: 'Choose...', retrait_gratuit: '🏪 Free pickup',
+        rechercher_ph: '🔎 Search a product...', btn_connexion: '👤 Login',
+        titre_flash: '⚡ Flash Sales', titre_produits: '🛒 Our Products', chargement: 'Loading...',
+        footer_sub: 'Your tech shop in Douala', footer_copy: '© 2025 CAMERTECH MARKET — Douala, Cameroon',
+        tab_connexion: 'Login', tab_inscription: 'Sign up', titre_connexion: '👤 Login',
+        ph_email: 'Email address', ph_mdp: 'Password', btn_se_connecter: 'Log in',
+        btn_mdp_oublie: 'Forgot password?', ou: 'or', btn_google: 'Continue with Google',
+        titre_creer_compte: '📝 Create an account', ph_nom: 'Full name *', ph_email_req: 'Email *',
+        ph_tel_livraison: 'Phone (9 digits) — for delivery *', ph_mdp_req: 'Password *',
+        ph_confirmer_mdp: 'Confirm password *', btn_creer_compte: 'Create my account',
+        titre_tel_manquant: '📞 One last detail', txt_tel_manquant: 'Your phone number is only used to organize delivery of your orders.',
+        ph_tel: 'Phone (9 digits)', btn_continuer: 'Continue',
+        titre_mdp_oublie: '🔑 Forgot password', txt_mdp_oublie: 'Enter your email, we\'ll send you a link to choose a new password.',
+        titre_panier: '🛒 My Cart', label_zone: '📍 Delivery area', choisir_zone: '-- Choose your area --',
+        ph_note: 'Note for the order (optional)...', btn_payer: '💳 Pay now (Mobile Money)',
+        btn_reserver: '📋 Reserve (pay on pickup/delivery)'
+    }
+};
+
+let currentLang = localStorage.getItem('cmkt_lang') || 'fr';
+let translatedProductsCache = {}; // { productId: { name, description } } — en anglais uniquement
+
+function appliquerTraductionUI(lang) {
+    const dict = I18N[lang];
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.dataset.i18n;
+        if (dict[key] !== undefined) el.textContent = dict[key];
+    });
+    document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+        const key = el.dataset.i18nPh;
+        if (dict[key] !== undefined) el.placeholder = dict[key];
+    });
+    document.documentElement.lang = lang;
+}
+
+async function setLang(lang) {
+    if (lang === currentLang) return;
+    currentLang = lang;
+    localStorage.setItem('cmkt_lang', lang);
+    $('btn-fr').classList.toggle('active', lang === 'fr');
+    $('btn-en').classList.toggle('active', lang === 'en');
+    appliquerTraductionUI(lang);
+
+    if (lang === 'en') {
+        await traduireProduitsSiNecessaire(allProducts);
+    }
+    renderProducts(allProducts.length ? (currentCat === 'tous' ? allProducts : allProducts.filter(p => p.category === currentCat)) : allProducts);
+    chargerFlash(allProducts);
+    if (modalProduct) openModal(modalProduct.id);
+}
+
+// Traduit en anglais (une seule fois, mis en cache) les produits pas encore traduits
+async function traduireProduitsSiNecessaire(produits) {
+    const aTraduire = produits.filter(p => !translatedProductsCache[p.id]);
+    if (!aTraduire.length) return;
+    try {
+        const resp = await fetch('/api/traduire-produits', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ produits: aTraduire.map(p => ({ id: p.id, name: p.name, description: p.description || '' })) })
+        });
+        const data = await resp.json();
+        if (Array.isArray(data)) {
+            data.forEach(t => { translatedProductsCache[t.id] = { name: t.name, description: t.description }; });
+        }
+    } catch (e) { console.error('Erreur traduction produits:', e); }
+}
+
+// Retourne le nom/description à afficher selon la langue active (fallback français si pas encore traduit)
+function texteProduit(p) {
+    if (currentLang === 'en' && translatedProductsCache[p.id]) {
+        return { name: translatedProductsCache[p.id].name || p.name, description: translatedProductsCache[p.id].description || p.description };
+    }
+    return { name: p.name, description: p.description };
+}
+
+// Retourne le nom de catégorie affiché dans la langue active (les valeurs stockées restent en français)
+const CAT_KEY = { 'Téléphonie':'cat_telephonie', 'Accessoires':'cat_accessoires', 'Électronique':'cat_electronique', 'Réseau':'cat_reseau', 'Gaming':'cat_gaming', 'Autre':'cat_autre' };
+function catLabel(cat) {
+    const key = CAT_KEY[cat];
+    return key ? I18N[currentLang][key] : cat;
+}
+
 function setupSidebar() {
     $('hamburger').onclick = () => { $('sidebar').classList.add('open'); $('sidebar-overlay').classList.add('active'); };
     $('sidebar-close').onclick = closeSidebar;
@@ -172,8 +298,8 @@ function setupSidebar() {
         localStorage.setItem('cmkt_theme', t);
     };
 
-    $('btn-fr').onclick = () => { $('btn-fr').classList.add('active'); $('btn-en').classList.remove('active'); };
-    $('btn-en').onclick = () => { $('btn-en').classList.add('active'); $('btn-fr').classList.remove('active'); };
+    $('btn-fr').onclick = () => setLang('fr');
+    $('btn-en').onclick = () => setLang('en');
 
     $('sidebar-zone').onchange = () => { userZone = $('sidebar-zone').value; $('zone-select').value = userZone; updateLivraison(); };
     $('prix-max-filter').onchange = () => {
@@ -472,7 +598,7 @@ function initSlider(slidesData) {
                     <p>${s.message||''}</p>
                     ${s.btn_texte?`<button class="slide-btn">${s.btn_texte}</button>`:''}
                 </div>
-                <div class="slide-media"><img src="${s.image_url}" class="slide-product-img" alt="${s.titre||'Promotion'}"></div>`;
+                <div class="slide-media"><img src="${s.image_url}" class="slide-product-img img-blurup" loading="lazy" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
             } else {
                 slide.className = 'slide slide-default';
                 slide.innerHTML = `<div class="slide-inner">
@@ -634,30 +760,31 @@ function injecterSchemaProduit(p) {
 function renderProducts(products) {
     const grid = $('product-grid');
     const filtered = currentCat === 'tous' ? products : products.filter(p => p.category === currentCat);
-    $('prod-count').textContent = filtered.length + ' produit(s)';
+    $('prod-count').textContent = filtered.length + (currentLang==='en' ? ' product(s)' : ' produit(s)');
     grid.innerHTML = '';
-    if (!filtered.length) { grid.innerHTML = '<div class="empty-state">Aucun produit disponible.</div>'; return; }
+    if (!filtered.length) { grid.innerHTML = `<div class="empty-state">${currentLang==='en'?'No products available.':'Aucun produit disponible.'}</div>`; return; }
     filtered.forEach(p => {
         const card = document.createElement('div');
         card.className = 'card';
         const prix = getPrix(p);
         const hasPromo = (p.promo_active || p.flash_active) && p.promo_prix;
         const pct = hasPromo ? `-${Math.round((1-p.promo_prix/p.resale_price)*100)}%` : '';
+        const txt = texteProduit(p);
         card.innerHTML = `
             <div class="card-img-wrap">
-                ${p.image_url ? `<img src="${p.image_url}" alt="${p.name}" class="card-img" loading="lazy">` : '<div class="card-img-ph">📦</div>'}
-                ${p.quantity < 5 && p.quantity > 0 ? '<span class="badge badge-low">Stock faible</span>' : ''}
+                ${p.image_url ? `<img src="${p.image_url}" alt="${txt.name}" class="card-img img-blurup" loading="lazy" onload="this.classList.add('loaded')">` : '<div class="card-img-ph">📦</div>'}
+                ${p.quantity < 5 && p.quantity > 0 ? `<span class="badge badge-low">${currentLang==='en'?'Low stock':'Stock faible'}</span>` : ''}
                 ${p.flash_active ? '<span class="badge badge-flash">⚡ FLASH</span>' : isNew(p.created_at) ? '<span class="badge badge-new">🆕</span>' : ''}
                 ${p.promo_active && !p.flash_active ? '<span class="badge badge-promo">🔥 PROMO</span>' : ''}
                 ${pct ? `<span class="badge badge-pct">${pct}</span>` : ''}
             </div>
             <div class="card-body">
-                <div class="card-cat">${p.category}</div>
-                <div class="card-name">${p.name}</div>
-                <div class="card-qty">Qté : ${p.quantity}</div>
+                <div class="card-cat">${catLabel(p.category)}</div>
+                <div class="card-name">${txt.name}</div>
+                <div class="card-qty">${currentLang==='en'?'Qty':'Qté'} : ${p.quantity}</div>
                 ${hasPromo ? `<div class="prix-barre-sm">${fmt(p.resale_price)} FCFA</div>` : ''}
                 <div class="card-price ${hasPromo?'promo':''}">${fmt(prix)} FCFA</div>
-                <button class="btn-acheter">Voir détails</button>
+                <button class="btn-acheter">${currentLang==='en'?'View details':'Voir détails'}</button>
                 ${isAdmin ? `<div class="card-admin-btns">
                     <button class="btn-sm-edit" data-id="${p.id}">✏️</button>
                     <button class="btn-sm-del" data-id="${p.id}">🗑️</button>
@@ -694,14 +821,14 @@ function chargerFlash(prods) {
         card.className = 'card';
         const prix = getPrix(p);
         card.innerHTML = `<div class="card-img-wrap">
-            ${p.image_url ? `<img src="${p.image_url}" class="card-img">` : '<div class="card-img-ph">📦</div>'}
+            ${p.image_url ? `<img src="${p.image_url}" class="card-img img-blurup" loading="lazy" onload="this.classList.add('loaded')">` : '<div class="card-img-ph">📦</div>'}
             <span class="badge badge-flash">⚡ FLASH</span>
         </div>
         <div class="card-body">
-            <div class="card-name">${p.name}</div>
+            <div class="card-name">${texteProduit(p).name}</div>
             <div class="prix-barre-sm">${fmt(p.resale_price)} FCFA</div>
             <div class="card-price promo">${fmt(prix)} FCFA</div>
-            <button class="btn-acheter">Ajouter au panier</button>
+            <button class="btn-acheter">${currentLang==='en'?'Add to cart':'Ajouter au panier'}</button>
         </div>`;
         card.querySelector('.btn-acheter').onclick = () => openModal(p.id);
         grid.appendChild(card);
@@ -733,9 +860,10 @@ async function openModal(productId) {
     if (!p) return;
     modalProduct = p;
     $('qty-val').textContent = '1';
-    $('prod-name').textContent = p.name;
-    $('prod-desc').textContent = p.description || '';
-    $('prod-cat-tag').textContent = p.category;
+    const txt = texteProduit(p);
+    $('prod-name').textContent = txt.name;
+    $('prod-desc').textContent = txt.description || '';
+    $('prod-cat-tag').textContent = catLabel(p.category);
     $('prod-new-tag').style.display = isNew(p.created_at) ? 'inline-block' : 'none';
     $('prod-low-tag').style.display = p.quantity < 5 ? 'inline-block' : 'none';
     $('prod-flash-tag').style.display = p.flash_active ? 'block' : 'none';
@@ -789,7 +917,7 @@ async function chargerCrossSell(p) {
         <h4 style="font-size:0.88rem;color:var(--text2);margin-bottom:10px">💡 Souvent achetés ensemble</h4>
         <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none">
             ${data.map(cs=>`<div onclick="closeOverlay('prod-overlay');setTimeout(()=>openModal('${cs.id}'),100)" style="min-width:110px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;cursor:pointer;text-align:center;flex-shrink:0">
-                ${cs.image_url?`<img src="${cs.image_url}" style="width:100%;height:55px;object-fit:cover;border-radius:6px;margin-bottom:6px">`:'<div style="height:55px;display:flex;align-items:center;justify-content:center;font-size:1.5rem">📦</div>'}
+                ${cs.image_url?`<img src="${cs.image_url}" class="img-blurup" loading="lazy" onload="this.classList.add('loaded')" style="width:100%;height:55px;object-fit:cover;border-radius:6px;margin-bottom:6px">`:'<div style="height:55px;display:flex;align-items:center;justify-content:center;font-size:1.5rem">📦</div>'}
                 <div style="font-size:0.72rem;font-weight:600;line-height:1.2;margin-bottom:4px">${cs.name}</div>
                 <div style="font-size:0.8rem;color:var(--orange);font-weight:700">${fmt(getPrix(cs))} F</div>
                 <button onclick="event.stopPropagation();addQuick('${cs.id}')" style="width:100%;background:var(--orange);color:white;border:none;padding:4px;border-radius:5px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-top:4px">+ Ajouter</button>
@@ -1259,7 +1387,7 @@ async function afficherPanneauAdmin() {
                         <label style="display:flex;align-items:center;gap:8px;color:#555;font-size:0.88rem"><input type="checkbox" id="p-flash-chk"> ⚡ Vente Flash</label>
                     </div>
                     <div style="background:#f4f6f4;border:1.5px dashed #ddd;border-radius:8px;padding:14px">
-                        <p style="font-size:0.82rem;color:#888;margin-bottom:8px">📷 Photo (compression automatique -90%)</p>
+                        <p style="font-size:0.82rem;color:#888;margin-bottom:8px">📷 Photo (optimisée automatiquement, haute qualité conservée)</p>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                             <label style="background:white;border:1px solid #ddd;padding:9px 14px;border-radius:7px;cursor:pointer;font-size:0.85rem">
                                 ⬆️ Uploader<input type="file" id="p-img-file" accept="image/*" multiple style="display:none" onchange="previewAdminImg(this)">
@@ -1568,34 +1696,54 @@ window.adminResetMdp = async (userId, nom, email) => {
 window.desactiverBanniere = async id => { await db.from('bannières').update({actif:false}).eq('id',id); afficherPanneauAdmin(); };
 
 window.previewAdminImg = input => {
-    const files = Array.from(input.files || []);
-    if (!files.length) return;
-    selectedFilesAll = files;
-    selectedFile = files[0];
+    const nouvelles = Array.from(input.files || []);
+    if (!nouvelles.length) return;
+    selectedFilesAll = [...selectedFilesAll, ...nouvelles].slice(0, 8); // 8 photos max
+    selectedFile = selectedFilesAll[0];
+    input.value = ''; // permet de resélectionner/ajouter d'autres photos ensuite
 
+    renderAdminImgThumbs();
+};
+
+function renderAdminImgThumbs() {
+    if (!selectedFilesAll.length) {
+        document.getElementById('adm-img-preview').style.display = 'none';
+        document.getElementById('adm-img-extra').innerHTML = '';
+        return;
+    }
     const reader = new FileReader();
     reader.onload = e => { document.getElementById('adm-img').src = e.target.result; document.getElementById('adm-img-preview').style.display = 'inline-block'; };
-    reader.readAsDataURL(selectedFile);
+    reader.readAsDataURL(selectedFilesAll[0]);
 
     const extra = document.getElementById('adm-img-extra');
     extra.innerHTML = '';
-    files.slice(1).forEach(f => {
+    selectedFilesAll.slice(1).forEach((f, idx) => {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:relative;display:inline-block';
         const r = new FileReader();
         r.onload = e => {
             const img = document.createElement('img');
             img.src = e.target.result;
             img.style.cssText = 'width:50px;height:50px;object-fit:cover;border-radius:6px;border:1px solid #ddd';
-            extra.appendChild(img);
+            wrap.appendChild(img);
         };
         r.readAsDataURL(f);
+        const x = document.createElement('button');
+        x.textContent = '✕';
+        x.type = 'button';
+        x.style.cssText = 'position:absolute;top:-6px;right:-6px;background:#e63946;color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:0.6rem;cursor:pointer;line-height:1;padding:0';
+        x.onclick = () => { selectedFilesAll.splice(idx + 1, 1); renderAdminImgThumbs(); };
+        wrap.appendChild(x);
+        extra.appendChild(wrap);
     });
-    if (files.length > 1) {
+    if (selectedFilesAll.length > 1) {
         const note = document.createElement('span');
         note.style.cssText = 'font-size:0.72rem;color:#888';
-        note.textContent = `+${files.length - 1} photo(s) — utilisées pour l'analyse IA, la 1ère reste la photo principale du produit`;
+        note.textContent = `${selectedFilesAll.length} photos — la 1ère reste la photo principale du produit`;
         extra.appendChild(note);
     }
-};
+}
+
 window.resetAdminImg = () => {
     selectedFile=null; selectedFilesAll=[];
     const f=document.getElementById('p-img-file'); if(f)f.value='';
