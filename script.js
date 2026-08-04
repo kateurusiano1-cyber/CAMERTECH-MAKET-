@@ -591,6 +591,11 @@ function initSlider(slidesData) {
                     <p>${s.message||''}</p>
                     ${prixHtml}
                     ${s.btn_texte?`<button class="slide-btn" onclick="${s.produit_id ? `openModal('${s.produit_id}')` : `document.getElementById('produits').scrollIntoView({behavior:'smooth'})`}">${s.btn_texte}</button>`:''}
+                    <div class="slide-atouts">
+                        <span>🚚 Livraison rapide</span>
+                        <span>💳 Paiement sécurisé</span>
+                        <span>✅ Produits authentiques</span>
+                    </div>
                 </div>
                 <div class="slide-media"><div class="slide-halo"></div><img src="${s.image_url}" class="slide-product-img img-blurup" loading="lazy" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
             } else {
