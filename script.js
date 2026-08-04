@@ -590,7 +590,7 @@ function initSlider(slidesData) {
                     <h2>${s.titre||''}<br><span>${s.sous_titre||''}</span></h2>
                     <p>${s.message||''}</p>
                     ${prixHtml}
-                    ${s.btn_texte?`<button class="slide-btn">${s.btn_texte}</button>`:''}
+                    ${s.btn_texte?`<button class="slide-btn" onclick="${s.produit_id ? `openModal('${s.produit_id}')` : `document.getElementById('produits').scrollIntoView({behavior:'smooth'})`}">${s.btn_texte}</button>`:''}
                 </div>
                 <div class="slide-media"><div class="slide-halo"></div><img src="${s.image_url}" class="slide-product-img img-blurup" loading="lazy" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
             } else {
@@ -626,7 +626,7 @@ function initSlider(slidesData) {
     }
 
     if (slideTimer) clearInterval(slideTimer);
-    if (totalSlides > 1) slideTimer = setInterval(() => goSlide((slideIndex+1) % totalSlides), 4500);
+    if (totalSlides > 1) slideTimer = setInterval(() => goSlide((slideIndex+1) % totalSlides), 3200);
 
     $('slider-prev').onclick = () => goSlide((slideIndex - 1 + totalSlides) % totalSlides);
     $('slider-next').onclick = () => goSlide((slideIndex + 1) % totalSlides);
@@ -668,9 +668,10 @@ function filtrerCat(cat) {
 
 // ===== RECHERCHE =====
 function setupSearch() {
+    const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
     $('search-bar').oninput = e => {
-        const q = e.target.value.toLowerCase().trim();
-        renderProducts(q ? allProducts.filter(p => p.name.toLowerCase().includes(q) || (p.description||'').toLowerCase().includes(q)) : allProducts);
+        const q = norm(e.target.value.trim());
+        renderProducts(q ? allProducts.filter(p => norm(p.name).includes(q) || norm(p.description||'').includes(q) || norm(p.category).includes(q)) : allProducts);
     };
 }
 
@@ -1500,6 +1501,10 @@ async function afficherPanneauAdmin() {
                             <input type="number" id="mktg-prix-ancien" placeholder="Ancien prix (optionnel)" class="adm-input">
                         </div>
                         <input type="text" id="mktg-btn-txt" placeholder="Texte bouton" class="adm-input">
+                        <select id="mktg-slide-produit" class="adm-input">
+                            <option value="">Au clic : faire défiler vers les produits</option>
+                            ${(prods||[]).map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+                        </select>
                     </div>
                     <div id="mktg-popup-extra" style="display:none;flex-direction:column;gap:10px">
                         <div style="background:#f4f6f4;border:1.5px dashed #ddd;border-radius:8px;padding:14px">
@@ -1937,6 +1942,7 @@ window.publierMessage = async () => {
         payload.tag=document.getElementById('mktg-tag').value;
         payload.image_url=sliderUrl;
         payload.btn_texte=document.getElementById('mktg-btn-txt').value;
+        payload.produit_id = document.getElementById('mktg-slide-produit').value || null;
         const pa=document.getElementById('mktg-prix-actuel').value; payload.prix_actuel = pa?parseFloat(pa):null;
         const pan=document.getElementById('mktg-prix-ancien').value; payload.prix_ancien = pan?parseFloat(pan):null;
     }
