@@ -107,6 +107,7 @@
         <div class="sidebar-sep" data-i18n="sep_services">Services</div>
         <a class="sidebar-link" id="sl-suivi" data-i18n="nav_suivi">🚚 Suivi de commande</a>
         <a class="sidebar-link" id="sl-loc" data-i18n="nav_loc">🏪 Localisation boutique</a>
+        <a class="sidebar-link" id="sl-retour" data-i18n="nav_retour">🔄 Politique de retour</a>
         <a class="sidebar-link" href="https://wa.me/237699781160" target="_blank" data-i18n="nav_contact">📞 Nous contacter</a>
         <div class="sidebar-sep" data-i18n="sep_preferences">Préférences</div>
         <div class="sidebar-pref">
@@ -208,6 +209,8 @@
         <div class="header-right">
             <div id="user-zone" style="display:none;align-items:center;gap:8px">
                 <span id="user-nom" class="user-nom"></span>
+                <span id="user-points" class="user-points" title="Mes points fidélité" style="display:none"></span>
+                <button class="btn-icon" id="btn-favoris" title="Mes favoris">🤍</button>
                 <button class="btn-icon" id="btn-commandes" title="Mes commandes">📋</button>
                 <button class="btn-icon btn-logout" id="btn-logout" title="Déconnexion">⏻</button>
             </div>
@@ -360,6 +363,33 @@
     </div>
 </div>
 
+<!-- MODAL POLITIQUE DE RETOUR -->
+<div class="modal-overlay" id="retour-overlay" style="display:none">
+    <div class="modal modal-auth" style="max-width:480px">
+        <button class="modal-x" onclick="closeOverlay('retour-overlay')">✕</button>
+        <h3>🔄 Politique de retour</h3>
+        <div style="color:var(--text2);font-size:0.9rem;line-height:1.7;text-align:left;margin:12px 0">
+            <p><strong>Délai :</strong> tu as <strong>7 jours</strong> après réception pour demander un retour.</p>
+            <p><strong>Conditions :</strong> le produit doit être non ouvert, non utilisé, dans son emballage d'origine, et accompagné du code de commande.</p>
+            <p><strong>Cas acceptés :</strong> produit défectueux, erreur de commande de notre part, produit différent de la description.</p>
+            <p><strong>Comment faire :</strong> va dans "Mes commandes", trouve la commande concernée, clique sur "Demander un retour", ou contacte-nous directement par WhatsApp.</p>
+        </div>
+        <a href="https://wa.me/237699781160?text=Bonjour%2C%20je%20souhaite%20faire%20une%20demande%20de%20retour" target="_blank" class="btn-green" style="display:block;text-align:center;text-decoration:none">📱 Contacter par WhatsApp</a>
+    </div>
+</div>
+
+<!-- MODAL DEMANDE DE RETOUR -->
+<div class="modal-overlay" id="demande-retour-overlay" style="display:none">
+    <div class="modal modal-auth">
+        <button class="modal-x" onclick="closeOverlay('demande-retour-overlay')">✕</button>
+        <h3>🔄 Demander un retour</h3>
+        <p style="color:var(--text3);font-size:0.85rem;margin-bottom:10px">Commande : <span id="retour-code-affiche" style="font-weight:700"></span></p>
+        <textarea id="retour-motif" placeholder="Explique le motif de ton retour..." rows="3" class="adm-input" style="width:100%;box-sizing:border-box"></textarea>
+        <button class="btn-green" id="btn-envoyer-retour" style="margin-top:10px">Envoyer la demande</button>
+        <p class="form-err" id="retour-err"></p>
+    </div>
+</div>
+
 <!-- MODAL PRODUIT -->
 <div class="modal-overlay" id="prod-overlay" style="display:none">
     <div class="modal modal-prod">
@@ -377,6 +407,7 @@
             <div id="prod-price" class="prod-price"></div>
             <p id="prod-stock" class="prod-stock"></p>
             <div id="prod-low-tag" class="low-tag" style="display:none">⚠️ Stock faible</div>
+            <button id="btn-favori-prod" class="btn-favori-prod">🤍 Ajouter aux favoris</button>
             <div id="prod-actions" class="prod-actions" style="display:none">
                 <div class="qty-box">
                     <button id="qty-minus">−</button>

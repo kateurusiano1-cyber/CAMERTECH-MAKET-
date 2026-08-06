@@ -3,6 +3,7 @@ const db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
 // ===== ÉTAT =====
 let currentUser = null, isAdmin = false, currentAdmin = null;
+let favorisIds = new Set();
 let allProducts = [], panier = [], modalProduct = null;
 let selectedFile = null, selectedFilesAll = [], editingId = null, currentCat = "tous";
 let userZone = "", fraisLivraison = 0;
@@ -151,7 +152,7 @@ const I18N = {
         cat_reseau_ic: '📡 Réseau', cat_gaming_ic: '🎮 Gaming', cat_autre_ic: '📦 Autre',
         cat_telephonie: 'Téléphonie', cat_accessoires: 'Accessoires', cat_electronique: 'Électronique',
         cat_reseau: 'Réseau', cat_gaming: 'Gaming', cat_flash: 'Flash', cat_tous: 'Tous', cat_autre: 'Autre',
-        nav_suivi: '🚚 Suivi de commande', nav_loc: '🏪 Localisation boutique', nav_contact: '📞 Nous contacter',
+        nav_suivi: '🚚 Suivi de commande', nav_loc: '🏪 Localisation boutique', nav_contact: '📞 Nous contacter', nav_retour: '🔄 Politique de retour',
         pref_langue: '🌍 Langue', pref_sombre: '🌙 Mode sombre', pref_zone: '📍 Ma zone', pref_prixmax: '💰 Prix max (FCFA)',
         choisir: 'Choisir...', retrait_gratuit: '🏪 Retrait gratuit',
         rechercher_ph: '🔎 Rechercher un produit...', btn_connexion: '👤 Connexion',
@@ -178,7 +179,7 @@ const I18N = {
         cat_reseau_ic: '📡 Network', cat_gaming_ic: '🎮 Gaming', cat_autre_ic: '📦 Other',
         cat_telephonie: 'Phones', cat_accessoires: 'Accessories', cat_electronique: 'Electronics',
         cat_reseau: 'Network', cat_gaming: 'Gaming', cat_flash: 'Flash', cat_tous: 'All', cat_autre: 'Other',
-        nav_suivi: '🚚 Track Order', nav_loc: '🏪 Store Location', nav_contact: '📞 Contact Us',
+        nav_suivi: '🚚 Track Order', nav_loc: '🏪 Store Location', nav_contact: '📞 Contact Us', nav_retour: '🔄 Return Policy',
         pref_langue: '🌍 Language', pref_sombre: '🌙 Dark Mode', pref_zone: '📍 My Area', pref_prixmax: '💰 Max Price (FCFA)',
         choisir: 'Choose...', retrait_gratuit: '🏪 Free pickup',
         rechercher_ph: '🔎 Search a product...', btn_connexion: '👤 Login',
@@ -281,6 +282,7 @@ function setupSidebar() {
     $('sl-gam').onclick = () => { closeSidebar(); filtrerCat('Gaming'); };
     $('sl-suivi').onclick = () => { closeSidebar(); openOverlay('suivi-overlay'); };
     $('sl-loc').onclick = () => { closeSidebar(); openOverlay('loc-overlay'); };
+    $('sl-retour').onclick = () => { closeSidebar(); openOverlay('retour-overlay'); };
 
     $('theme-toggle').onchange = () => {
         const t = $('theme-toggle').checked ? 'dark' : 'light';
@@ -439,12 +441,65 @@ function setupAuth() {
     };
 
     $('btn-commandes').onclick = chargerCommandes;
+    $('btn-favoris').onclick = afficherFavoris;
 }
 
 function showUserUI() {
     $('user-nom').textContent = '👤 ' + currentUser.nom.split(' ')[0];
     $('user-zone').style.display = 'flex';
     $('btn-auth-show').style.display = 'none';
+    afficherPoints();
+    chargerFavoris();
+}
+
+// ===== FIDELITE =====
+function palierFidelite(points) {
+    if (points >= 2000) return { nom: 'Or', icone: '🥇' };
+    if (points >= 500) return { nom: 'Argent', icone: '🥈' };
+    return { nom: 'Bronze', icone: '🥉' };
+}
+function afficherPoints() {
+    const pts = currentUser.points || 0;
+    const palier = palierFidelite(pts);
+    const el = $('user-points');
+    el.style.display = 'inline-flex';
+    el.textContent = `${palier.icone} ${pts} pts`;
+    el.onclick = () => afficherModalFidelite();
+}
+function afficherModalFidelite() {
+    const pts = currentUser.points || 0;
+    const palier = palierFidelite(pts);
+    const prochain = pts < 500 ? 500 : pts < 2000 ? 2000 : null;
+    alert(`${palier.icone} Palier ${palier.nom}\n\n⭐ ${pts} points cumulés\n(1 point gagné tous les 1 000 FCFA dépensés, dès qu'une commande est validée)` +
+        (prochain ? `\n\nPlus que ${prochain - pts} points pour atteindre le palier suivant !` : `\n\n🎉 Tu as atteint le palier maximum !`));
+}
+
+// ===== FAVORIS =====
+async function chargerFavoris() {
+    if (!currentUser) return;
+    const { data } = await db.from('favoris').select('product_id').eq('utilisateur_id', currentUser.id);
+    favorisIds = new Set((data||[]).map(f => f.product_id));
+    if (allProducts.length) renderProducts(allProducts);
+}
+
+window.toggleFavori = async (productId, btn) => {
+    if (!currentUser) { openOverlay('auth-overlay'); return; }
+    const estFavori = favorisIds.has(productId);
+    if (estFavori) {
+        favorisIds.delete(productId);
+        await db.from('favoris').delete().eq('utilisateur_id', currentUser.id).eq('product_id', productId);
+    } else {
+        favorisIds.add(productId);
+        await db.from('favoris').insert([{ utilisateur_id: currentUser.id, product_id: productId }]);
+    }
+    if (btn) { btn.textContent = estFavori ? '🤍' : '❤️'; btn.classList.toggle('active', !estFavori); }
+};
+
+function afficherFavoris() {
+    const favs = allProducts.filter(p => favorisIds.has(p.id));
+    currentCat = 'tous';
+    renderProducts(favs);
+    $('produits').scrollIntoView({behavior:'smooth'});
 }
 
 // ===== MOT DE PASSE OUBLIE =====
@@ -777,6 +832,7 @@ function renderProducts(products) {
                 ${p.flash_active ? '<span class="badge badge-flash">⚡ FLASH</span>' : isNew(p.created_at) ? '<span class="badge badge-new">🆕</span>' : ''}
                 ${p.promo_active && !p.flash_active ? '<span class="badge badge-promo">🔥 PROMO</span>' : ''}
                 ${pct ? `<span class="badge badge-pct">${pct}</span>` : ''}
+                <button class="btn-favori ${favorisIds.has(p.id)?'active':''}" data-id="${p.id}">${favorisIds.has(p.id)?'❤️':'🤍'}</button>
             </div>
             <div class="card-body">
                 <div class="card-cat">${catLabel(p.category)}</div>
@@ -792,6 +848,7 @@ function renderProducts(products) {
                 </div>` : ''}
             </div>`;
         card.querySelector('.btn-acheter').onclick = e => { e.stopPropagation(); openModal(p.id); };
+        card.querySelector('.btn-favori').onclick = e => { e.stopPropagation(); toggleFavori(p.id, e.currentTarget); };
         card.onclick = () => openModal(p.id);
         if (isAdmin) {
             card.querySelector('.btn-sm-edit').onclick = e => { e.stopPropagation(); chargerEditAdmin(p.id); };
@@ -866,6 +923,10 @@ async function openModal(productId) {
     $('prod-cat-tag').textContent = catLabel(p.category);
     $('prod-new-tag').style.display = isNew(p.created_at) ? 'inline-block' : 'none';
     $('prod-low-tag').style.display = p.quantity < 5 ? 'inline-block' : 'none';
+    const bf = $('btn-favori-prod');
+    bf.textContent = favorisIds.has(p.id) ? '❤️ Dans mes favoris' : '🤍 Ajouter aux favoris';
+    bf.classList.toggle('active', favorisIds.has(p.id));
+    bf.onclick = () => { toggleFavori(p.id); bf.textContent = favorisIds.has(p.id) ? '❤️ Dans mes favoris' : '🤍 Ajouter aux favoris'; bf.classList.toggle('active', favorisIds.has(p.id)); };
     $('prod-flash-tag').style.display = p.flash_active ? 'block' : 'none';
     $('prod-stock').textContent = `Quantité disponible : ${p.quantity}`;
     const prix = getPrix(p);
@@ -1215,6 +1276,7 @@ function setupModals() {
     $('loc-close').onclick = () => closeOverlay('loc-overlay');
     $('cmds-close').onclick = () => closeOverlay('cmds-overlay');
     $('btn-suivi').onclick = suivreCommande;
+    $('btn-envoyer-retour').onclick = envoyerDemandeRetour;
     document.addEventListener('keydown', e => {
         if(e.key==='Escape') document.querySelectorAll('.modal-overlay').forEach(m=>m.style.display='none');
     });
@@ -1239,15 +1301,38 @@ async function chargerCommandes() {
     if(!currentUser)return;
     const {data}=await db.from('reservations').select('*').eq('utilisateur_id',currentUser.id).order('created_at',{ascending:false});
     const list=$('cmds-list');
+    const septJours = 7*24*60*60*1000;
     list.innerHTML=!data?.length?'<p style="color:var(--text3);text-align:center;padding:20px">Aucune commande.</p>'
-        :data.map(r=>`<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid var(--border)">
+        :data.map(r=>{
+            const peutRetourner = r.statut==='livre' && (Date.now() - new Date(r.created_at).getTime()) < septJours;
+            return `<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid var(--border)">
             <div style="font-family:monospace;color:var(--green);font-weight:700">${r.code}</div>
             <div style="color:var(--text3);font-size:0.78rem;margin:4px 0">📅 ${new Date(r.created_at).toLocaleString('fr-FR')} • 📍 ${r.zone_livraison||'—'}</div>
             <span style="display:inline-block;padding:3px 12px;border-radius:10px;font-size:0.72rem;font-weight:700;background:${r.statut==='en attente'?'#fff8f0':r.statut==='valide'?'#f0fff4':'#fff0f0'};color:${r.statut==='en attente'?'var(--orange)':r.statut==='valide'?'var(--success)':'var(--danger)'}">${r.statut}</span>
             <div style="color:var(--text2);font-size:0.82rem;margin-top:6px">${r.items.map(i=>`${i.name} ×${i.qty}`).join(', ')}</div>
             <div style="color:var(--green);font-weight:700;margin-top:4px">${fmt(r.total)} FCFA</div>
-        </div>`).join('');
+            ${peutRetourner ? `<button onclick="ouvrirDemandeRetour('${r.id}','${r.code}')" style="margin-top:8px;background:none;border:1px solid var(--border);color:var(--text2);padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🔄 Demander un retour</button>` : ''}
+        </div>`;}).join('');
     openOverlay('cmds-overlay');
+}
+
+let retourReservationId = null;
+window.ouvrirDemandeRetour = (reservationId, code) => {
+    retourReservationId = reservationId;
+    $('retour-code-affiche').textContent = code;
+    $('retour-motif').value = '';
+    $('retour-err').textContent = '';
+    openOverlay('demande-retour-overlay');
+};
+async function envoyerDemandeRetour() {
+    const motif = $('retour-motif').value.trim();
+    const err = $('retour-err');
+    if (!motif) { err.style.color='var(--danger)'; err.textContent = '❌ Explique brièvement le motif'; return; }
+    try {
+        await db.from('retours').insert([{ reservation_id: retourReservationId, utilisateur_id: currentUser.id, code_commande: $('retour-code-affiche').textContent, motif }]);
+        err.style.color='var(--success)'; err.textContent = '✅ Demande envoyée, on te recontacte rapidement.';
+        setTimeout(() => closeOverlay('demande-retour-overlay'), 1500);
+    } catch(e) { err.style.color='var(--danger)'; err.textContent = '❌ ' + e.message; }
 }
 
 // ===== LOGIN ADMIN =====
@@ -1313,13 +1398,14 @@ async function afficherPanneauAdmin() {
     page.style.display='block';
     page.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-family:Inter,sans-serif">Chargement du panneau...</div>';
 
-    const [{data:prods},{data:users},{data:reservations},{data:avisListe},{data:bannieres},{data:params}]=await Promise.all([
+    const [{data:prods},{data:users},{data:reservations},{data:avisListe},{data:bannieres},{data:params},{data:retours}]=await Promise.all([
         db.from('products').select('*').order('created_at',{ascending:false}),
         db.from('utilisateurs').select('*').order('created_at',{ascending:false}),
         db.from('reservations').select('*').order('created_at',{ascending:false}),
         db.from('avis').select('*').eq('valide',false),
         db.from('bannières').select('*').eq('actif',true),
-        db.from('parametres').select('*')
+        db.from('parametres').select('*'),
+        db.from('retours').select('*').order('created_at',{ascending:false})
     ]);
     const paramMap = Object.fromEntries((params||[]).map(p=>[p.cle,p.valeur]));
 
@@ -1341,6 +1427,7 @@ async function afficherPanneauAdmin() {
                 <button onclick="showTab('tab-avis')" class="adm-tab" id="tb-avis">⭐ Avis(${(avisListe||[]).length})</button>
                 <button onclick="showTab('tab-mktg')" class="adm-tab" id="tb-mktg">📢 Marketing</button>
                 <button onclick="showTab('tab-param')" class="adm-tab" id="tb-param">⚙️ Paramètres</button>
+                <button onclick="showTab('tab-retours')" class="adm-tab" id="tb-retours">🔄 Retours</button>
                 <button onclick="window.location.href='/'" class="adm-tab">🏪 Site</button>
             </div>
         </div>
@@ -1582,6 +1669,28 @@ async function afficherPanneauAdmin() {
             <p id="param-res" style="min-height:18px;font-size:0.82rem;margin-top:8px"></p>
         </div>
 
+        <!-- RETOURS -->
+        <div id="tab-retours" style="display:none">
+            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+                <h2 style="font-size:1rem;margin-bottom:14px">🔄 Demandes de retour (${(retours||[]).length})</h2>
+                ${!(retours||[]).length ? '<p style="color:#888">Aucune demande de retour.</p>' :
+                (retours||[]).map(r=>`<div style="background:#f8f8f8;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+                        <div>
+                            <div style="font-family:monospace;font-weight:700;color:#1a5c2a">${r.code_commande||'—'}</div>
+                            <div style="font-size:0.78rem;color:#888;margin:4px 0">${new Date(r.created_at).toLocaleString('fr-FR')}</div>
+                            <div style="font-size:0.85rem;margin-top:4px">${r.motif||''}</div>
+                            <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${r.statut==='en_attente'?'#fff8f0':r.statut==='traite'?'#f0fff4':'#fff0f0'};color:${r.statut==='en_attente'?'#ff6600':r.statut==='traite'?'#2dc653':'#e63946'}">${r.statut}</span>
+                        </div>
+                        <div style="display:flex;gap:6px">
+                            <button onclick="changerStatutRetour('${r.id}','traite')" style="background:#f0fff4;color:#2dc653;border:1px solid #b7f5c8;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">✅ Traité</button>
+                            <button onclick="changerStatutRetour('${r.id}','refuse')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">❌ Refuser</button>
+                        </div>
+                    </div>
+                </div>`).join('')}
+            </div>
+        </div>
+
         </div>
     </div>
     <style>
@@ -1596,6 +1705,11 @@ async function afficherPanneauAdmin() {
         document.getElementById('mktg-popup-extra').style.display = this.value==='popup'?'flex':'none';
     };
 }
+
+window.changerStatutRetour = async (id, statut) => {
+    await db.from('retours').update({ statut }).eq('id', id);
+    afficherPanneauAdmin();
+};
 
 let popupFlyerFile = null;
 window.previewPopupFlyer = (input) => {
@@ -1686,10 +1800,10 @@ function renderCmdsAdmin(data) {
 }
 
 window.showTab = id => {
-    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param'].forEach(t=>{
+    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param','tab-retours'].forEach(t=>{
         const el=document.getElementById(t); if(el) el.style.display=t===id?'block':'none';
     });
-    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param'].forEach(b=>{
+    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param','tb-retours'].forEach(b=>{
         const el=document.getElementById(b); if(el) el.classList.toggle('active', b==='tb-'+id.replace('tab-',''));
     });
 };
