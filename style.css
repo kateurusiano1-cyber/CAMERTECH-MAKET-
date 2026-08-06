@@ -176,7 +176,8 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 .loader { text-align: center; color: var(--text3); padding: 60px; font-size: 0.95rem; font-family: var(--font-body); }
 
 /* ===== GRILLE PRODUITS ===== */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; min-height: 380px; }
+#banniere-top.banniere-top { min-height: 38px; }
 .empty-state { text-align: center; color: var(--text3); padding: 60px 20px; grid-column: 1/-1; font-family: var(--font-body); }
 
 /* ===== CARD PRODUIT ===== */
@@ -336,7 +337,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
     .tuile span:last-child { padding-bottom: 10px; }
     .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .slide-inner h2 { font-size: 1.5rem; }
-    .slider-wrap { height: auto; }
+    .slider-wrap { height: auto; min-height: 380px; }
     .slide { flex-direction: column; }
     .slide-inner { flex: 0 0 auto; padding: 20px 20px 12px; }
     .slide-media { flex: 0 0 140px; padding: 8px; }

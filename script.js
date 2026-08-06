@@ -665,6 +665,7 @@ function initSlider(slidesData) {
             track.appendChild(slide);
             const dot = document.createElement('button');
             dot.className = 'slider-dot' + (i===0?' active':'');
+            dot.setAttribute('aria-label', `Aller à la diapositive ${i+1}`);
             dot.onclick = () => goSlide(i);
             dots.appendChild(dot);
         });
@@ -680,6 +681,7 @@ function initSlider(slidesData) {
         track.appendChild(slide);
         const dot = document.createElement('button');
         dot.className = 'slider-dot active';
+        dot.setAttribute('aria-label', 'Aller à la diapositive 1');
         dots.appendChild(dot);
         const btn = document.getElementById('slide-decouvrir');
         if (btn) btn.onclick = () => $('produits').scrollIntoView({behavior:'smooth'});

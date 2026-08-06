@@ -120,13 +120,13 @@
         <div class="sidebar-pref">
             <span data-i18n="pref_sombre">🌙 Mode sombre</span>
             <label class="toggle-switch">
-                <input type="checkbox" id="theme-toggle">
+                <input type="checkbox" id="theme-toggle" aria-label="Activer le mode sombre">
                 <span class="toggle-thumb"></span>
             </label>
         </div>
         <div class="sidebar-pref" style="flex-direction:column;align-items:flex-start;gap:6px">
             <span data-i18n="pref_zone">📍 Ma zone</span>
-            <select id="sidebar-zone" class="small-select">
+            <select id="sidebar-zone" class="small-select" aria-label="Choisir ma zone de livraison">
                 <option value="" data-i18n="choisir">Choisir...</option>
                 <optgroup label="Zones livrées">
                     <option value="Akwa">Akwa</option>
@@ -432,7 +432,7 @@
         <div id="panier-items"></div>
         <div class="livraison-box">
             <label data-i18n="label_zone">📍 Zone de livraison</label>
-            <select id="zone-select">
+            <select id="zone-select" aria-label="Choisir votre zone de livraison">
                 <option value="" data-i18n="choisir_zone">-- Choisir votre zone --</option>
                 <optgroup label="Zones livrées — 1 000 FCFA">
                     <option value="Akwa">Akwa — 1 000 FCFA</option>
