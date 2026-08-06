@@ -5,12 +5,13 @@
     --green-dark: #0f3a19;
     --orange: #ff6600;
     --orange-light: #ff8533;
+    --orange-text: #b34700;
     --white: #ffffff;
     --bg: #f5f5f5;
     --card: #ffffff;
     --text: #1a1a1a;
     --text2: #555555;
-    --text3: #888888;
+    --text3: #656565;
     --border: #e8e8e8;
     --shadow: 0 2px 12px rgba(0,0,0,0.07);
     --shadow-hover: 0 8px 28px rgba(0,0,0,0.14);
@@ -216,7 +217,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 .card-admin-btns { display: flex; gap: 5px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .btn-sm-edit { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; }
 .btn-sm-del { background: #fff0f0; color: var(--danger); border: 1px solid #fcc; padding: 6px 10px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; }
-.btn-sm-flash { background: #fff8f0; color: var(--orange); border: 1px solid #fdd; padding: 6px 10px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; }
+.btn-sm-flash { background: #fff8f0; color: var(--orange-text); border: 1px solid #fdd; padding: 6px 10px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; }
 
 /* ===== FOOTER ===== */
 .footer { background: var(--green-dark); color: rgba(255,255,255,0.85); padding: 28px 20px 0; margin-top: 40px; }
@@ -224,7 +225,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 .footer-links { display: flex; flex-direction: column; gap: 8px; }
 .footer-links a { color: rgba(255,255,255,0.7); font-size: 0.88rem; transition: color 0.2s; font-family: var(--font-body); }
 .footer-links a:hover { color: var(--orange); }
-.footer-copy { text-align: center; padding: 14px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: rgba(255,255,255,0.45); font-family: var(--font-body); }
+.footer-copy { text-align: center; padding: 14px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: rgba(255,255,255,0.75); font-family: var(--font-body); }
 
 /* ===== MODALS ===== */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(4px); }
@@ -292,7 +293,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 .livraison-box select { width: 100%; background: var(--card); border: 1.5px solid var(--border); padding: 11px; color: var(--text); border-radius: 6px; font-size: 0.88rem; font-family: var(--font-body); }
 .livraison-info { margin-top: 10px; padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; font-weight: 700; text-align: center; font-family: var(--font-body); }
 .lv-ok { background: #f0fff4; color: var(--success); border: 1px solid #b7f5c8; }
-.lv-pay { background: #fff8f0; color: var(--orange); border: 1px solid #fdd; }
+.lv-pay { background: #fff8f0; color: var(--orange-text); border: 1px solid #fdd; }
 .lv-warn { background: #fff4f0; color: #c0392b; border: 1px solid #f5c6c0; font-weight: 500; text-align: left; line-height: 1.4; }
 .totaux-box { padding: 12px 0; border-top: 2px solid var(--border); margin-top: 8px; }
 .total-ligne { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.88rem; color: var(--text2); font-family: var(--font-body); }

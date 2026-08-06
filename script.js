@@ -599,14 +599,14 @@ async function afficherPopup() {
     const msg = popupMsg?.message || '🎉 Bienvenue sur CAMERTECH MARKET !';
     const titreVitrine = popupMsg?.produits_ids?.length ? '🛍️ Sélection du moment' : '⚡ Ventes Flash';
     const flyerHtml = popupMsg?.image_url
-        ? `<img src="${popupMsg.image_url}" ${popupMsg.lien ? `onclick="closePopup();window.open('${popupMsg.lien}','_blank')" style="cursor:pointer;` : 'style="'}width:100%;border-radius:12px;margin-bottom:14px;display:block">`
-        : `<img src="logo.png" style="height:55px;width:55px;border-radius:50%;margin-bottom:12px">`;
-    const prods = vitrine.length ? `<p style="font-weight:700;color:var(--orange);margin:14px 0 8px">${titreVitrine}</p>
+        ? `<img src="${popupMsg.image_url}" alt="Offre spéciale CAMERTECH MARKET" ${popupMsg.lien ? `onclick="closePopup();window.open('${popupMsg.lien}','_blank')" style="cursor:pointer;` : 'style="'}width:100%;border-radius:12px;margin-bottom:14px;display:block">`
+        : `<img src="logo.png" alt="Logo CAMERTECH MARKET" style="height:55px;width:55px;border-radius:50%;margin-bottom:12px">`;
+    const prods = vitrine.length ? `<p style="font-weight:700;color:var(--orange-text);margin:14px 0 8px">${titreVitrine}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
         ${vitrine.map(p=>`<div onclick="closePopup();openModal('${p.id}')" style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px;cursor:pointer;text-align:center">
-            ${p.image_url?`<img src="${p.image_url}" style="width:100%;height:55px;object-fit:cover;border-radius:6px;margin-bottom:6px">`:''}
+            ${p.image_url?`<img src="${p.image_url}" alt="${p.name}" style="width:100%;height:55px;object-fit:cover;border-radius:6px;margin-bottom:6px">`:''}
             <div style="font-size:0.75rem;font-weight:600">${p.name}</div>
-            <div style="font-size:0.8rem;color:var(--orange);font-weight:700">${fmt(getPrix(p))} F</div>
+            <div style="font-size:0.8rem;color:var(--orange-text);font-weight:700">${fmt(getPrix(p))} F</div>
         </div>`).join('')}</div>` : '';
     const el = document.createElement('div');
     el.id = 'popup-overlay';
@@ -880,7 +880,7 @@ function chargerFlash(prods) {
         card.className = 'card';
         const prix = getPrix(p);
         card.innerHTML = `<div class="card-img-wrap">
-            ${p.image_url ? `<img src="${p.image_url}" class="card-img img-blurup" loading="lazy" onload="this.classList.add('loaded')">` : '<div class="card-img-ph">📦</div>'}
+            ${p.image_url ? `<img src="${p.image_url}" alt="${texteProduit(p).name}" class="card-img img-blurup" loading="lazy" onload="this.classList.add('loaded')">` : '<div class="card-img-ph">📦</div>'}
             <span class="badge badge-flash">⚡ FLASH</span>
         </div>
         <div class="card-body">
@@ -980,9 +980,9 @@ async function chargerCrossSell(p) {
         <h4 style="font-size:0.88rem;color:var(--text2);margin-bottom:10px">💡 Souvent achetés ensemble</h4>
         <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none">
             ${data.map(cs=>`<div onclick="closeOverlay('prod-overlay');setTimeout(()=>openModal('${cs.id}'),100)" style="min-width:110px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;cursor:pointer;text-align:center;flex-shrink:0">
-                ${cs.image_url?`<img src="${cs.image_url}" class="img-blurup" loading="lazy" onload="this.classList.add('loaded')" style="width:100%;height:55px;object-fit:cover;border-radius:6px;margin-bottom:6px">`:'<div style="height:55px;display:flex;align-items:center;justify-content:center;font-size:1.5rem">📦</div>'}
+                ${cs.image_url?`<img src="${cs.image_url}" alt="${cs.name}" class="img-blurup" loading="lazy" onload="this.classList.add('loaded')" style="width:100%;height:55px;object-fit:cover;border-radius:6px;margin-bottom:6px">`:'<div style="height:55px;display:flex;align-items:center;justify-content:center;font-size:1.5rem">📦</div>'}
                 <div style="font-size:0.72rem;font-weight:600;line-height:1.2;margin-bottom:4px">${cs.name}</div>
-                <div style="font-size:0.8rem;color:var(--orange);font-weight:700">${fmt(getPrix(cs))} F</div>
+                <div style="font-size:0.8rem;color:var(--orange-text);font-weight:700">${fmt(getPrix(cs))} F</div>
                 <button onclick="event.stopPropagation();addQuick('${cs.id}')" style="width:100%;background:var(--orange);color:white;border:none;padding:4px;border-radius:5px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-top:4px">+ Ajouter</button>
             </div>`).join('')}
         </div>
@@ -1008,7 +1008,7 @@ async function chargerAvis(productId) {
     zone.innerHTML = `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
         <h3 style="font-size:1rem;font-weight:700;margin-bottom:12px">⭐ Avis clients</h3>
         ${data?.length?`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-            <span style="font-size:2rem;font-weight:800;color:var(--orange);font-family:Poppins,sans-serif">${moy}</span>
+            <span style="font-size:2rem;font-weight:800;color:var(--orange-text);font-family:Poppins,sans-serif">${moy}</span>
             <div><div style="color:#f4c430;font-size:1.1rem">${stars(moy)}</div><div style="color:var(--text3);font-size:0.82rem">${data.length} avis</div></div>
         </div>`:''}
         ${currentUser?`<button onclick="toggleFormAvis('${productId}')" style="background:var(--bg);color:var(--text);border:1.5px solid var(--border);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:0.85rem;margin-bottom:12px">✏️ Laisser un avis</button>`:''}
@@ -1032,7 +1032,7 @@ async function chargerAvis(productId) {
             </div>
             <div style="color:#f4c430;font-size:0.9rem">${stars(a.note)}</div>
             ${a.commentaire?`<p style="color:var(--text2);font-size:0.85rem;margin-top:6px">${a.commentaire}</p>`:''}
-            ${a.photo_url?`<img src="${a.photo_url}" style="width:75px;height:75px;object-fit:cover;border-radius:7px;margin-top:8px;cursor:pointer" onclick="window.open('${a.photo_url}','_blank')">`:''}
+            ${a.photo_url?`<img src="${a.photo_url}" alt="Photo jointe par ${a.nom_client}" style="width:75px;height:75px;object-fit:cover;border-radius:7px;margin-top:8px;cursor:pointer" onclick="window.open('${a.photo_url}','_blank')">`:''}
         </div>`).join(''):'<p style="color:var(--text3);font-size:0.85rem">Aucun avis pour le moment.</p>'}
     </div>`;
 }
@@ -1342,9 +1342,9 @@ function afficherLoginAdmin() {
     document.body.innerHTML=`
     <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f4f6f4;padding:20px;font-family:Inter,sans-serif">
         <div style="background:white;border-radius:18px;padding:36px;max-width:380px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.1)">
-            <img src="logo.png" style="height:70px;width:70px;border-radius:50%;margin-bottom:14px;border:3px solid #1a5c2a">
+            <img src="logo.png" alt="Logo CAMERTECH MARKET" style="height:70px;width:70px;border-radius:50%;margin-bottom:14px;border:3px solid #1a5c2a">
             <h1 style="color:#1a5c2a;font-family:Poppins,sans-serif;margin-bottom:4px;font-size:1.3rem">CAMERTECH MARKET</h1>
-            <p style="color:#888;font-size:0.85rem;margin-bottom:24px">Espace Administrateur</p>
+            <p style="color:#666;font-size:0.85rem;margin-bottom:24px">Espace Administrateur</p>
             <div id="step1">
                 <input type="text" id="adm-id" placeholder="Identifiant admin" style="width:100%;background:#f4f6f4;border:1.5px solid #e8e8e8;padding:13px;color:#1a1a1a;border-radius:10px;margin-bottom:10px;font-size:0.95rem;font-family:Inter,sans-serif">
                 <input type="password" id="adm-mdp" placeholder="Mot de passe" style="width:100%;background:#f4f6f4;border:1.5px solid #e8e8e8;padding:13px;color:#1a1a1a;border-radius:10px;margin-bottom:16px;font-size:0.95rem;font-family:Inter,sans-serif">
