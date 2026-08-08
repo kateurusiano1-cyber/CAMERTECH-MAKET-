@@ -1391,6 +1391,34 @@ window.adminStep2 = () => {
 };
 
 // ===== PANNEAU ADMIN (simplifié mais complet) =====
+function renderProduitsLignes(prods) {
+    return (prods||[]).map(p=>`<tr style="border-bottom:1px solid #f8f8f8">
+        <td style="padding:10px"><strong>${p.name}</strong></td>
+        <td style="padding:10px;color:#888">${p.category}</td>
+        <td style="padding:10px;font-weight:600;color:${p.quantity===0?'#e63946':p.quantity<5?'#ff6600':'#2dc653'}">${p.quantity}</td>
+        <td style="padding:10px;color:#1a5c2a;font-weight:600">${fmt(p.resale_price)} F</td>
+        <td style="padding:10px">${p.flash_active?'<span style="color:#e63946;font-weight:600">⚡Flash</span>':p.promo_active?'<span style="color:#ff6600;font-weight:600">🔥Promo</span>':'Normal'}</td>
+        <td style="padding:10px"><div style="display:flex;gap:5px">
+            <button onclick="chargerEditProduit('${p.id}')" style="background:#f0fff4;color:#1a5c2a;border:1px solid #b7f5c8;padding:5px 10px;border-radius:6px;font-size:0.78rem;cursor:pointer">✏️</button>
+            <button onclick="supprimerProduit('${p.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:5px 10px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️</button>
+            <button onclick="toggleFlash('${p.id}',${p.flash_active})" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.78rem;cursor:pointer">${p.flash_active?'❌Flash':'⚡Flash'}</button>
+        </div></td>
+    </tr>`).join('');
+}
+
+// Rafraîchit uniquement la liste des produits (sans reconstruire tout le panneau admin,
+// donc sans jamais changer d'onglet ni casser l'état de la page).
+async function rafraichirProduits() {
+    try {
+        const { data } = await db.from('products').select('*').order('created_at',{ascending:false});
+        window._prods = data || [];
+        const tbody = document.getElementById('prods-tbody');
+        const count = document.getElementById('prods-count');
+        if (tbody) tbody.innerHTML = renderProduitsLignes(window._prods);
+        if (count) count.textContent = window._prods.length;
+    } catch (e) { console.error('Erreur rafraîchissement produits:', e); }
+}
+
 async function afficherPanneauAdmin() {
     let page = document.getElementById('admin-page');
     if (!page) {
@@ -1503,22 +1531,11 @@ async function afficherPanneauAdmin() {
                 </div>
             </div>
             <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
-                <h2 style="font-size:1rem;margin-bottom:14px">📦 Produits (${(prods||[]).length})</h2>
+                <h2 style="font-size:1rem;margin-bottom:14px">📦 Produits (<span id="prods-count">${(prods||[]).length}</span>)</h2>
                 <div style="overflow-x:auto">
                     <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
                         <thead><tr>${['Nom','Catégorie','Stock','Prix','Statut','Actions'].map(h=>`<th style="color:#888;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0f0;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px">${h}</th>`).join('')}</tr></thead>
-                        <tbody>${(prods||[]).map(p=>`<tr style="border-bottom:1px solid #f8f8f8">
-                            <td style="padding:10px"><strong>${p.name}</strong></td>
-                            <td style="padding:10px;color:#888">${p.category}</td>
-                            <td style="padding:10px;font-weight:600;color:${p.quantity===0?'#e63946':p.quantity<5?'#ff6600':'#2dc653'}">${p.quantity}</td>
-                            <td style="padding:10px;color:#1a5c2a;font-weight:600">${fmt(p.resale_price)} F</td>
-                            <td style="padding:10px">${p.flash_active?'<span style="color:#e63946;font-weight:600">⚡Flash</span>':p.promo_active?'<span style="color:#ff6600;font-weight:600">🔥Promo</span>':'Normal'}</td>
-                            <td style="padding:10px"><div style="display:flex;gap:5px">
-                                <button onclick="chargerEditProduit('${p.id}')" style="background:#f0fff4;color:#1a5c2a;border:1px solid #b7f5c8;padding:5px 10px;border-radius:6px;font-size:0.78rem;cursor:pointer">✏️</button>
-                                <button onclick="supprimerProduit('${p.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:5px 10px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️</button>
-                                <button onclick="toggleFlash('${p.id}',${p.flash_active})" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.78rem;cursor:pointer">${p.flash_active?'❌Flash':'⚡Flash'}</button>
-                            </div></td>
-                        </tr>`).join('')}</tbody>
+                        <tbody id="prods-tbody">${renderProduitsLignes(prods)}</tbody>
                     </table>
                 </div>
             </div>
@@ -1706,6 +1723,8 @@ async function afficherPanneauAdmin() {
         document.getElementById('mktg-slider-extra').style.display = this.value==='slider'?'flex':'none';
         document.getElementById('mktg-popup-extra').style.display = this.value==='popup'?'flex':'none';
     };
+
+    showTab(adminTabActuel);
 }
 
 window.changerStatutRetour = async (id, statut) => {
@@ -1801,7 +1820,9 @@ function renderCmdsAdmin(data) {
     </table></div>`;
 }
 
+let adminTabActuel = 'tab-dash';
 window.showTab = id => {
+    adminTabActuel = id;
     ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param','tab-retours'].forEach(t=>{
         const el=document.getElementById(t); if(el) el.style.display=t===id?'block':'none';
     });
@@ -1991,6 +2012,7 @@ window.validerProduitLot = async (i) => {
         if (error) throw error;
         res.style.color = '#2dc653'; res.textContent = '✅ Produit ajouté !';
         btn.textContent = '✅ Ajouté'; btn.style.background = '#888'; btn.disabled = true;
+        rafraichirProduits();
     } catch (e) {
         res.style.color = '#e63946'; res.textContent = '❌ ' + e.message;
         btn.disabled = false; btn.textContent = '✅ Ajouter ce produit';
@@ -2011,7 +2033,8 @@ window.sauvegarderProduit = async () => {
     const {error}=editingId?await db.from('products').update(prod).eq('id',editingId):await db.from('products').insert([prod]);
     if(error){msg.style.color='#e63946';msg.textContent='❌ '+error.message;return;}
     msg.style.color='#2dc653';msg.textContent='✅ Enregistré !';
-    annulerEdit(); setTimeout(()=>afficherPanneauAdmin(),700);
+    annulerEdit();
+    rafraichirProduits();
 };
 
 window.chargerEditProduit = id => {
@@ -2034,17 +2057,18 @@ window.chargerEditProduit = id => {
 
 window.annulerEdit = () => {
     editingId=null; selectedFile=null; selectedFilesAll=[];
-    ['p-name','p-desc','p-qty','p-achat','p-vente','p-promo','p-img-url'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    ['p-name','p-desc','p-qty','p-achat','p-vente','p-promo','p-img-url','p-flash-fin'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     const c=document.getElementById('p-promo-chk');if(c)c.checked=false;
     const f=document.getElementById('p-flash-chk');if(f)f.checked=false;
     const w=document.getElementById('adm-img-preview');if(w)w.style.display='none';
     const ex=document.getElementById('adm-img-extra');if(ex)ex.innerHTML='';
+    const ia=document.getElementById('ia-res');if(ia)ia.textContent='';
     const t=document.getElementById('prod-form-title');if(t)t.textContent='➕ Ajouter un Produit';
     const b=document.getElementById('btn-annuler-edit');if(b)b.style.display='none';
 };
 
-window.supprimerProduit = async id => { if(!confirm('Supprimer ce produit ?'))return; await db.from('products').delete().eq('id',id); afficherPanneauAdmin(); };
-window.toggleFlash = async (id, actif) => { await db.from('products').update({flash_active:!actif}).eq('id',id); afficherPanneauAdmin(); };
+window.supprimerProduit = async id => { if(!confirm('Supprimer ce produit ?'))return; await db.from('products').delete().eq('id',id); rafraichirProduits(); };
+window.toggleFlash = async (id, actif) => { await db.from('products').update({flash_active:!actif}).eq('id',id); rafraichirProduits(); };
 
 window.publierMessage = async () => {
     const msg=document.getElementById('mktg-msg').value.trim();
