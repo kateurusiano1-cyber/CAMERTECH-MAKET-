@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
       return res.status(500).json({ error: 'Clés GeniusPay manquantes côté serveur' });
     }
 
-    const response = await fetch(`https://pay.genius.ci/api/v1/merchant/payments/${encodeURIComponent(reference)}`, {
+    const response = await fetch(`https://geniuspay.ci/api/v1/merchant/payments/${encodeURIComponent(reference)}`, {
       headers: {
         'X-API-Key': process.env.GENIUSPAY_API_KEY,
         'X-API-Secret': process.env.GENIUSPAY_API_SECRET
