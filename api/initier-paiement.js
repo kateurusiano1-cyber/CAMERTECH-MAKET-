@@ -59,7 +59,7 @@ module.exports = async (req, res) => {
       error_url: `${origin}/?paiement=retour&ref=${reference}`
     };
 
-    const response = await fetch('https://geniuspay.ci/api/v1/merchant/payments', {
+    const response = await fetch('https://pay.genius.ci/api/v1/merchant/payments', {
       method: 'POST',
       headers: {
         'X-API-Key': process.env.GENIUSPAY_API_KEY,
