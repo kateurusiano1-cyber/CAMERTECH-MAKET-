@@ -86,6 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await chargerParametres();
     await verifierLienResetDansURL();
+    await verifierRetourPaiement();
 
     // Applique la langue mémorisée (si déjà EN, met aussi à jour l'état visuel des boutons)
     appliquerTraductionUI(currentLang);
@@ -1190,7 +1191,7 @@ async function confirmerPaiement() {
     const btn = $('btn-pay-confirm');
     if (tel.length!==9) { status.style.color='var(--danger)'; status.textContent='❌ Numéro invalide (9 chiffres)'; return; }
     btn.disabled=true; btn.textContent='Traitement...';
-    status.style.color='var(--text3)'; status.textContent='📲 Envoi de la demande...';
+    status.style.color='var(--text3)'; status.textContent='📲 Préparation du paiement...';
     try {
         const total=panier.reduce((s,p)=>s+p.prix*p.qty,0)+fraisLivraison;
         const code='CMT-'+Math.random().toString(36).substring(2,5).toUpperCase()+'-'+Date.now().toString().slice(-4);
@@ -1205,30 +1206,62 @@ async function confirmerPaiement() {
             body:JSON.stringify({ telephone:tel, montant:Math.round(total), operateur:selectedOp, reference:code, nom_client:currentUser.nom.split(' ')[0] })
         });
         const result = await resp.json();
-        if (result.success) {
-            status.style.color='var(--success)'; status.textContent='✅ Confirmez sur votre téléphone !';
-            let tries=0;
-            const poll=setInterval(async()=>{
-                tries++;
-                if(tries>24){clearInterval(poll);return;}
-                try {
-                    const cr=await fetch(CONFIG.API.VERIFIER_PAIEMENT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transaction_id:result.transaction_id})});
-                    const chk=await cr.json();
-                    if(chk.transaction_status==='SUCCESSFUL'||chk.status==='success'){
-                        clearInterval(poll); closeOverlay('pay-overlay');
-                        await db.from('reservations').update({statut:'valide', paye_le:new Date().toISOString()}).eq('code', code);
-                        afficherSucces(code,total); panier=[]; updatePanierBtn();
-                    } else if(chk.transaction_status==='FAILED'){
-                        clearInterval(poll); status.style.color='var(--danger)'; status.textContent='❌ Paiement refusé.';
-                        btn.disabled=false; btn.textContent='Réessayer';
-                    }
-                } catch(e){}
-            },5000);
+        if (result.success && result.payment_url) {
+            status.style.color='var(--success)'; status.textContent='✅ Redirection vers le paiement...';
+            // On garde la référence du panier pour pouvoir réafficher le récapitulatif au retour
+            sessionStorage.setItem('cmkt_panier_'+code, JSON.stringify({ items: panier, total, zone: userZone, frais: fraisLivraison }));
+            setTimeout(() => { window.location.href = result.payment_url; }, 600);
         } else throw new Error(result.error||'Échec paiement');
     } catch(e) {
         status.style.color='var(--danger)'; status.textContent='❌ '+(e.message||'Erreur. Réessayez.');
         btn.disabled=false; btn.textContent='Payer maintenant';
     }
+}
+
+// Traite le retour du client depuis la page de paiement GeniusPay (?paiement=retour&ref=CODE)
+async function verifierRetourPaiement() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('paiement') !== 'retour') return;
+    const code = params.get('ref');
+    window.history.replaceState({}, '', window.location.pathname);
+    if (!code) return;
+
+    const { data: resa } = await db.from('reservations').select('*').eq('code', code).single();
+    if (!resa) return;
+
+    if (resa.statut === 'valide') {
+        // Déjà confirmé (webhook arrivé avant le retour du client)
+        afficherSuccesDepuisResa(resa);
+        return;
+    }
+
+    // Sinon on redemande le statut à GeniusPay via sa référence stockée en transaction_id (si déjà connue)
+    // ou on patiente un court instant pour laisser le webhook arriver, puis on revérifie une fois.
+    await new Promise(r => setTimeout(r, 2500));
+    const { data: resa2 } = await db.from('reservations').select('*').eq('code', code).single();
+    if (resa2?.statut === 'valide') {
+        afficherSuccesDepuisResa(resa2);
+    } else if (resa2?.statut === 'paiement_echoue') {
+        alert('❌ Le paiement a échoué ou a été annulé. Tu peux réessayer depuis ton panier.');
+    } else {
+        alert('⏳ Paiement en cours de confirmation. Si tu as bien payé, ta commande sera validée automatiquement dans un instant — vérifie dans "Mes commandes".');
+    }
+}
+
+// Affiche la page de succès à partir d'une commande déjà enregistrée en base
+// (utilisé au retour de paiement, quand le panier en mémoire a été perdu par la redirection)
+function afficherSuccesDepuisResa(resa) {
+    const sauvegarde = sessionStorage.getItem('cmkt_panier_'+resa.code);
+    if (sauvegarde) {
+        const d = JSON.parse(sauvegarde);
+        panier = d.items; userZone = d.zone; fraisLivraison = d.frais;
+        sessionStorage.removeItem('cmkt_panier_'+resa.code);
+    } else {
+        panier = (resa.items||[]).map(i => ({ name:i.name, qty:i.qty, prix:i.prix }));
+        userZone = resa.zone_livraison; fraisLivraison = resa.frais_livraison || 0;
+    }
+    afficherSucces(resa.code, resa.total);
+    panier = []; updatePanierBtn();
 }
 
 async function reserverSansPaiement() {

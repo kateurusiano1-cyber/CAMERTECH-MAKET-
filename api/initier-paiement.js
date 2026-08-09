@@ -1,3 +1,9 @@
+// api/initier-paiement.js
+// Initie un paiement Mobile Money via GeniusPay (remplace Monetbil).
+// Mode "MMO explicite" : on force l'opérateur choisi par le client (MTN/Orange)
+// via PawaPay, ce qui est la voie la plus fiable pour le Cameroun d'après la
+// documentation GeniusPay (couverture confirmée : MTN_MOMO_CMR, ORANGE_CMR).
+
 const { createClient } = require('@supabase/supabase-js');
 const { circuitOuvert, signalerEchec, signalerSucces } = require('./_lib/circuitBreaker');
 
@@ -20,69 +26,68 @@ module.exports = async (req, res) => {
     if (!telephone || !montant || !operateur || !reference) {
       return res.status(400).json({ error: 'Paramètres manquants' });
     }
-
     if (montant < 100 || montant > 5000000) {
       return res.status(400).json({ error: 'Montant invalide' });
     }
 
-    // Circuit breaker : si Monetbil échoue en boucle, on arrête de le solliciter un moment
-    const circuit = await circuitOuvert(supabase, 'monetbil');
+    // Circuit breaker : si GeniusPay échoue en boucle, on arrête de le solliciter un moment
+    const circuit = await circuitOuvert(supabase, 'geniuspay');
     if (circuit.ouvert) {
       return res.status(503).json({ error: `Paiement temporairement indisponible, réessayez dans ${Math.ceil(circuit.retryAfterSeconds / 60)} min.` });
     }
 
-    const serviceKey = process.env.MONETBIL_SERVICE_KEY;
-    if (!serviceKey) {
-      return res.status(500).json({ error: 'Clé Monetbil manquante' });
+    if (!process.env.GENIUSPAY_API_KEY || !process.env.GENIUSPAY_API_SECRET) {
+      return res.status(500).json({ error: 'Clés GeniusPay manquantes côté serveur' });
     }
 
-    const url = `https://api.monetbil.com/widget/v2.1/${serviceKey}`;
+    const mmoProvider = operateur === 'mtn' ? 'MTN_MOMO_CMR' : 'ORANGE_CMR';
+    const origin = `https://${req.headers.host}`;
 
-    const params = new URLSearchParams({
-      amount: Math.round(montant).toString(),
-      phone: '237' + telephone,
-      phone_lock: 'true',
-      locale: 'fr',
-      operator: operateur === 'mtn' ? 'CM_MTNMOBILEMONEY' : 'CM_ORANGEMONEY',
-      country: 'CM',
+    const payload = {
+      amount: Math.round(montant),
       currency: 'XAF',
-      payment_ref: reference,
-      first_name: nom_client || 'Client'
-    });
+      payment_method: 'pawapay',
+      mmo_provider: mmoProvider,
+      description: `Commande CAMERTECH MARKET ${reference}`,
+      customer: {
+        name: nom_client || 'Client',
+        phone: '+237' + telephone,
+        country: 'CM'
+      },
+      metadata: { order_id: reference },
+      success_url: `${origin}/?paiement=retour&ref=${reference}`,
+      error_url: `${origin}/?paiement=retour&ref=${reference}`
+    };
 
-    const response = await fetch(url, {
+    const response = await fetch('https://geniuspay.ci/api/v1/merchant/payments', {
       method: 'POST',
-      body: params.toString(),
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json'
-      }
+        'X-API-Key': process.env.GENIUSPAY_API_KEY,
+        'X-API-Secret': process.env.GENIUSPAY_API_SECRET,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
     });
 
-    const rawText = await response.text();
-    console.log('Status:', response.status);
-    console.log('Response:', rawText.substring(0, 300));
+    const result = await response.json();
 
-    let result;
-    try {
-      result = JSON.parse(rawText);
-    } catch (e) {
-      await signalerEchec(supabase, 'monetbil');
-      return res.status(500).json({ error: 'Réponse invalide: ' + rawText.substring(0, 100) });
+    if (!response.ok || !result.success) {
+      await signalerEchec(supabase, 'geniuspay');
+      return res.status(500).json({ error: result.error?.message || 'Échec initialisation paiement' });
     }
 
-    await signalerSucces(supabase, 'monetbil');
+    await signalerSucces(supabase, 'geniuspay');
 
     return res.status(200).json({
-      success: result.status === 'success' || result.status === 1 || !!result.transaction_id,
-      transaction_id: result.transaction_id || null,
-      message: result.message || null,
-      status: result.status || null
+      success: true,
+      payment_url: result.data.payment_url,
+      geniuspay_reference: result.data.reference,
+      status: result.data.status
     });
 
   } catch (error) {
     console.error('Erreur:', error.message);
-    try { await signalerEchec(supabase, 'monetbil'); } catch (e) {}
+    try { await signalerEchec(supabase, 'geniuspay'); } catch (e) {}
     return res.status(500).json({ error: error.message });
   }
 };

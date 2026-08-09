@@ -1,5 +1,5 @@
 // api/verifier-paiement.js
-// Vérification du statut d'une transaction Monetbil (Vercel)
+// Vérifie le statut d'une transaction GeniusPay via sa référence (MTX-...).
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -7,28 +7,33 @@ module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' });
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const { transaction_id } = body;
-    if (!transaction_id) return res.status(400).json({ error: 'transaction_id manquant' });
+    const { reference } = body;
+    if (!reference) return res.status(400).json({ error: 'reference manquante' });
 
-    const formData = new URLSearchParams();
-    formData.append('service_key', process.env.MONETBIL_SERVICE_KEY);
-    formData.append('transaction_id', transaction_id);
+    if (!process.env.GENIUSPAY_API_KEY || !process.env.GENIUSPAY_API_SECRET) {
+      return res.status(500).json({ error: 'Clés GeniusPay manquantes côté serveur' });
+    }
 
-    const response = await fetch('https://api.monetbil.com/payment/v1/checkPayment', {
-      method: 'POST',
-      body: formData,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    const response = await fetch(`https://geniuspay.ci/api/v1/merchant/payments/${encodeURIComponent(reference)}`, {
+      headers: {
+        'X-API-Key': process.env.GENIUSPAY_API_KEY,
+        'X-API-Secret': process.env.GENIUSPAY_API_SECRET
+      }
     });
 
     const result = await response.json();
+    if (!response.ok || !result.success) {
+      return res.status(404).json({ error: result.error?.message || 'Transaction introuvable' });
+    }
 
     return res.status(200).json({
-      status: result.status,
-      transaction_status: result.transaction?.status,
-      amount: result.transaction?.amount
+      status: result.data.status, // pending | processing | completed | failed | expired
+      amount: result.data.amount,
+      order_id: result.data.metadata?.order_id || null
     });
   } catch (e) {
     return res.status(500).json({ error: e.message });
