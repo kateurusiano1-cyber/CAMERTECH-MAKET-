@@ -1292,7 +1292,7 @@ function afficherCode(code, total) {
     openOverlay('code-overlay');
 }
 
-// Page de succès affichée après confirmation d'un paiement Monetbil (mobile money)
+// Page de succès affichée après confirmation d'un paiement GeniusPay (mobile money)
 function afficherSucces(code, total) {
     $('success-code-display').textContent = code;
     let html=panier.map(p=>`<div class="recap-ligne"><span>${p.name} ×${p.qty}</span><span>${fmt(p.prix*p.qty)} F</span></div>`).join('');
