@@ -64,16 +64,27 @@ module.exports = async (req, res) => {
       headers: {
         'X-API-Key': process.env.GENIUSPAY_API_KEY,
         'X-API-Secret': process.env.GENIUSPAY_API_SECRET,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify(payload)
     });
 
-    const result = await response.json();
+    const rawText = await response.text();
+    console.log('GeniusPay HTTP status:', response.status);
+    console.log('GeniusPay response (extrait):', rawText.substring(0, 500));
+
+    let result;
+    try {
+      result = JSON.parse(rawText);
+    } catch (e) {
+      await signalerEchec(supabase, 'geniuspay');
+      return res.status(502).json({ error: `GeniusPay a répondu HTTP ${response.status} avec un contenu non-JSON : ${rawText.substring(0, 200)}` });
+    }
 
     if (!response.ok || !result.success) {
       await signalerEchec(supabase, 'geniuspay');
-      return res.status(500).json({ error: result.error?.message || 'Échec initialisation paiement' });
+      return res.status(500).json({ error: result.error?.message || `Échec initialisation paiement (HTTP ${response.status})` });
     }
 
     await signalerSucces(supabase, 'geniuspay');
