@@ -1536,8 +1536,8 @@ async function afficherPanneauAdmin() {
                         <input type="datetime-local" id="p-flash-fin" class="adm-input">
                         <label style="display:flex;align-items:center;gap:8px;color:#555;font-size:0.88rem"><input type="checkbox" id="p-flash-chk"> ⚡ Vente Flash</label>
                     </div>
-                    <div style="background:#f4f6f4;border:1.5px dashed #ddd;border-radius:8px;padding:14px">
-                        <p style="font-size:0.82rem;color:#888;margin-bottom:8px">📷 Photo (optimisée automatiquement, haute qualité conservée)</p>
+                    <div id="p-img-dropzone" style="background:#f4f6f4;border:1.5px dashed #ddd;border-radius:8px;padding:14px;transition:background 0.2s" ondragover="handleDragOverImages(event)" ondragleave="handleDragLeaveImages(event)" ondrop="handleDropImages(event)">
+                        <p style="font-size:0.82rem;color:#888;margin-bottom:8px">📷 Photo (optimisée automatiquement, haute qualité conservée) — glisse-dépose aussi possible ici</p>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                             <label style="background:white;border:1px solid #ddd;padding:9px 14px;border-radius:7px;cursor:pointer;font-size:0.85rem">
                                 ⬆️ Uploader<input type="file" id="p-img-file" accept="image/*" multiple style="display:none" onchange="previewAdminImg(this)">
@@ -1891,13 +1891,29 @@ window.adminResetMdp = async (userId, nom, email) => {
 window.desactiverBanniere = async id => { await db.from('bannières').update({actif:false}).eq('id',id); afficherPanneauAdmin(); };
 
 window.previewAdminImg = input => {
-    const nouvelles = Array.from(input.files || []);
+    ajouterFichiersImage(input.files);
+    input.value = ''; // permet de resélectionner/ajouter d'autres photos ensuite
+};
+
+function ajouterFichiersImage(fileList) {
+    const nouvelles = Array.from(fileList || []).filter(f => f.type.startsWith('image/'));
     if (!nouvelles.length) return;
     selectedFilesAll = [...selectedFilesAll, ...nouvelles].slice(0, 8); // 8 photos max
     selectedFile = selectedFilesAll[0];
-    input.value = ''; // permet de resélectionner/ajouter d'autres photos ensuite
-
     renderAdminImgThumbs();
+}
+
+window.handleDropImages = (e) => {
+    e.preventDefault();
+    e.currentTarget.style.background = '#f4f6f4';
+    ajouterFichiersImage(e.dataTransfer.files);
+};
+window.handleDragOverImages = (e) => {
+    e.preventDefault();
+    e.currentTarget.style.background = '#e8f5e9';
+};
+window.handleDragLeaveImages = (e) => {
+    e.currentTarget.style.background = '#f4f6f4';
 };
 
 function renderAdminImgThumbs() {
@@ -2093,6 +2109,8 @@ window.annulerEdit = () => {
     ['p-name','p-desc','p-qty','p-achat','p-vente','p-promo','p-img-url','p-flash-fin'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     const c=document.getElementById('p-promo-chk');if(c)c.checked=false;
     const f=document.getElementById('p-flash-chk');if(f)f.checked=false;
+    const pf=document.getElementById('p-img-file');if(pf)pf.value='';
+    const img=document.getElementById('adm-img');if(img)img.src='';
     const w=document.getElementById('adm-img-preview');if(w)w.style.display='none';
     const ex=document.getElementById('adm-img-extra');if(ex)ex.innerHTML='';
     const ia=document.getElementById('ia-res');if(ia)ia.textContent='';

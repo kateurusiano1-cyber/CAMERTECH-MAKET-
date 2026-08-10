@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
 
     const payload = {
       amount: Math.round(montant),
-      currency: 'XAF',
+      currency: 'XOF',
       payment_method: 'pawapay',
       mmo_provider: mmoProvider,
       description: `Commande CAMERTECH MARKET ${reference}`,
@@ -84,7 +84,8 @@ module.exports = async (req, res) => {
 
     if (!response.ok || !result.success) {
       await signalerEchec(supabase, 'geniuspay');
-      return res.status(500).json({ error: result.error?.message || `Échec initialisation paiement (HTTP ${response.status})` });
+      const detailChamps = result.errors ? ' — ' + JSON.stringify(result.errors) : (result.message ? ' — ' + result.message : '');
+      return res.status(500).json({ error: (result.error?.message || `Échec initialisation paiement (HTTP ${response.status})`) + detailChamps });
     }
 
     await signalerSucces(supabase, 'geniuspay');
