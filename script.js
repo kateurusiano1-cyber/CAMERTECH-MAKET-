@@ -2009,7 +2009,7 @@ function afficherResultatsLot(produits, fichiers) {
     const zone = document.getElementById('ia-lot-resultats');
     zone.style.display = 'flex';
     zone.innerHTML = produits.map((p, i) => `
-        <div class="ia-lot-carte" style="background:#f8f9fb;border:1px solid #e0e6f0;border-radius:10px;padding:14px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
+        <div class="ia-lot-carte" id="ia-lot-carte-${i}" style="background:#f8f9fb;border:1px solid #e0e6f0;border-radius:10px;padding:14px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
             <img id="ia-lot-img-${i}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;flex-shrink:0">
             <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px">
                 <input type="text" id="ia-lot-name-${i}" class="adm-input" value="${(p.name||'').replace(/"/g,'&quot;')}" placeholder="Nom du produit">
@@ -2062,6 +2062,17 @@ window.validerProduitLot = async (i) => {
         res.style.color = '#2dc653'; res.textContent = '✅ Produit ajouté !';
         btn.textContent = '✅ Ajouté'; btn.style.background = '#888'; btn.disabled = true;
         rafraichirProduits();
+        setTimeout(() => {
+            const carte = document.getElementById(`ia-lot-carte-${i}`);
+            if (carte) carte.remove();
+            const zone = document.getElementById('ia-lot-resultats');
+            if (zone && !zone.children.length) {
+                zone.style.display = 'none'; zone.innerHTML = '';
+                resetAdminImg(); // vide aussi les photos et la case "produits différents" en haut
+                const msg = document.getElementById('prod-msg');
+                if (msg) { msg.style.color = '#2dc653'; msg.textContent = '✅ Tous les produits du lot ont été ajoutés !'; }
+            }
+        }, 900);
     } catch (e) {
         res.style.color = '#e63946'; res.textContent = '❌ ' + e.message;
         btn.disabled = false; btn.textContent = '✅ Ajouter ce produit';
