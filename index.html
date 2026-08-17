@@ -323,6 +323,10 @@
             <input type="tel" id="reg-tel" placeholder="Téléphone (9 chiffres) — pour la livraison *" maxlength="9" data-i18n-ph="ph_tel_livraison">
             <div class="pwd-wrap"><input type="password" id="reg-mdp" placeholder="Mot de passe *" data-i18n-ph="ph_mdp_req"><button type="button" class="pwd-toggle" data-target="reg-mdp">👁</button></div>
             <div class="pwd-wrap"><input type="password" id="reg-mdp2" placeholder="Confirmer mot de passe *" data-i18n-ph="ph_confirmer_mdp"><button type="button" class="pwd-toggle" data-target="reg-mdp2">👁</button></div>
+            <label style="display:flex;align-items:flex-start;gap:8px;font-size:0.8rem;color:var(--text2);margin:10px 0;cursor:pointer">
+                <input type="checkbox" id="reg-politique" style="margin-top:2px;flex-shrink:0">
+                <span><span data-i18n="txt_accepte_politique">J'ai lu et j'accepte la</span> <a href="#" id="lien-politique-reg" data-i18n="lien_politique" style="color:var(--green);text-decoration:underline">politique de confidentialité</a> *</span>
+            </label>
             <button class="btn-green" id="btn-register" data-i18n="btn_creer_compte">Créer mon compte</button>
             <p class="form-err" id="reg-err"></p>
         </div>
@@ -335,8 +339,26 @@
         <h3 data-i18n="titre_tel_manquant">📞 Un dernier détail</h3>
         <p style="color:var(--text3);font-size:0.88rem;margin-bottom:12px" data-i18n="txt_tel_manquant">Ton numéro de téléphone nous sert uniquement pour organiser la livraison de tes commandes.</p>
         <input type="tel" id="tel-manquant-input" placeholder="Téléphone (9 chiffres)" maxlength="9" data-i18n-ph="ph_tel">
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:0.8rem;color:var(--text2);margin:10px 0;cursor:pointer">
+            <input type="checkbox" id="tel-manquant-politique" style="margin-top:2px;flex-shrink:0">
+            <span><span data-i18n="txt_accepte_politique">J'ai lu et j'accepte la</span> <a href="#" id="lien-politique-tel" data-i18n="lien_politique" style="color:var(--green);text-decoration:underline">politique de confidentialité</a> *</span>
+        </label>
         <button class="btn-green" id="btn-tel-manquant-confirmer" data-i18n="btn_continuer">Continuer</button>
         <p class="form-err" id="tel-manquant-err"></p>
+    </div>
+</div>
+
+<!-- MODAL POLITIQUE DE CONFIDENTIALITE -->
+<div class="modal-overlay" id="politique-overlay" style="display:none">
+    <div class="modal modal-auth" style="max-width:480px">
+        <button class="modal-x" onclick="closeOverlay('politique-overlay')">✕</button>
+        <h3>🔒 Politique de confidentialité</h3>
+        <div style="color:var(--text2);font-size:0.9rem;line-height:1.7;text-align:left;margin:12px 0;max-height:50vh;overflow-y:auto">
+            <p>Certains produits proposés sur CAMERTECH MARKET sont des <strong>copies</strong>, des <strong>copies certifiées</strong>, ou des <strong>produits originaux</strong>. La différence entre ces catégories se traduit uniquement par le <strong>prix</strong>, qui varie selon la qualité du produit. Cette information est indiquée le plus clairement possible sur chaque fiche produit.</p>
+            <p>Les articles vendus <strong>sans nom de marque</strong> ne sont pas nécessairement des copies. Cependant, pour ce type d'article, les possibilités de remboursement sont plus limitées en cas de réclamation.</p>
+            <p>En créant un compte, tu confirmes avoir lu et compris ces informations avant de passer commande.</p>
+        </div>
+        <button class="btn-green" onclick="closeOverlay('politique-overlay')">J'ai compris</button>
     </div>
 </div>
 

@@ -64,7 +64,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Session
     try {
         const saved = localStorage.getItem('cmkt_user');
-        if (saved) { currentUser = JSON.parse(saved); showUserUI(); }
+        if (saved) {
+            currentUser = JSON.parse(saved); showUserUI();
+            await chargerPanierServeur();
+            ecouterPanierEnDirect();
+        }
     } catch(e) { localStorage.removeItem('cmkt_user'); }
 
     // Thème
@@ -170,7 +174,9 @@ const I18N = {
         titre_mdp_oublie: '🔑 Mot de passe oublié', txt_mdp_oublie: 'Entre ton email, on t\'envoie un lien pour choisir un nouveau mot de passe.',
         titre_panier: '🛒 Mon Panier', label_zone: '📍 Zone de livraison', choisir_zone: '-- Choisir votre zone --',
         ph_note: 'Note pour la commande (optionnel)...', btn_payer: '💳 Payer maintenant (Mobile Money)',
-        btn_reserver: '📋 Réserver (paiement à la livraison)'
+        btn_reserver: '📋 Réserver (paiement à la livraison)',
+        txt_accepte_politique: 'J\'ai lu et j\'accepte la', lien_politique: 'politique de confidentialité',
+        err_politique_requise: '❌ Tu dois accepter la politique de confidentialité pour continuer'
     },
     en: {
         nav_accueil: '🏠 Home', nav_flash: '⚡ Flash Sales', nav_promo: '🏷️ Promotions',
@@ -197,7 +203,9 @@ const I18N = {
         titre_mdp_oublie: '🔑 Forgot password', txt_mdp_oublie: 'Enter your email, we\'ll send you a link to choose a new password.',
         titre_panier: '🛒 My Cart', label_zone: '📍 Delivery area', choisir_zone: '-- Choose your area --',
         ph_note: 'Note for the order (optional)...', btn_payer: '💳 Pay now (Mobile Money)',
-        btn_reserver: '📋 Reserve (pay on pickup/delivery)'
+        btn_reserver: '📋 Reserve (pay on pickup/delivery)',
+        txt_accepte_politique: 'I have read and accept the', lien_politique: 'privacy policy',
+        err_politique_requise: '❌ You must accept the privacy policy to continue'
     }
 };
 
@@ -313,6 +321,8 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
         currentUser = profil;
         localStorage.setItem('cmkt_user', JSON.stringify(profil));
         showUserUI();
+        await chargerPanierServeur();
+        ecouterPanierEnDirect();
         return { ok: true };
     }
     if (extra.telephone) {
@@ -320,18 +330,22 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
             firebase_uid: fbUser.uid,
             nom: extra.nom || fbUser.displayName || 'Client',
             telephone: extra.telephone,
-            email: fbUser.email
+            email: fbUser.email,
+            politique_acceptee_le: extra.politiqueAcceptee ? new Date().toISOString() : null
         }]).select().single();
         if (error) { console.error('Erreur création profil Supabase:', error); return { ok: false, error }; }
         currentUser = data;
         localStorage.setItem('cmkt_user', JSON.stringify(data));
         showUserUI();
+        await chargerPanierServeur();
+        ecouterPanierEnDirect();
         return { ok: true };
     }
     // Première connexion (Google) sans téléphone connu : on le demande.
     pendingFbUser = fbUser;
     $('tel-manquant-input').value = '';
     $('tel-manquant-err').textContent = '';
+    $('tel-manquant-politique').checked = false;
     openOverlay('tel-manquant-overlay');
     return { ok: false, pending: true };
 }
@@ -355,6 +369,9 @@ function setupAuth() {
     $('auth-close').onclick = () => closeOverlay('auth-overlay');
     $('auth-overlay').onclick = e => { if(e.target===$('auth-overlay')) closeOverlay('auth-overlay'); };
 
+    $('lien-politique-reg').onclick = e => { e.preventDefault(); openOverlay('politique-overlay'); };
+    $('lien-politique-tel').onclick = e => { e.preventDefault(); openOverlay('politique-overlay'); };
+
     $('atab-login').onclick = () => {
         $('atab-login').classList.add('active'); $('atab-reg').classList.remove('active');
         show('form-login'); hide('form-reg');
@@ -362,6 +379,7 @@ function setupAuth() {
     $('atab-reg').onclick = () => {
         $('atab-reg').classList.add('active'); $('atab-login').classList.remove('active');
         hide('form-login'); show('form-reg');
+        $('reg-politique').checked = false;
     };
 
     $('btn-login').onclick = async () => {
@@ -400,7 +418,8 @@ function setupAuth() {
         const tel = $('tel-manquant-input').value.trim();
         const err = $('tel-manquant-err');
         if (tel.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
-        const r = await creerOuChargerProfil(pendingFbUser, { telephone: tel });
+        if (!$('tel-manquant-politique').checked) { err.textContent = I18N[currentLang].err_politique_requise; return; }
+        const r = await creerOuChargerProfil(pendingFbUser, { telephone: tel, politiqueAcceptee: true });
         if (r.ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); }
         else { err.textContent = '❌ ' + (r.error?.message || 'Erreur, réessaie'); }
     };
@@ -418,10 +437,11 @@ function setupAuth() {
         if (tel.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
         if (mdp.length < 6) { err.textContent = '❌ Mot de passe trop court (6 min)'; return; }
         if (mdp !== mdp2) { err.textContent = '❌ Mots de passe différents'; return; }
+        if (!$('reg-politique').checked) { err.textContent = I18N[currentLang].err_politique_requise; return; }
         $('btn-register').textContent = 'Création...';
         try {
             const cred = await window.fbCreateUserWithEmail(window.firebaseAuth, email, mdp);
-            const r = await creerOuChargerProfil(cred.user, { nom, telephone: tel });
+            const r = await creerOuChargerProfil(cred.user, { nom, telephone: tel, politiqueAcceptee: true });
             $('btn-register').textContent = 'Créer mon compte';
             if (r.ok) { closeOverlay('auth-overlay'); }
             else { err.textContent = '❌ Compte créé mais profil non enregistré : ' + (r.error?.message || 'contacte le support'); }
@@ -433,6 +453,7 @@ function setupAuth() {
 
     $('btn-logout').onclick = () => {
         window.fbSignOut(window.firebaseAuth).catch(()=>{});
+        arreterEcoutePanier();
         currentUser = null;
         localStorage.removeItem('cmkt_user');
         $('user-zone').style.display = 'none';
@@ -965,6 +986,7 @@ $('btn-add-cart').onclick = () => {
     if (ex) ex.qty = Math.min(ex.qty+qty, modalProduct.quantity);
     else panier.push({ id:modalProduct.id, name:modalProduct.name, prix, qty, image_url:modalProduct.image_url });
     updatePanierBtn();
+    syncPanierServeur();
     closeOverlay('prod-overlay');
     const btn = $('panier-btn');
     btn.style.transform = 'scale(1.2)';
@@ -998,6 +1020,7 @@ window.addQuick = id => {
     if (ex) ex.qty++;
     else panier.push({id:p.id, name:p.name, prix:getPrix(p), qty:1});
     updatePanierBtn();
+    syncPanierServeur();
 };
 
 // ===== AVIS =====
@@ -1070,6 +1093,82 @@ function updatePanierBtn() {
     $('panier-btn').style.display = total > 0 ? '' : 'none';
 }
 
+// ===== SYNCHRO PANIER ENTRE APPAREILS =====
+// Objectif : un client qui commence sa commande sur PC et revient sur son téléphone
+// pour payer doit retrouver son panier déjà là, à jour.
+let panierChannel = null;
+let syncPanierTimeout = null;
+let dernierPanierEnvoye = null; // évite de se re-synchroniser soi-même via l'écho Realtime
+
+// Sauvegarde le panier courant côté serveur (anti-rebond : regroupe les appels rapprochés
+// pour ne pas spammer Supabase à chaque clic +/-).
+function syncPanierServeur() {
+    if (!currentUser) return;
+    clearTimeout(syncPanierTimeout);
+    syncPanierTimeout = setTimeout(async () => {
+        const items = panier;
+        dernierPanierEnvoye = JSON.stringify(items);
+        try {
+            await db.from('paniers').upsert({
+                utilisateur_id: currentUser.id,
+                items,
+                zone: userZone || null,
+                frais_livraison: fraisLivraison || 0,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'utilisateur_id' });
+        } catch (e) { console.error('Erreur synchro panier:', e); }
+    }, 600);
+}
+
+// Charge le panier sauvegardé côté serveur à la connexion (ou à la restauration de session).
+// Fusionne avec un panier local déjà présent au lieu de l'écraser, pour ne jamais faire
+// perdre un article que le client vient d'ajouter avant même que la fusion arrive.
+async function chargerPanierServeur() {
+    if (!currentUser) return;
+    try {
+        const { data } = await db.from('paniers').select('*').eq('utilisateur_id', currentUser.id).single();
+        if (!data) return;
+        (data.items || []).forEach(item => {
+            const ex = panier.find(x => x.id === item.id);
+            if (ex) ex.qty = Math.max(ex.qty, item.qty);
+            else panier.push(item);
+        });
+        if (!userZone && data.zone) userZone = data.zone;
+        if (!fraisLivraison && data.frais_livraison) fraisLivraison = data.frais_livraison;
+        updatePanierBtn();
+        if ($('zone-select') && userZone) { $('zone-select').value = userZone; updateLivraison(); }
+    } catch (e) { /* pas encore de panier serveur pour ce compte : normal */ }
+}
+
+// Écoute en direct les changements faits depuis un AUTRE appareil connecté au même compte
+// (ex : le client ajoute un article sur PC pendant que son téléphone est ouvert sur le site).
+function ecouterPanierEnDirect() {
+    if (!currentUser || panierChannel) return;
+    panierChannel = db.channel('panier-' + currentUser.id)
+        .on('postgres_changes', {
+            event: '*', schema: 'public', table: 'paniers',
+            filter: 'utilisateur_id=eq.' + currentUser.id
+        }, payload => {
+            const nouveau = payload.new;
+            if (!nouveau) return;
+            if (dernierPanierEnvoye === JSON.stringify(nouveau.items)) return; // c'est notre propre écho
+            panier = nouveau.items || [];
+            userZone = nouveau.zone || userZone;
+            fraisLivraison = nouveau.frais_livraison || 0;
+            updatePanierBtn();
+            if ($('zone-select')) $('zone-select').value = userZone || '';
+            if ($('panier-overlay') && $('panier-overlay').style.display === 'flex') {
+                panier.length ? renderPanier() : openPanier();
+            }
+        })
+        .subscribe();
+}
+
+// Coupe l'écoute en direct (à la déconnexion, pour ne pas laisser un canal ouvert inutilement).
+function arreterEcoutePanier() {
+    if (panierChannel) { db.removeChannel(panierChannel); panierChannel = null; }
+}
+
 function setupPanier() {
     $('panier-btn').onclick = openPanier;
     $('panier-close').onclick = () => closeOverlay('panier-overlay');
@@ -1083,14 +1182,14 @@ function setupPanier() {
             setTimeout(()=>$('btn-copier').textContent='📋 Copier le code',2000);
         });
     };
-    $('btn-fermer-code').onclick = () => { closeOverlay('code-overlay'); panier=[]; updatePanierBtn(); };
+    $('btn-fermer-code').onclick = () => { closeOverlay('code-overlay'); panier=[]; updatePanierBtn(); syncPanierServeur(); };
     $('btn-copier-success').onclick = () => {
         navigator.clipboard.writeText($('success-code-display').textContent).then(() => {
             $('btn-copier-success').textContent='✅ Copié !';
             setTimeout(()=>$('btn-copier-success').textContent='📋 Copier le code',2000);
         });
     };
-    $('btn-fermer-success').onclick = () => { closeOverlay('success-overlay'); panier=[]; updatePanierBtn(); };
+    $('btn-fermer-success').onclick = () => { closeOverlay('success-overlay'); panier=[]; updatePanierBtn(); syncPanierServeur(); };
 }
 
 function openPanier() {
@@ -1119,7 +1218,7 @@ function renderPanier() {
         d.innerHTML=`<div class="panier-item-info"><strong>${item.name}</strong><span>${fmt(item.prix)} FCFA × ${item.qty}</span></div>
             <div class="panier-item-price">${fmt(st)} FCFA</div>
             <button class="btn-rm" data-idx="${i}">✕</button>`;
-        d.querySelector('.btn-rm').onclick = e => { panier.splice(parseInt(e.target.dataset.idx),1); updatePanierBtn(); openPanier(); };
+        d.querySelector('.btn-rm').onclick = e => { panier.splice(parseInt(e.target.dataset.idx),1); updatePanierBtn(); syncPanierServeur(); openPanier(); };
         items.appendChild(d);
     });
     updateTotaux(sousTotal);
@@ -1162,6 +1261,7 @@ function updateLivraison() {
         warn.style.display='none';
     }
     if(panier.length) renderPanier();
+    syncPanierServeur();
 }
 
 // ===== PAIEMENT =====
@@ -1261,7 +1361,7 @@ function afficherSuccesDepuisResa(resa) {
         userZone = resa.zone_livraison; fraisLivraison = resa.frais_livraison || 0;
     }
     afficherSucces(resa.code, resa.total);
-    panier = []; updatePanierBtn();
+    panier = []; updatePanierBtn(); syncPanierServeur();
 }
 
 async function reserverSansPaiement() {
@@ -1279,7 +1379,7 @@ async function reserverSansPaiement() {
     afficherCode(code,total);
     const waMsg=encodeURIComponent(`🛒 CAMERTECH MARKET\n\n👤 ${currentUser.nom}\n📞 ${currentUser.telephone}\n📍 Zone: ${userZone}\n🔑 Code: ${code}\n\n${panier.map(p=>`• ${p.name} ×${p.qty} = ${fmt(p.prix*p.qty)} F`).join('\n')}\n\n💰 TOTAL: ${fmt(total)} FCFA`);
     setTimeout(()=>window.open(`https://wa.me/${CONFIG.WA1}?text=${waMsg}`,'_blank'),500);
-    panier=[]; updatePanierBtn();
+    panier=[]; updatePanierBtn(); syncPanierServeur();
 }
 
 function afficherCode(code, total) {
