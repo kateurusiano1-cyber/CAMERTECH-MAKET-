@@ -1508,34 +1508,65 @@ function afficherLoginAdmin() {
     </div>`;
 }
 
-let adminCodeTemp=null, adminTemp=null, adminTries=0;
+let adminTicketTemp=null, adminTries=0;
 
-window.adminStep1 = () => {
+window.adminStep1 = async () => {
     const id=document.getElementById('adm-id').value.trim();
     const mdp=document.getElementById('adm-mdp').value.trim();
     const err=document.getElementById('adm-err');
-    const admin=CONFIG.ADMINS.find(a=>a.id===id&&a.mdp===mdp);
-    if(!admin){adminTries++;err.textContent=`❌ Identifiant ou mot de passe incorrect (${adminTries}/3)`;if(adminTries>=3){document.getElementById('step1').style.opacity='0.4';document.getElementById('step1').style.pointerEvents='none';err.textContent='🚫 Trop de tentatives.';}return;}
-    adminTemp=admin;
-    adminCodeTemp=Math.floor(1000+Math.random()*9000).toString();
-    const msg=encodeURIComponent(`🔐 CAMERTECH MARKET\nCode admin : ${adminCodeTemp}\nValide 5 min.`);
-    window.open(`https://wa.me/${admin.wa}?text=${msg}`,'_blank');
-    document.getElementById('step1').style.display='none';
-    document.getElementById('step2').style.display='block';
-    setTimeout(()=>{adminCodeTemp=null;},5*60*1000);
+    const btn = document.querySelector('#step1 button');
+    err.textContent = ''; if (btn) { btn.disabled = true; btn.textContent = 'Vérification...'; }
+    try {
+        const resp = await fetch('/api/admin-login', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, mdp })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            adminTries++;
+            err.textContent = `❌ ${data.error || 'Identifiant ou mot de passe incorrect'}` + (resp.status===401 ? ` (${adminTries}/3)` : '');
+            if (adminTries>=3) { document.getElementById('step1').style.opacity='0.4'; document.getElementById('step1').style.pointerEvents='none'; err.textContent='🚫 Trop de tentatives.'; }
+            return;
+        }
+        adminTicketTemp = data.ticket;
+        const msg=encodeURIComponent(`🔐 CAMERTECH MARKET\nCode admin : ${data.code}\nValide 5 min.`);
+        window.open(`https://wa.me/${data.wa}?text=${msg}`,'_blank');
+        document.getElementById('step1').style.display='none';
+        document.getElementById('step2').style.display='block';
+    } catch (e) {
+        err.textContent = '❌ Erreur réseau, réessaie';
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Continuer →'; }
+    }
 };
 
-window.adminStep2 = () => {
+window.adminStep2 = async () => {
     const codeEl = document.getElementById('adm-code');
     const err = document.getElementById('adm-err');
     if (!codeEl) { console.error('Element adm-code introuvable'); return; }
     const code = codeEl.value.trim();
     if (!code) { err.textContent='❌ Entrez le code reçu'; return; }
-    if (!adminCodeTemp) { err.textContent='❌ Code expiré. Cliquez sur Retour et recommencez.'; return; }
-    if (code !== adminCodeTemp) { err.textContent='❌ Code incorrect'; return; }
-    isAdmin = true;
-    currentAdmin = adminTemp;
-    afficherPanneauAdmin();
+    if (!adminTicketTemp) { err.textContent='❌ Session expirée. Cliquez sur Retour et recommencez.'; return; }
+    const btn = document.querySelector('#step2 button');
+    err.textContent = ''; if (btn) { btn.disabled = true; btn.textContent = 'Vérification...'; }
+    try {
+        const resp = await fetch('/api/admin-verify-otp', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticket: adminTicketTemp, code })
+        });
+        const data = await resp.json();
+        if (!resp.ok) { err.textContent = `❌ ${data.error || 'Code incorrect'}`; return; }
+        isAdmin = true;
+        currentAdmin = { id: data.id, wa: data.wa };
+        sessionStorage.setItem('cmkt_admin_token', data.token);
+        sessionStorage.setItem('cmkt_admin_id', data.id);
+        sessionStorage.setItem('cmkt_admin_wa', data.wa);
+        afficherPanneauAdmin();
+    } catch (e) {
+        err.textContent = '❌ Erreur réseau, réessaie';
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Confirmer'; }
+    }
 };
 
 // ===== PANNEAU ADMIN (simplifié mais complet) =====

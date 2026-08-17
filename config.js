@@ -5,11 +5,9 @@ const CONFIG = {
     WA1: "237699781160",
     WA2: "237653756167",
     ADMIN_PATH: "admin-cmr2025",
-    ADMINS: [
-        { id:"EVAR_ADMIN_1", mdp:"Ev@r2025#Cm1", wa:"237699781160" },
-        { id:"EVAR_ADMIN_2", mdp:"C@mTech#753!", wa:"237653756167" },
-        { id:"EVAR_ADMIN_3", mdp:"M@rket#670Xt", wa:"237670554637" }
-    ],
+    // Les identifiants admin ne sont plus ici : ils vivent uniquement côté
+    // serveur (variables d'environnement Vercel), vérifiés par /api/admin-login
+    // et /api/admin-verify-otp. Voir supabase_admin_auth.sql pour le détail.
     API: {
         INITIER_PAIEMENT: "/api/initier-paiement",
         VERIFIER_PAIEMENT: "/api/verifier-paiement"
