@@ -414,6 +414,21 @@ function setupAuth() {
         }
     };
 
+    // Même bouton Google, dupliqué visuellement dans l'onglet Inscription pour plus de clarté
+    // (le compte est de toute façon créé/chargé via creerOuChargerProfil, identique aux deux endroits).
+    $('btn-google-login-reg').onclick = async () => {
+        const err = $('reg-err');
+        err.textContent = '';
+        try {
+            const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
+            const r = await creerOuChargerProfil(cred.user);
+            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+            else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || 'Erreur, réessaie'); }
+        } catch (e) {
+            err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+        }
+    };
+
     $('btn-tel-manquant-confirmer').onclick = async () => {
         const tel = $('tel-manquant-input').value.trim();
         const err = $('tel-manquant-err');
