@@ -5,14 +5,22 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { circuitOuvert, signalerEchec, signalerSucces } = require('./_lib/circuitBreaker');
+const { verifierRequeteAdmin } = require('./_lib/adminSession');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' });
+
+  // Réservé à l'admin connecté : évite qu'un visiteur anonyme épuise le
+  // quota gratuit Gemini ou déclenche volontairement le circuit breaker.
+  const session = verifierRequeteAdmin(req, process.env.ADMIN_SESSION_SECRET);
+  if (!session) {
+    return res.status(401).json({ error: 'Accès réservé à l\'administrateur' });
+  }
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
