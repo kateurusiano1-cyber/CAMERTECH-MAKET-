@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
         // jamais une valeur envoyée par le navigateur.
         const { data: resa, error } = await supabase
             .from('reservations')
-            .select('code, total, statut')
+            .select('code, total, statut, utilisateur_id')
             .eq('code', reference)
             .single();
 
@@ -44,14 +44,23 @@ module.exports = async (req, res) => {
         if (resa.statut === 'valide') return res.status(400).json({ error: 'Cette commande est déjà payée' });
         if (!resa.total || resa.total < 100) return res.status(400).json({ error: 'Montant de commande invalide' });
 
+        // Email du client pour pré-remplir le widget (évite qu'il ait à le taper) :
+        // relu depuis son profil, jamais depuis ce qu'enverrait le navigateur.
+        let email = null;
+        if (resa.utilisateur_id) {
+            const { data: user } = await supabase.from('utilisateurs').select('email').eq('id', resa.utilisateur_id).single();
+            email = user?.email || null;
+        }
+
         await signalerSucces(supabase, 'ikeepay');
 
         return res.status(200).json({
             success: true,
             pk: process.env.IKEEPAY_PUBLIC_KEY,
             amount: Math.round(resa.total),
-            currency: 'XOF',
-            order_id: resa.code
+            currency: 'XAF', // le Cameroun utilise le XAF (franc CFA Afrique Centrale), pas le XOF (Afrique de l'Ouest)
+            order_id: resa.code,
+            email
         });
     } catch (e) {
         console.error('Erreur preparer-paiement:', e.message);

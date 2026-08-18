@@ -1431,6 +1431,7 @@ function ouvrirWidgetIkeepay(paiement, code) {
         currency: paiement.currency,
         order_id: paiement.order_id
     });
+    if (paiement.email) params.set('email', paiement.email);
     $('ikeepay-iframe').src = `https://ikeepay.com/checkout/v1/inline?${params.toString()}`;
     $('ikeepay-overlay').style.display = 'flex';
 
