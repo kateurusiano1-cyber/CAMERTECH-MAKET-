@@ -1429,7 +1429,8 @@ function ouvrirWidgetIkeepay(paiement, code) {
         pk: paiement.pk,
         amount: String(paiement.amount),
         currency: paiement.currency,
-        order_id: paiement.order_id
+        order_id: paiement.order_id,
+        country: 'CM' // Cameroun explicite — évite de dépendre uniquement de la sélection visuelle dans le widget
     });
     if (paiement.email) params.set('email', paiement.email);
     $('ikeepay-iframe').src = `https://ikeepay.com/checkout/v1/inline?${params.toString()}`;
