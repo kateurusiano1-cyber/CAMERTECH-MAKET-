@@ -9,8 +9,7 @@ const CONFIG = {
     // serveur (variables d'environnement Vercel), vérifiés par /api/admin-login
     // et /api/admin-verify-otp. Voir supabase_admin_auth.sql pour le détail.
     API: {
-        INITIER_PAIEMENT: "/api/initier-paiement",
-        VERIFIER_PAIEMENT: "/api/verifier-paiement"
+        PREPARER_PAIEMENT: "/api/preparer-paiement"
     },
     // Quartiers livrés directement (1 000 FCFA). Tout autre quartier = retrait en agence.
     ZONES_COUVERTES: ["Akwa","Bonamoussadi","Ndokoti","PK14","Makepe","Bassa","Logbaba","Deido","Bonaberi"],

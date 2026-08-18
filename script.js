@@ -8,7 +8,6 @@ let allProducts = [], panier = [], modalProduct = null;
 let selectedFile = null, selectedFilesAll = [], editingId = null, currentCat = "tous";
 let userZone = "", fraisLivraison = 0;
 let slideIndex = 0, slideTimer = null, totalSlides = 1;
-let selectedOp = "mtn";
 let selectedNote = 0, avisFile = null;
 
 // ===== COMPRESSION IMAGE =====
@@ -170,7 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await chargerParametres();
     await verifierLienResetDansURL();
-    await verifierRetourPaiement();
+    // (l'ancien traitement de retour de redirection GeniusPay a été retiré)
 
     // Applique la langue mémorisée (si déjà EN, met aussi à jour l'état visuel des boutons)
     appliquerTraductionUI(currentLang);
@@ -395,9 +394,16 @@ let pendingFbUser = null;
 // Crée ou charge le profil Supabase (nom/téléphone/email) lié à un compte Firebase.
 // Retourne true si le profil est prêt et currentUser est défini.
 async function creerOuChargerProfil(fbUser, extra = {}) {
-    const { data: profil } = await db.from('utilisateurs').select('*').eq('firebase_uid', fbUser.uid).single();
+    // Lecture du profil via la route serveur (jeton Firebase vérifié côté
+    // serveur) plutôt qu'en interrogeant Supabase directement depuis le
+    // navigateur — la table utilisateurs n'est plus lisible publiquement.
+    let profil = null;
+    try {
+        const idToken = await fbUser.getIdToken();
+        const resp = await fetch('/api/mon-profil', { headers: { 'Authorization': 'Bearer ' + idToken } });
+        if (resp.ok) { const j = await resp.json(); profil = j.profil; }
+    } catch (e) { console.error('Erreur chargement profil:', e); }
     if (profil) {
-        delete profil.mot_de_passe;
         currentUser = profil;
         localStorage.setItem('cmkt_user', JSON.stringify(profil));
         showUserUI();
@@ -1362,9 +1368,13 @@ function updateLivraison() {
 // ===== PAIEMENT =====
 function setupPaiement() {
     $('pay-close').onclick = () => closeOverlay('pay-overlay');
-    $('pay-mtn').onclick = () => { selectedOp='mtn'; $('pay-mtn').classList.add('active'); $('pay-orange').classList.remove('active'); };
-    $('pay-orange').onclick = () => { selectedOp='orange'; $('pay-orange').classList.add('active'); $('pay-mtn').classList.remove('active'); };
     $('btn-pay-confirm').onclick = confirmerPaiement;
+    $('ikeepay-close').onclick = fermerWidgetIkeepay;
+}
+
+function fermerWidgetIkeepay() {
+    $('ikeepay-overlay').style.display = 'none';
+    $('ikeepay-iframe').src = '';
 }
 
 function initierPaiement() {
@@ -1372,7 +1382,6 @@ function initierPaiement() {
     if (!userZone) { alert('Choisissez votre zone de livraison.'); return; }
     const total = panier.reduce((s,p)=>s+p.prix*p.qty,0) + fraisLivraison;
     $('pay-amount').textContent = fmt(total) + ' FCFA';
-    $('pay-tel').value = currentUser.telephone || '';
     $('pay-status').textContent='';
     $('btn-pay-confirm').disabled=false;
     $('btn-pay-confirm').textContent='Payer maintenant';
@@ -1381,11 +1390,9 @@ function initierPaiement() {
 }
 
 async function confirmerPaiement() {
-    const tel = $('pay-tel').value.trim();
     const status = $('pay-status');
     const btn = $('btn-pay-confirm');
-    if (tel.length!==9) { status.style.color='var(--danger)'; status.textContent='❌ Numéro invalide (9 chiffres)'; return; }
-    btn.disabled=true; btn.textContent='Traitement...';
+    btn.disabled=true; btn.textContent='Préparation...';
     status.style.color='var(--text3)'; status.textContent='📲 Préparation du paiement...';
     try {
         const total=panier.reduce((s,p)=>s+p.prix*p.qty,0)+fraisLivraison;
@@ -1396,52 +1403,72 @@ async function confirmerPaiement() {
             total, zone_livraison:userZone, frais_livraison:fraisLivraison, statut:'paiement_en_cours',
             note:$('note-cmd').value||null
         }]);
-        const resp = await fetch(CONFIG.API.INITIER_PAIEMENT, {
+        // Le serveur relit le vrai montant de la commande qu'on vient de créer
+        // (jamais celui calculé ici) avant de nous donner le feu vert.
+        const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({ telephone:tel, montant:Math.round(total), operateur:selectedOp, reference:code, nom_client:currentUser.nom.split(' ')[0] })
+            body:JSON.stringify({ reference: code })
         });
         const result = await resp.json();
-        if (result.success && result.payment_url) {
-            status.style.color='var(--success)'; status.textContent='✅ Redirection vers le paiement...';
-            // On garde la référence du panier pour pouvoir réafficher le récapitulatif au retour
-            sessionStorage.setItem('cmkt_panier_'+code, JSON.stringify({ items: panier, total, zone: userZone, frais: fraisLivraison }));
-            setTimeout(() => { window.location.href = result.payment_url; }, 600);
-        } else throw new Error(result.error||'Échec paiement');
+        if (!result.success) throw new Error(result.error||'Échec paiement');
+
+        // Sauvegarde du panier pour pouvoir réafficher le récapitulatif au retour du widget
+        sessionStorage.setItem('cmkt_panier_'+code, JSON.stringify({ items: panier, total, zone: userZone, frais: fraisLivraison }));
+        status.textContent=''; btn.disabled=false; btn.textContent='Payer maintenant';
+
+        ouvrirWidgetIkeepay(result, code);
     } catch(e) {
         status.style.color='var(--danger)'; status.textContent='❌ '+(e.message||'Erreur. Réessayez.');
         btn.disabled=false; btn.textContent='Payer maintenant';
     }
 }
 
-// Traite le retour du client depuis la page de paiement GeniusPay (?paiement=retour&ref=CODE)
-async function verifierRetourPaiement() {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('paiement') !== 'retour') return;
-    const code = params.get('ref');
-    window.history.replaceState({}, '', window.location.pathname);
-    if (!code) return;
+// Ouvre le widget iKeePay en overlay (iframe intégrée, aucune redirection externe)
+function ouvrirWidgetIkeepay(paiement, code) {
+    const params = new URLSearchParams({
+        pk: paiement.pk,
+        amount: String(paiement.amount),
+        currency: paiement.currency,
+        order_id: paiement.order_id
+    });
+    $('ikeepay-iframe').src = `https://ikeepay.com/checkout/v1/inline?${params.toString()}`;
+    $('ikeepay-overlay').style.display = 'flex';
 
+    const onMessage = async (event) => {
+        if (event.data === 'ikeepay-close') {
+            fermerWidgetIkeepay();
+        }
+        if (event.data === 'ikeepay-success') {
+            window.removeEventListener('message', onMessage);
+            fermerWidgetIkeepay();
+            await attendreConfirmationCommande(code);
+        }
+    };
+    window.addEventListener('message', onMessage);
+}
+
+// Après le signal "succès" du widget, on attend la confirmation réelle du
+// webhook côté serveur (jamais fait confiance au seul message de l'iframe,
+// qui ne prouve rien côté serveur) avant d'afficher la page de succès.
+async function attendreConfirmationCommande(code, tentative = 0) {
     const { data: resa } = await db.from('reservations').select('*').eq('code', code).single();
-    if (!resa) return;
-
-    if (resa.statut === 'valide') {
-        // Déjà confirmé (webhook arrivé avant le retour du client)
+    if (resa?.statut === 'valide') {
         afficherSuccesDepuisResa(resa);
         return;
     }
-
-    // Sinon on redemande le statut à GeniusPay via sa référence stockée en transaction_id (si déjà connue)
-    // ou on patiente un court instant pour laisser le webhook arriver, puis on revérifie une fois.
-    await new Promise(r => setTimeout(r, 2500));
-    const { data: resa2 } = await db.from('reservations').select('*').eq('code', code).single();
-    if (resa2?.statut === 'valide') {
-        afficherSuccesDepuisResa(resa2);
-    } else if (resa2?.statut === 'paiement_echoue') {
+    if (resa?.statut === 'paiement_echoue') {
         alert('❌ Le paiement a échoué ou a été annulé. Tu peux réessayer depuis ton panier.');
-    } else {
-        alert('⏳ Paiement en cours de confirmation. Si tu as bien payé, ta commande sera validée automatiquement dans un instant — vérifie dans "Mes commandes".');
+        return;
     }
+    if (tentative >= 8) {
+        alert('⏳ Paiement en cours de confirmation. Ta commande sera validée automatiquement dans un instant — vérifie dans "Mes commandes".');
+        return;
+    }
+    setTimeout(() => attendreConfirmationCommande(code, tentative + 1), 2000);
 }
+
+// (ancienne gestion du retour de redirection GeniusPay supprimée — le widget
+// iKeePay reste sur la page, la confirmation passe par attendreConfirmationCommande())
 
 // Affiche la page de succès à partir d'une commande déjà enregistrée en base
 // (utilisé au retour de paiement, quand le panier en mémoire a été perdu par la redirection)
@@ -1487,7 +1514,7 @@ function afficherCode(code, total) {
     openOverlay('code-overlay');
 }
 
-// Page de succès affichée après confirmation d'un paiement GeniusPay (mobile money)
+// Page de succès affichée après confirmation d'un paiement (mobile money via iKeePay)
 function afficherSucces(code, total) {
     $('success-code-display').textContent = code;
     let html=panier.map(p=>`<div class="recap-ligne"><span>${p.name} ×${p.qty}</span><span>${fmt(p.prix*p.qty)} F</span></div>`).join('');
@@ -1678,6 +1705,19 @@ async function rafraichirProduits() {
     } catch (e) { console.error('Erreur rafraîchissement produits:', e); }
 }
 
+// Appelle la route serveur admin-action (protégée par jeton admin) au lieu
+// d'écrire directement dans Supabase depuis le navigateur avec la clé anon.
+async function adminAction(ressource, action, { id, payload } = {}) {
+    const resp = await fetch('/api/admin-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (sessionStorage.getItem('cmkt_admin_token') || '') },
+        body: JSON.stringify({ ressource, action, id, payload })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Erreur admin');
+    return data;
+}
+
 async function afficherPanneauAdmin() {
     let page = document.getElementById('admin-page');
     if (!page) {
@@ -1687,15 +1727,16 @@ async function afficherPanneauAdmin() {
     page.style.display='block';
     page.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-family:Inter,sans-serif">Chargement du panneau...</div>';
 
-    const [{data:prods},{data:users},{data:reservations},{data:avisListe},{data:bannieres},{data:params},{data:retours}]=await Promise.all([
+    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},{data:retours}]=await Promise.all([
         db.from('products').select('*').order('created_at',{ascending:false}),
-        db.from('utilisateurs').select('*').order('created_at',{ascending:false}),
+        adminAction('utilisateurs','list').catch(()=>({data:[]})),
         db.from('reservations').select('*').order('created_at',{ascending:false}),
         db.from('avis').select('*').eq('valide',false),
         db.from('bannières').select('*').eq('actif',true),
         db.from('parametres').select('*'),
         db.from('retours').select('*').order('created_at',{ascending:false})
     ]);
+    const users = usersResult.data;
     const paramMap = Object.fromEntries((params||[]).map(p=>[p.cle,p.valeur]));
 
     const totalV=(reservations||[]).reduce((s,r)=>s+parseFloat(r.total),0);
@@ -2097,12 +2138,12 @@ window.filtrerCmdsAdmin = q => {
 
 window.changerStatutAdmin = async (id, statut) => {
     if(!statut)return;
-    await db.from('reservations').update({statut}).eq('id',id);
+    await adminAction('reservations','update',{id,payload:{statut}});
     afficherPanneauAdmin();
 };
 
-window.validerAvisAdmin = async id => { await db.from('avis').update({valide:true}).eq('id',id); afficherPanneauAdmin(); };
-window.supprimerAvisAdmin = async id => { if(!confirm('Supprimer ?'))return; await db.from('avis').delete().eq('id',id); afficherPanneauAdmin(); };
+window.validerAvisAdmin = async id => { await adminAction('avis','update',{id,payload:{valide:true}}); afficherPanneauAdmin(); };
+window.supprimerAvisAdmin = async id => { if(!confirm('Supprimer ?'))return; await adminAction('avis','delete',{id}); afficherPanneauAdmin(); };
 
 window.adminResetMdp = async (userId, nom, email) => {
     if (!email) { alert(`❌ ${nom} n'a pas d'email enregistré, impossible d'envoyer un lien de réinitialisation.`); return; }
@@ -2114,7 +2155,7 @@ window.adminResetMdp = async (userId, nom, email) => {
         alert('❌ ' + traduireErreurFirebase(e.code));
     }
 };
-window.desactiverBanniere = async id => { await db.from('bannières').update({actif:false}).eq('id',id); afficherPanneauAdmin(); };
+window.desactiverBanniere = async id => { await adminAction('bannieres','update',{id,payload:{actif:false}}); afficherPanneauAdmin(); };
 
 window.previewAdminImg = input => {
     ajouterFichiersImage(input.files);
@@ -2280,11 +2321,10 @@ window.validerProduitLot = async (i) => {
     try {
         const fichier = window._iaLotFichiers[i];
         const imageUrl = fichier ? await uploadImage(fichier) : null;
-        const { error } = await db.from('products').insert([{
+        await adminAction('products', 'insert', { payload: {
             name, description: desc, category: cat,
             purchase_price: achat, resale_price: vente, quantity: qte, image_url: imageUrl
-        }]);
-        if (error) throw error;
+        }});
         res.style.color = '#2dc653'; res.textContent = '✅ Produit ajouté !';
         btn.textContent = '✅ Ajouté'; btn.style.background = '#888'; btn.disabled = true;
         rafraichirProduits();
@@ -2316,8 +2356,9 @@ window.sauvegarderProduit = async () => {
     let imageUrl=document.getElementById('p-img-url').value.trim();
     if(selectedFile){try{imageUrl=await uploadImage(selectedFile);}catch(e){msg.style.color='#e63946';msg.textContent='❌ Upload: '+e.message;return;}}
     const prod={name,description:document.getElementById('p-desc').value.trim()||null,category:document.getElementById('p-cat').value,quantity:qty,purchase_price:achat,resale_price:vente,image_url:imageUrl||null,promo_active:document.getElementById('p-promo-chk').checked,promo_prix:parseFloat(document.getElementById('p-promo').value)||null,flash_active:document.getElementById('p-flash-chk').checked,flash_fin:document.getElementById('p-flash-fin').value?new Date(document.getElementById('p-flash-fin').value).toISOString():null};
-    const {error}=editingId?await db.from('products').update(prod).eq('id',editingId):await db.from('products').insert([prod]);
-    if(error){msg.style.color='#e63946';msg.textContent='❌ '+error.message;return;}
+    try {
+        await (editingId ? adminAction('products','update',{id:editingId,payload:prod}) : adminAction('products','insert',{payload:prod}));
+    } catch(e) { msg.style.color='#e63946'; msg.textContent='❌ '+e.message; return; }
     msg.style.color='#2dc653';msg.textContent='✅ Enregistré !';
     annulerEdit();
     rafraichirProduits();
@@ -2355,8 +2396,8 @@ window.annulerEdit = () => {
     const b=document.getElementById('btn-annuler-edit');if(b)b.style.display='none';
 };
 
-window.supprimerProduit = async id => { if(!confirm('Supprimer ce produit ?'))return; await db.from('products').delete().eq('id',id); rafraichirProduits(); };
-window.toggleFlash = async (id, actif) => { await db.from('products').update({flash_active:!actif}).eq('id',id); rafraichirProduits(); };
+window.supprimerProduit = async id => { if(!confirm('Supprimer ce produit ?'))return; await adminAction('products','delete',{id}); rafraichirProduits(); };
+window.toggleFlash = async (id, actif) => { await adminAction('products','update',{id,payload:{flash_active:!actif}}); rafraichirProduits(); };
 
 window.publierMessage = async () => {
     const msg=document.getElementById('mktg-msg').value.trim();
@@ -2391,8 +2432,8 @@ window.publierMessage = async () => {
         const idsChoisis = Array.from(document.querySelectorAll('.mktg-prod-chk:checked')).map(c=>c.value).slice(0,4);
         payload.produits_ids = idsChoisis.length ? idsChoisis : null;
     }
-    const {error}=await db.from('bannières').insert([payload]);
-    if(error){res.style.color='#e63946';res.textContent='❌ '+error.message;return;}
+    try { await adminAction('bannieres','insert',{payload}); }
+    catch(e){res.style.color='#e63946';res.textContent='❌ '+e.message;return;}
     res.style.color='#2dc653';res.textContent='✅ Publié !';
     document.getElementById('mktg-msg').value='';
     popupFlyerFile = null;
