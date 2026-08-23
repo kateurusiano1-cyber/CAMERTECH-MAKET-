@@ -1088,10 +1088,9 @@ $('btn-add-cart').onclick = () => {
     else panier.push({ id:modalProduct.id, name:modalProduct.name, prix, qty, image_url:modalProduct.image_url });
     updatePanierBtn();
     syncPanierServeur();
+    const imgEl = document.querySelector('#prod-overlay .prod-img, #prod-overlay img');
+    volerVersPanier(modalProduct.image_url, imgEl); // capture la position avant fermeture
     closeOverlay('prod-overlay');
-    const btn = $('panier-btn');
-    btn.style.transform = 'scale(1.2)';
-    setTimeout(() => btn.style.transform='', 200);
 };
 
 // ===== CROSS-SELLING =====
@@ -1107,13 +1106,13 @@ async function chargerCrossSell(p) {
                 ${cs.image_url?`<img src="${cs.image_url}" alt="${cs.name}" class="img-blurup" loading="lazy" onload="this.classList.add('loaded')" style="width:100%;height:55px;object-fit:cover;border-radius:6px;margin-bottom:6px">`:'<div style="height:55px;display:flex;align-items:center;justify-content:center;font-size:1.5rem">📦</div>'}
                 <div style="font-size:0.72rem;font-weight:600;line-height:1.2;margin-bottom:4px">${cs.name}</div>
                 <div style="font-size:0.8rem;color:var(--orange-text);font-weight:700">${fmt(getPrix(cs))} F</div>
-                <button onclick="event.stopPropagation();addQuick('${cs.id}')" style="width:100%;background:var(--orange);color:white;border:none;padding:4px;border-radius:5px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-top:4px">+ Ajouter</button>
+                <button onclick="event.stopPropagation();addQuick('${cs.id}',event)" style="width:100%;background:var(--orange);color:white;border:none;padding:4px;border-radius:var(--radius-pill);font-size:0.7rem;font-weight:700;cursor:pointer;margin-top:4px">+ Ajouter</button>
             </div>`).join('')}
         </div>
     </div>`;
 }
 
-window.addQuick = id => {
+window.addQuick = (id, evt) => {
     if (!currentUser) return;
     const p = allProducts.find(x=>x.id===id);
     if (!p) return;
@@ -1122,6 +1121,8 @@ window.addQuick = id => {
     else panier.push({id:p.id, name:p.name, prix:getPrix(p), qty:1});
     updatePanierBtn();
     syncPanierServeur();
+    const fromEl = evt?.currentTarget?.closest('div')?.querySelector('img') || evt?.currentTarget;
+    volerVersPanier(p.image_url, fromEl);
 };
 
 // ===== AVIS =====
@@ -1188,6 +1189,39 @@ window.soumettreAvis = async pid => {
 };
 
 // ===== PANIER =====
+// Envoie une petite pastille (photo du produit) depuis le point de clic
+// jusqu'à l'icône panier, avec rebond à l'arrivée — retour visuel clair
+// que l'ajout a bien eu lieu, sans bloquer l'interaction.
+function volerVersPanier(imageUrl, fromEl) {
+    const cible = $('panier-btn');
+    if (!cible || cible.style.display === 'none' && !cible.offsetParent) { /* le badge apparaîtra quand même via updatePanierBtn */ }
+    const cibleRect = cible.getBoundingClientRect();
+    const departRect = fromEl ? fromEl.getBoundingClientRect() : cibleRect;
+    const taille = 46;
+
+    const ghost = document.createElement('div');
+    ghost.className = 'fly-to-cart-ghost';
+    ghost.style.width = taille + 'px';
+    ghost.style.height = taille + 'px';
+    ghost.style.left = (departRect.left + departRect.width/2 - taille/2) + 'px';
+    ghost.style.top = (departRect.top + departRect.height/2 - taille/2) + 'px';
+    if (imageUrl) ghost.style.backgroundImage = `url('${imageUrl}')`;
+    else ghost.style.background = 'var(--orange)';
+
+    const dx = (cibleRect.left + cibleRect.width/2) - (departRect.left + departRect.width/2);
+    const dy = (cibleRect.top + cibleRect.height/2) - (departRect.top + departRect.height/2);
+    ghost.style.setProperty('--fly-end', `translate(${dx}px, ${dy}px)`);
+
+    document.body.appendChild(ghost);
+    ghost.addEventListener('animationend', () => {
+        ghost.remove();
+        cible.classList.add('bump');
+        const badge = $('panier-count');
+        if (badge) { badge.classList.add('pop'); setTimeout(() => badge.classList.remove('pop'), 500); }
+        setTimeout(() => cible.classList.remove('bump'), 500);
+    });
+}
+
 function updatePanierBtn() {
     const total = panier.reduce((s,p)=>s+p.qty,0);
     $('panier-count').textContent = total;
@@ -1366,10 +1400,14 @@ function updateLivraison() {
 }
 
 // ===== PAIEMENT =====
+let selectedOp = "MTN";
+
 function setupPaiement() {
     $('pay-close').onclick = () => closeOverlay('pay-overlay');
     $('btn-pay-confirm').onclick = confirmerPaiement;
     $('ikeepay-close').onclick = fermerWidgetIkeepay;
+    $('pay-mtn').onclick = () => { selectedOp='MTN'; $('pay-mtn').classList.add('active'); $('pay-orange').classList.remove('active'); };
+    $('pay-orange').onclick = () => { selectedOp='ORANGE'; $('pay-orange').classList.add('active'); $('pay-mtn').classList.remove('active'); };
 }
 
 function fermerWidgetIkeepay() {
@@ -1385,6 +1423,12 @@ function initierPaiement() {
     $('pay-status').textContent='';
     $('btn-pay-confirm').disabled=false;
     $('btn-pay-confirm').textContent='Payer maintenant';
+    // Le formulaire numéro+opérateur n'a de sens qu'en mode H2H —
+    // en mode widget, iKeePay gère ça lui-même dans sa fenêtre.
+    const modeH2H = CONFIG.PAIEMENT_MODE === 'h2h';
+    $('pay-methods-h2h').style.display = modeH2H ? 'flex' : 'none';
+    $('pay-tel-wrap').style.display = modeH2H ? 'block' : 'none';
+    if (modeH2H) $('pay-tel').value = currentUser.telephone || '';
     closeOverlay('panier-overlay');
     openOverlay('pay-overlay');
 }
@@ -1392,7 +1436,15 @@ function initierPaiement() {
 async function confirmerPaiement() {
     const status = $('pay-status');
     const btn = $('btn-pay-confirm');
-    btn.disabled=true; btn.textContent='Préparation...';
+    const modeH2H = CONFIG.PAIEMENT_MODE === 'h2h';
+
+    let tel = '';
+    if (modeH2H) {
+        tel = $('pay-tel').value.trim();
+        if (tel.length!==9 || !/^6\d{8}$/.test(tel)) { status.style.color='var(--danger)'; status.textContent='❌ Numéro invalide (9 chiffres, commence par 6)'; return; }
+    }
+
+    btn.disabled=true; btn.textContent='Traitement...';
     status.style.color='var(--text3)'; status.textContent='📲 Préparation du paiement...';
     try {
         const total=panier.reduce((s,p)=>s+p.prix*p.qty,0)+fraisLivraison;
@@ -1403,20 +1455,38 @@ async function confirmerPaiement() {
             total, zone_livraison:userZone, frais_livraison:fraisLivraison, statut:'paiement_en_cours',
             note:$('note-cmd').value||null
         }]);
-        // Le serveur relit le vrai montant de la commande qu'on vient de créer
-        // (jamais celui calculé ici) avant de nous donner le feu vert.
-        const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({ reference: code })
-        });
-        const result = await resp.json();
-        if (!result.success) throw new Error(result.error||'Échec paiement');
-
-        // Sauvegarde du panier pour pouvoir réafficher le récapitulatif au retour du widget
         sessionStorage.setItem('cmkt_panier_'+code, JSON.stringify({ items: panier, total, zone: userZone, frais: fraisLivraison }));
-        status.textContent=''; btn.disabled=false; btn.textContent='Payer maintenant';
 
-        ouvrirWidgetIkeepay(result, code);
+        if (modeH2H) {
+            // Mode H2H : notre serveur relit le vrai montant et déclenche
+            // directement la demande de paiement MTN/Orange (prompt USSD).
+            const resp = await fetch(CONFIG.API.PAIEMENT_H2H, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ reference: code, telephone: tel, operateur: selectedOp })
+            });
+            const result = await resp.json();
+            if (!result.success) throw new Error(result.error||'Échec paiement');
+            if (result.payment_link) {
+                status.textContent='✅ Redirection...';
+                setTimeout(() => { window.location.href = result.payment_link; }, 500);
+                return;
+            }
+            status.style.color='var(--success)'; status.textContent='📲 Vérifie ton téléphone et valide la demande de paiement...';
+            btn.disabled=true; btn.textContent='En attente de confirmation...';
+            await attendreConfirmationCommande(code);
+        } else {
+            // Mode widget : le serveur relit le vrai montant de la commande
+            // qu'on vient de créer (jamais celui calculé ici) avant de nous
+            // donner le feu vert.
+            const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ reference: code })
+            });
+            const result = await resp.json();
+            if (!result.success) throw new Error(result.error||'Échec paiement');
+            status.textContent=''; btn.disabled=false; btn.textContent='Payer maintenant';
+            ouvrirWidgetIkeepay(result, code);
+        }
     } catch(e) {
         status.style.color='var(--danger)'; status.textContent='❌ '+(e.message||'Erreur. Réessayez.');
         btn.disabled=false; btn.textContent='Payer maintenant';

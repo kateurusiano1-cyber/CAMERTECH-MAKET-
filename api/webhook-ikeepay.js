@@ -26,10 +26,15 @@ module.exports = async (req, res) => {
         }
 
         const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-        const orderId = payload?.order_id;
-        const statutRecu = payload?.status;
-        const montantRecu = Number(payload?.amount);
-        console.log(`Webhook iKeePay reçu: event=${payload?.event} order_id=${orderId} statut=${statutRecu} amount=${montantRecu}`);
+
+        // Deux formats possibles selon le mode utilisé (widget ou H2H) — on
+        // les ramène tous les deux à la même forme avant de continuer.
+        const estH2H = !!payload?.data;
+        const orderId = estH2H ? payload.data.external_reference : payload?.order_id;
+        const statutRecu = estH2H ? payload.data.status : payload?.status;
+        const montantRecu = Number(estH2H ? payload.data.amount : payload?.amount);
+        const refFournisseur = estH2H ? payload.data.provider_reference : payload?.ikeepay_ref;
+        console.log(`Webhook iKeePay reçu (${estH2H ? 'H2H' : 'widget'}): event=${payload?.event} order_id=${orderId} statut=${statutRecu} amount=${montantRecu}`);
 
         if (!orderId) return res.status(200).json({ received: true }); // rien à traiter
 
@@ -55,7 +60,7 @@ module.exports = async (req, res) => {
             }
             await supabase.from('reservations').update({
                 statut: 'valide',
-                transaction_id: payload?.ikeepay_ref || null,
+                transaction_id: refFournisseur || null,
                 paye_le: new Date().toISOString()
             }).eq('code', orderId);
         } else if (statutRecu === 'failed' || statutRecu === 'expired' || payload?.event === 'payment.failed') {

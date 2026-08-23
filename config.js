@@ -9,8 +9,12 @@ const CONFIG = {
     // serveur (variables d'environnement Vercel), vérifiés par /api/admin-login
     // et /api/admin-verify-otp. Voir supabase_admin_auth.sql pour le détail.
     API: {
-        PREPARER_PAIEMENT: "/api/preparer-paiement"
+        PREPARER_PAIEMENT: "/api/preparer-paiement",   // mode widget (iframe iKeePay)
+        PAIEMENT_H2H: "/api/paiement-h2h"              // mode H2H (formulaire propre au site)
     },
+    // 'h2h' = ton propre formulaire numéro+opérateur (comme avant avec GeniusPay).
+    // 'widget' = fenêtre iKeePay intégrée. Change juste cette ligne pour basculer.
+    PAIEMENT_MODE: "h2h",
     // Quartiers livrés directement (1 000 FCFA). Tout autre quartier = retrait en agence.
     ZONES_COUVERTES: ["Akwa","Bonamoussadi","Ndokoti","PK14","Makepe","Bassa","Logbaba","Deido","Bonaberi"],
     FRAIS_LIVRAISON: 1000,

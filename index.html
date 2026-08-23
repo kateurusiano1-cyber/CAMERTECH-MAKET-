@@ -26,7 +26,7 @@
     <meta name="twitter:image" content="https://camertechmarket.com/logo.png">
 
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script type="module">
@@ -534,14 +534,26 @@
             <p style="color:var(--text3);font-size:0.85rem">Sécurisé par <strong>iKeePay</strong></p>
         </div>
         <div id="pay-amount" class="pay-amount"></div>
+        <div class="pay-methods" id="pay-methods-h2h">
+            <button class="pay-method active" data-op="MTN" id="pay-mtn">
+                <span style="font-size:1.4rem;display:block;margin-bottom:4px">📱</span>MTN MoMo
+            </button>
+            <button class="pay-method" data-op="ORANGE" id="pay-orange">
+                <span style="font-size:1.4rem;display:block;margin-bottom:4px">🟠</span>Orange Money
+            </button>
+        </div>
         <div class="pay-form">
+            <div id="pay-tel-wrap">
+                <label>Numéro de téléphone</label>
+                <input type="tel" id="pay-tel" placeholder="6XXXXXXXX" maxlength="9">
+            </div>
             <button class="btn-green" id="btn-pay-confirm">Payer maintenant</button>
             <p id="pay-status" class="pay-status"></p>
         </div>
     </div>
 </div>
 
-<!-- WIDGET IKEEPAY (iframe intégrée, pas de redirection externe) -->
+<!-- WIDGET IKEEPAY (mode 'widget' uniquement — iframe intégrée, pas de redirection externe) -->
 <div id="ikeepay-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:none;align-items:center;justify-content:center">
     <div style="position:relative;width:100%;max-width:450px;height:100%;max-height:90vh;padding:8px">
         <button id="ikeepay-close" style="position:absolute;top:-2.2rem;right:0.5rem;background:none;border:none;color:#fff;font-size:1.6rem;cursor:pointer;line-height:1">✕</button>
