@@ -412,24 +412,32 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
         return { ok: true };
     }
     if (extra.telephone) {
-        // upsert (et non insert) : si un profil existe déjà pour cet UID
-        // (ex: la lecture sécurisée du profil a échoué juste avant sans
-        // qu'on puisse le détecter), on met à jour cette ligne au lieu de
-        // provoquer une erreur de doublon.
-        const { data, error } = await db.from('utilisateurs').upsert([{
-            firebase_uid: fbUser.uid,
-            nom: extra.nom || fbUser.displayName || 'Client',
-            telephone: extra.telephone,
-            email: fbUser.email,
-            politique_acceptee_le: extra.politiqueAcceptee ? new Date().toISOString() : null
-        }], { onConflict: 'firebase_uid' }).select().single();
-        if (error) { console.error('Erreur création profil Supabase:', error); return { ok: false, error }; }
-        currentUser = data;
-        localStorage.setItem('cmkt_user', JSON.stringify(data));
-        showUserUI();
-        await chargerPanierServeur();
-        ecouterPanierEnDirect();
-        return { ok: true };
+        // Passe par le serveur (jeton Firebase vérifié) car la clé publique
+        // n'a plus le droit d'écrire dans utilisateurs (RLS durci).
+        try {
+            const idToken = await fbUser.getIdToken();
+            const resp = await fetch('/api/creer-profil', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+                body: JSON.stringify({
+                    nom: extra.nom || fbUser.displayName || 'Client',
+                    telephone: extra.telephone,
+                    email: fbUser.email,
+                    politiqueAcceptee: !!extra.politiqueAcceptee
+                })
+            });
+            const j = await resp.json();
+            if (!resp.ok) { console.error('Erreur création profil:', j.error); return { ok: false, error: j.error }; }
+            currentUser = j.profil;
+            localStorage.setItem('cmkt_user', JSON.stringify(j.profil));
+            showUserUI();
+            await chargerPanierServeur();
+            ecouterPanierEnDirect();
+            return { ok: true };
+        } catch (e) {
+            console.error('Erreur création profil:', e);
+            return { ok: false, error: e.message };
+        }
     }
     // Première connexion (Google) sans téléphone connu : on le demande.
     pendingFbUser = fbUser;
