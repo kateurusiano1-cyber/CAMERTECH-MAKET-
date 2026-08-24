@@ -1696,9 +1696,9 @@ window.adminStep1 = async () => {
     const btn = document.querySelector('#step1 button');
     err.textContent = ''; if (btn) { btn.disabled = true; btn.textContent = 'Vérification...'; }
     try {
-        const resp = await fetch('/api/admin-login', {
+        const resp = await fetch('/api/admin-auth', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, mdp })
+            body: JSON.stringify({ step: 1, id, mdp })
         });
         const data = await resp.json();
         if (!resp.ok) {
@@ -1729,9 +1729,9 @@ window.adminStep2 = async () => {
     const btn = document.querySelector('#step2 button');
     err.textContent = ''; if (btn) { btn.disabled = true; btn.textContent = 'Vérification...'; }
     try {
-        const resp = await fetch('/api/admin-verify-otp', {
+        const resp = await fetch('/api/admin-auth', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ticket: adminTicketTemp, code })
+            body: JSON.stringify({ step: 2, ticket: adminTicketTemp, code })
         });
         const data = await resp.json();
         if (!resp.ok) { err.textContent = `❌ ${data.error || 'Code incorrect'}`; return; }
