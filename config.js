@@ -9,11 +9,9 @@ const CONFIG = {
     // serveur (variables d'environnement Vercel), vérifiés par /api/admin-login
     // et /api/admin-verify-otp. Voir supabase_admin_auth.sql pour le détail.
     API: {
-        PAIEMENT_H2H: "/api/paiement-h2h"              // mode H2H (formulaire propre au site)
+        PREPARER_PAIEMENT: "/api/preparer-paiement"   // widget iKeePay, conforme à leur documentation
     },
-    // Mode widget iKeePay retiré (économie de fonctions serverless, limite
-    // Vercel Hobby = 12). Le H2H est validé fonctionnel, cf. ci-dessous.
-    PAIEMENT_MODE: "h2h",
+    PAIEMENT_MODE: "widget",
     // Quartiers livrés directement (1 000 FCFA). Tout autre quartier = retrait en agence.
     ZONES_COUVERTES: ["Akwa","Bonamoussadi","Ndokoti","PK14","Makepe","Bassa","Logbaba","Deido","Bonaberi"],
     FRAIS_LIVRAISON: 1000,
