@@ -13,6 +13,7 @@
 //   avis         : update (uniquement le champ "valide") | delete
 //   reservations : update (uniquement le champ "statut")
 //   utilisateurs : list   (lecture seule, pour le tableau de bord admin)
+//                  delete (profil Supabase + compte de connexion Firebase)
 
 const { createClient } = require('@supabase/supabase-js');
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
@@ -102,6 +103,27 @@ module.exports = async (req, res) => {
             const { data, error } = await supabase.from('reservations').update({ statut: payload?.statut }).eq('id', id).select().single();
             if (error) throw error;
             return res.status(200).json({ data });
+        }
+
+        if (ressource === 'utilisateurs' && action === 'delete') {
+            if (!id) return res.status(400).json({ error: 'id manquant' });
+            const { data: profil, error: errLecture } = await supabase.from('utilisateurs').select('firebase_uid,email').eq('id', id).single();
+            if (errLecture || !profil) return res.status(404).json({ error: 'Client introuvable' });
+
+            // On détache (jamais supprime) l'historique de commandes du
+            // client — l'historique/comptabilité reste, seul le lien vers
+            // le compte disparaît.
+            await supabase.from('reservations').update({ utilisateur_id: null }).eq('utilisateur_id', id);
+            // Nettoyage best-effort des favoris s'ils existent (table optionnelle).
+            try { await supabase.from('favoris').delete().eq('utilisateur_id', id); } catch (_) {}
+
+            const { error: errSuppr } = await supabase.from('utilisateurs').delete().eq('id', id);
+            if (errSuppr) throw errSuppr;
+            // Le compte de connexion Firebase n'est PAS supprimé ici (clé de
+            // service bloquée par la politique Google) — on renvoie ses
+            // coordonnées pour une suppression manuelle en 1 clic dans la
+            // console Firebase (Authentication → Users).
+            return res.status(200).json({ ok: true, firebase_uid: profil.firebase_uid, email: profil.email });
         }
 
         return res.status(400).json({ error: 'Combinaison ressource/action non autorisée' });

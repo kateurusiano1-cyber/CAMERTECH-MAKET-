@@ -1945,7 +1945,7 @@ async function afficherPanneauAdmin() {
                         <td style="padding:10px">📞 ${u.telephone}</td>
                         <td style="padding:10px;color:#888">${u.email||'—'}</td>
                         <td style="padding:10px;color:#888;font-size:0.78rem">${new Date(u.created_at).toLocaleDateString('fr-FR')}</td>
-                        <td style="padding:10px"><button onclick="adminResetMdp('${u.id}','${u.nom.replace(/'/g,"\\'")}','${u.email||''}')" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer">🔑 Réinitialiser mdp</button></td>
+                        <td style="padding:10px"><button onclick="adminResetMdp('${u.id}','${u.nom.replace(/'/g,"\\'")}','${u.email||''}')" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;margin-right:6px">🔑 Réinitialiser mdp</button><button onclick="adminSupprimerUtilisateur('${u.id}','${u.nom.replace(/'/g,"\\'")}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer">🗑️ Supprimer</button></td>
                     </tr>`).join('')}</tbody>
                 </table></div>
             </div>
@@ -2237,6 +2237,17 @@ window.adminResetMdp = async (userId, nom, email) => {
         alert(`✅ Email de réinitialisation envoyé à ${email}.`);
     } catch (e) {
         alert('❌ ' + traduireErreurFirebase(e.code));
+    }
+};
+window.adminSupprimerUtilisateur = async (userId, nom) => {
+    if (!confirm(`Supprimer définitivement le profil de ${nom} ?\n\nSon profil et son historique seront détachés (irréversible). Il te restera une dernière étape manuelle pour bannir aussi son compte de connexion.`)) return;
+    try {
+        const r = await adminAction('utilisateurs', 'delete', { id: userId });
+        afficherPanneauAdmin();
+        const identifiant = r.email || r.firebase_uid || '(voir Firebase)';
+        alert(`✅ Profil de ${nom} supprimé.\n\nPour finir, supprime aussi son compte de connexion dans la console Firebase :\nAuthentication → Users → cherche "${identifiant}" → icône poubelle.`);
+    } catch (e) {
+        alert('❌ ' + e.message);
     }
 };
 window.desactiverBanniere = async id => { await adminAction('bannieres','update',{id,payload:{actif:false}}); afficherPanneauAdmin(); };

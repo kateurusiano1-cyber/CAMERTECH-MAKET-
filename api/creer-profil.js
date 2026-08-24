@@ -26,6 +26,21 @@ module.exports = async (req, res) => {
         if (!telephone) return res.status(400).json({ error: 'Numéro de téléphone requis' });
 
         const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+        // Règle 1 : un email ne peut être associé qu'à un seul compte.
+        if (email) {
+            const { data: memeEmail } = await supabase.from('utilisateurs').select('firebase_uid').eq('email', email).neq('firebase_uid', uid);
+            if (memeEmail && memeEmail.length > 0) {
+                return res.status(409).json({ error: 'Un compte existe déjà avec cet email. Connecte-toi plutôt avec ce compte.' });
+            }
+        }
+
+        // Règle 2 : un même numéro de téléphone peut être partagé par 3 comptes maximum.
+        const { data: memeTel } = await supabase.from('utilisateurs').select('firebase_uid').eq('telephone', telephone).neq('firebase_uid', uid);
+        if (memeTel && memeTel.length >= 3) {
+            return res.status(409).json({ error: 'Ce numéro de téléphone est déjà utilisé par 3 comptes (maximum atteint).' });
+        }
+
         const { data, error } = await supabase.from('utilisateurs').upsert([{
             firebase_uid: uid,
             nom: nom || 'Client',
