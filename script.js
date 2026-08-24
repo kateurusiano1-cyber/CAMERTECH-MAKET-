@@ -506,7 +506,7 @@ function setupAuth() {
             const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
             const r = await creerOuChargerProfil(cred.user);
             if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
-            else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || 'Erreur, réessaie'); }
+            else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
         } catch (e) {
             err.textContent = '❌ ' + traduireErreurFirebase(e.code);
         }
@@ -521,7 +521,7 @@ function setupAuth() {
             const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
             const r = await creerOuChargerProfil(cred.user);
             if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
-            else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || 'Erreur, réessaie'); }
+            else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
         } catch (e) {
             err.textContent = '❌ ' + traduireErreurFirebase(e.code);
         }
@@ -534,7 +534,7 @@ function setupAuth() {
         if (!$('tel-manquant-politique').checked) { err.textContent = I18N[currentLang].err_politique_requise; return; }
         const r = await creerOuChargerProfil(pendingFbUser, { telephone: tel, politiqueAcceptee: true });
         if (r.ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); }
-        else { err.textContent = '❌ ' + (r.error?.message || 'Erreur, réessaie'); }
+        else { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
     };
 
     $('btn-register').onclick = async () => {
