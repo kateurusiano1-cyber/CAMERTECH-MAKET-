@@ -412,13 +412,17 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
         return { ok: true };
     }
     if (extra.telephone) {
-        const { data, error } = await db.from('utilisateurs').insert([{
+        // upsert (et non insert) : si un profil existe déjà pour cet UID
+        // (ex: la lecture sécurisée du profil a échoué juste avant sans
+        // qu'on puisse le détecter), on met à jour cette ligne au lieu de
+        // provoquer une erreur de doublon.
+        const { data, error } = await db.from('utilisateurs').upsert([{
             firebase_uid: fbUser.uid,
             nom: extra.nom || fbUser.displayName || 'Client',
             telephone: extra.telephone,
             email: fbUser.email,
             politique_acceptee_le: extra.politiqueAcceptee ? new Date().toISOString() : null
-        }]).select().single();
+        }], { onConflict: 'firebase_uid' }).select().single();
         if (error) { console.error('Erreur création profil Supabase:', error); return { ok: false, error }; }
         currentUser = data;
         localStorage.setItem('cmkt_user', JSON.stringify(data));

@@ -26,6 +26,7 @@ async function verifierFirebaseToken(idToken) {
         if (!payload.sub || !payload.user_id) return null;
         return payload.sub; // = uid Firebase
     } catch (e) {
+        console.error('Échec vérification jeton Firebase:', e.message);
         return null;
     }
 }
