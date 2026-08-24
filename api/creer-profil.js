@@ -38,6 +38,6 @@ module.exports = async (req, res) => {
         return res.status(200).json({ profil: data });
     } catch (e) {
         console.error('Erreur creer-profil:', e.message);
-        return res.status(500).json({ error: 'Erreur serveur' });
+        return res.status(500).json({ error: e.message || 'Erreur serveur' });
     }
 };
