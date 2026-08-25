@@ -451,3 +451,52 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 @media (prefers-reduced-motion: reduce) {
     .fly-to-cart-ghost, .btn-panier.bump, .panier-badge.pop, .btn-added, .card, .card-img, .btn-acheter { animation: none !important; transition: none !important; }
 }
+
+/* ===== RÉTROACTION BANNIÈRE (module de personnalisation) ===== */
+.slide-feedback-hint {
+    position: absolute; bottom: 14px; right: 14px; z-index: 5;
+    width: 38px; height: 38px; border-radius: 50%; border: none;
+    background: rgba(0,0,0,0.35); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    color: #fff; font-size: 1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.25s var(--ease), background 0.25s var(--ease);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+.slide-feedback-hint:hover { transform: scale(1.12); background: rgba(0,0,0,0.55); }
+@media (max-width: 768px) {
+    .slide-feedback-hint { width: 34px; height: 34px; font-size: 0.9rem; bottom: 10px; right: 10px; }
+}
+
+.feedback-banniere-overlay {
+    position: fixed; inset: 0; z-index: 4000; display: flex; align-items: flex-end; justify-content: center;
+    background: rgba(0,0,0,0); pointer-events: none;
+    transition: background 0.3s var(--ease);
+}
+.feedback-banniere-overlay.show { background: rgba(0,0,0,0.4); pointer-events: auto; }
+@media (min-width: 640px) {
+    .feedback-banniere-overlay { align-items: center; }
+}
+.feedback-banniere-panel {
+    position: relative; background: var(--card); width: 100%; max-width: 420px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 26px 22px 22px;
+    transform: translateY(100%); transition: transform 0.35s var(--ease);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.25);
+}
+@media (min-width: 640px) {
+    .feedback-banniere-panel { border-radius: var(--radius-lg); transform: translateY(20px) scale(0.96); opacity: 0; transition: transform 0.35s var(--ease), opacity 0.3s var(--ease); }
+}
+.feedback-banniere-overlay.show .feedback-banniere-panel { transform: translateY(0) scale(1); opacity: 1; }
+.feedback-banniere-question { font-family: var(--font-title); font-weight: 700; font-size: 1.05rem; color: var(--text); margin-bottom: 18px; line-height: 1.4; }
+.feedback-banniere-question span { display: block; font-family: var(--font-body); font-weight: 400; font-size: 0.85rem; color: var(--text2); margin-top: 4px; }
+.feedback-banniere-choix { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.feedback-banniere-choix button {
+    background: var(--bg); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    padding: 12px 10px; font-size: 0.82rem; font-weight: 600; color: var(--text);
+    cursor: pointer; font-family: var(--font-body); transition: all 0.2s var(--ease); text-align: left;
+}
+.feedback-banniere-choix button:hover { border-color: var(--green); background: rgba(14,124,74,0.06); transform: translateY(-2px); }
+.feedback-banniere-merci { text-align: center; padding: 14px 0; font-family: var(--font-title); font-weight: 700; font-size: 1.1rem; color: var(--green); }
+.feedback-banniere-merci span { display: block; font-family: var(--font-body); font-weight: 400; font-size: 0.85rem; color: var(--text2); margin-top: 6px; }
+@media (prefers-reduced-motion: reduce) {
+    .feedback-banniere-overlay, .feedback-banniere-panel, .slide-feedback-hint { transition: none !important; }
+}

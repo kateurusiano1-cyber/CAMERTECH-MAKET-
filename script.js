@@ -188,11 +188,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     fetchProducts();
     chargerBanniere();
 
-    // Popup unique par session
-    if (!sessionStorage.getItem('popup_ok')) {
-        setTimeout(afficherPopup, 2000);
-        sessionStorage.setItem('popup_ok', '1');
-    }
+    // Popup à chaque chargement/rafraîchissement de page (demande explicite)
+    setTimeout(afficherPopup, 2000);
 });
 
 // ===== SIDEBAR =====
@@ -787,7 +784,8 @@ function initSlider(slidesData) {
                         <span>✅ Produits authentiques</span>
                     </div>
                 </div>
-                <div class="slide-media"><div class="slide-halo"></div><img src="${s.image_url}" class="slide-product-img img-blurup" loading="lazy" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
+                <div class="slide-media"><div class="slide-halo"></div><img src="${s.image_url}" class="slide-product-img img-blurup" loading="lazy" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>
+                <button class="slide-feedback-hint" onclick="event.stopPropagation();ouvrirFeedbackBanniere('${(s.produit_id||'').toString()}')" title="Cette offre vous convient ?" aria-label="Donner votre avis sur cette offre">💬</button>`;
             } else {
                 slide.className = 'slide slide-default';
                 slide.innerHTML = `<div class="slide-inner slide-inner-full">
@@ -795,7 +793,8 @@ function initSlider(slidesData) {
                     <h2>Les meilleurs produits<br><span>Tech au Cameroun</span></h2>
                     <p>Livraison rapide à Douala • Qualité garantie</p>
                     <button class="slide-btn" onclick="$('produits').scrollIntoView({behavior:'smooth'})">Découvrir →</button>
-                </div>`;
+                </div>
+                <button class="slide-feedback-hint" onclick="event.stopPropagation();ouvrirFeedbackBanniere('')" title="Cette offre vous convient ?" aria-label="Donner votre avis sur cette offre">💬</button>`;
             }
             track.appendChild(slide);
             const dot = document.createElement('button');
@@ -879,6 +878,7 @@ async function fetchProducts() {
         if (error) throw error;
         allProducts = data || [];
         renderProducts(allProducts);
+        appliquerPreferenceShopping();
         chargerFlash(allProducts);
         injecterSchemaCatalogue(allProducts);
         const { data: slidesData } = await db.from('bannières').select('*').eq('type', 'slider').eq('actif', true);
@@ -1232,6 +1232,76 @@ function volerVersPanier(imageUrl, fromEl) {
         if (badge) { badge.classList.add('pop'); setTimeout(() => badge.classList.remove('pop'), 500); }
         setTimeout(() => cible.classList.remove('bump'), 500);
     });
+}
+
+// ===== RÉTROACTION BANNIÈRE (personnalisation légère) =====
+const FEEDBACK_OPTIONS = [
+    { id: 'prix', label: '💸 Prix trop élevé', effet: 'Priorité aux meilleurs prix' },
+    { id: 'style', label: '🔄 Pas le bon style', effet: 'On te montre autre chose' },
+    { id: 'equipe', label: '✅ Déjà équipé', effet: 'Accessoires mis en avant' },
+    { id: 'plus', label: '🎯 Parfait, plus comme ça', effet: 'On garde ce cap' }
+];
+
+window.ouvrirFeedbackBanniere = (produitId) => {
+    if ($('feedback-banniere-overlay')) return; // déjà ouvert
+    const el = document.createElement('div');
+    el.id = 'feedback-banniere-overlay';
+    el.className = 'feedback-banniere-overlay';
+    el.innerHTML = `
+        <div class="feedback-banniere-panel">
+            <button class="modal-x" onclick="fermerFeedbackBanniere()">✕</button>
+            <p class="feedback-banniere-question">Cette offre ne vous correspond pas vraiment ?<br><span>Aidez-nous à personnaliser votre shopping 🇨🇲</span></p>
+            <div class="feedback-banniere-choix">
+                ${FEEDBACK_OPTIONS.map(o => `<button onclick="choisirFeedbackBanniere('${o.id}','${produitId}')">${o.label}</button>`).join('')}
+            </div>
+        </div>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+};
+
+window.fermerFeedbackBanniere = () => {
+    const el = $('feedback-banniere-overlay');
+    if (!el) return;
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 250);
+};
+
+window.choisirFeedbackBanniere = (choixId, produitId) => {
+    const option = FEEDBACK_OPTIONS.find(o => o.id === choixId);
+    // Préférence gardée localement (aucune donnée envoyée à un serveur) et
+    // utilisée pour affiner la grille produits de cette visite.
+    let categoriePref = null;
+    if (choixId === 'plus' && produitId) {
+        const p = allProducts.find(x => x.id === produitId);
+        if (p) categoriePref = p.category;
+    }
+    if (choixId === 'equipe') categoriePref = 'Accessoires';
+
+    localStorage.setItem('cmkt_pref_shopping', JSON.stringify({
+        choix: choixId, categorie: categoriePref, le: Date.now()
+    }));
+
+    const panel = document.querySelector('.feedback-banniere-panel');
+    if (panel) panel.innerHTML = `<p class="feedback-banniere-merci">Merci ! 🙌<br><span>${option?.effet || 'Préférence enregistrée'}</span></p>`;
+    setTimeout(() => { fermerFeedbackBanniere(); appliquerPreferenceShopping(); }, 1100);
+};
+
+// Applique la préférence enregistrée : tri par prix croissant, ou filtre
+// sur une catégorie pertinente. Reste discret — n'écrase pas un choix que
+// le client vient de faire lui-même dans les onglets de catégorie.
+function appliquerPreferenceShopping() {
+    const brut = localStorage.getItem('cmkt_pref_shopping');
+    if (!brut) return;
+    try {
+        const pref = JSON.parse(brut);
+        if (pref.choix === 'prix') {
+            allProducts.sort((a, b) => getPrix(a) - getPrix(b));
+            renderProducts(allProducts);
+        } else if (pref.categorie) {
+            const pill = document.querySelector(`.cat-pill[data-cat="${pref.categorie}"]`);
+            if (pill) pill.click();
+        }
+    } catch (e) { /* préférence ignorée si corrompue */ }
 }
 
 function updatePanierBtn() {
