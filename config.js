@@ -13,7 +13,7 @@ const CONFIG = {
     },
     PAIEMENT_MODE: "widget",
     // Quartiers livrés directement (1 000 FCFA). Tout autre quartier = retrait en agence.
-    ZONES_COUVERTES: ["Akwa","Bonamoussadi","Ndokoti","PK14","Makepe","Bassa","Logbaba","Deido","Bonaberi"],
+    ZONES_COUVERTES: ["Akwa","Bonamoussadi","Ndokoti","PK14","Makepe","Bassa","Logbaba","Deido","Bonaberi","Bonanjo","Bali","New-Bell","Bépanda","Ndogpassi","Ndogbong","Cité SIC","Kotto","PK8","PK9","PK10","PK12","PK16","PK21","Logpom","Yassa","Village","Bonapriso","Japoma","Nyalla","Zone Industrielle Bassa","Cité des Palmiers"],
     FRAIS_LIVRAISON: 1000,
     // ⚠️ À personnaliser : adresse exacte et numéro de contact pour le retrait en agence
     AGENCE_ADRESSE: "Douala, PK14, Cameroun (adresse précise à confirmer)",
