@@ -47,6 +47,28 @@ module.exports = async (req, res) => {
             return res.status(200).json({ data });
         }
 
+        // feedback_produits : lecture seule agrégée, pour le tableau de bord
+        // admin (module de personnalisation en fiche produit).
+        if (ressource === 'feedback_produits' && action === 'stats') {
+            const { data, error } = await supabase
+                .from('feedback_produits')
+                .select('choix, categorie, produit_nom, created_at')
+                .order('created_at', { ascending: false })
+                .limit(2000);
+            if (error) throw error;
+
+            const parChoix = {};
+            const parProduit = {};
+            for (const r of data) {
+                parChoix[r.choix] = (parChoix[r.choix] || 0) + 1;
+                if (r.produit_nom) {
+                    const cle = `${r.produit_nom}|${r.choix}`;
+                    parProduit[cle] = (parProduit[cle] || 0) + 1;
+                }
+            }
+            return res.status(200).json({ total: data.length, parChoix, parProduit, recents: data.slice(0, 30) });
+        }
+
         if (ressource === 'products' && action === 'insert') {
             const { data, error } = await supabase.from('products').insert([payload]).select().single();
             if (error) throw error;

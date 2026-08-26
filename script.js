@@ -1266,8 +1266,14 @@ window.choisirFeedbackProduit = (choixId, produitId, categorie) => {
         window.open(`https://wa.me/${CONFIG.WA1}?text=${texte}`, '_blank');
     }
 
-    // Préférence gardée localement (aucune donnée envoyée à un serveur) et
-    // utilisée pour affiner la grille produits de cette visite.
+    // Envoi au serveur pour consultation admin (best-effort, ne bloque jamais l'UI).
+    db.from('feedback_produits').insert([{
+        produit_id: produitId || null, produit_nom: p?.name || null, categorie: categorie || null,
+        choix: choixId, utilisateur_id: currentUser?.id || null
+    }]).then(({error}) => { if (error) console.error('Erreur envoi feedback:', error); });
+
+    // Préférence gardée aussi localement, pour affiner la grille produits
+    // de cette visite sans attendre de round-trip serveur.
     let categoriesMoins = JSON.parse(localStorage.getItem('cmkt_pref_categories_moins') || '[]');
     let categoriesPlus = JSON.parse(localStorage.getItem('cmkt_pref_categories_plus') || '[]');
     if (choixId === 'moins' && categorie) { categoriesMoins = [...new Set([...categoriesMoins, categorie])]; localStorage.setItem('cmkt_pref_categories_moins', JSON.stringify(categoriesMoins)); }
@@ -1877,14 +1883,15 @@ async function afficherPanneauAdmin() {
     page.style.display='block';
     page.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-family:Inter,sans-serif">Chargement du panneau...</div>';
 
-    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},{data:retours}]=await Promise.all([
+    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},{data:retours},feedbackStats]=await Promise.all([
         db.from('products').select('*').order('created_at',{ascending:false}),
         adminAction('utilisateurs','list').catch(()=>({data:[]})),
         db.from('reservations').select('*').order('created_at',{ascending:false}),
         db.from('avis').select('*').eq('valide',false),
         db.from('bannières').select('*').eq('actif',true),
         db.from('parametres').select('*'),
-        db.from('retours').select('*').order('created_at',{ascending:false})
+        db.from('retours').select('*').order('created_at',{ascending:false}),
+        adminAction('feedback_produits','stats').catch(()=>({total:0,parChoix:{},parProduit:{},recents:[]}))
     ]);
     const users = usersResult.data;
     const paramMap = Object.fromEntries((params||[]).map(p=>[p.cle,p.valeur]));
@@ -2106,6 +2113,29 @@ async function afficherPanneauAdmin() {
                         <button onclick="desactiverBanniere('${b.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">Désactiver</button>
                     </div>`).join(''):'<p style="color:#888">Aucun message actif.</p>'}
                 </div>
+            </div>
+            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+                <h2 style="font-size:1rem;margin-bottom:4px">📊 Retours des clients (fiche produit)</h2>
+                <p style="font-size:0.8rem;color:#888;margin-bottom:14px">${feedbackStats.total || 0} retour(s) collecté(s) au total.</p>
+                ${feedbackStats.total ? `
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+                    ${[
+                        {id:'plus',label:'👍 Veulent en voir plus',color:'#0088ff'},
+                        {id:'moins',label:'👎 Ne veulent plus voir',color:'#e63946'},
+                        {id:'cher',label:'💸 Trop cher',color:'#ff6600'},
+                        {id:'possede',label:'✅ Déjà acheté',color:'#2dc653'}
+                    ].map(o=>`<div style="background:#f8f8f8;border-radius:8px;padding:12px;text-align:center">
+                        <div style="font-size:1.4rem;font-weight:800;color:${o.color}">${feedbackStats.parChoix?.[o.id]||0}</div>
+                        <div style="font-size:0.72rem;color:#888;margin-top:2px">${o.label}</div>
+                    </div>`).join('')}
+                </div>
+                <p style="font-size:0.8rem;color:#666;margin-bottom:8px;font-weight:700">Derniers retours</p>
+                <div style="max-height:220px;overflow-y:auto">
+                    ${(feedbackStats.recents||[]).map(r=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:0.8rem">
+                        <span>${r.produit_nom || '(produit supprimé)'}</span>
+                        <span style="color:#888;white-space:nowrap">${({plus:'👍',moins:'👎',cher:'💸',possede:'✅'})[r.choix]||r.choix} · ${new Date(r.created_at).toLocaleDateString('fr-FR')}</span>
+                    </div>`).join('')}
+                </div>` : '<p style="color:#888;font-size:0.85rem">Aucun retour pour le moment.</p>'}
             </div>
         </div>
 
