@@ -784,8 +784,7 @@ function initSlider(slidesData) {
                         <span>✅ Produits authentiques</span>
                     </div>
                 </div>
-                <div class="slide-media"><div class="slide-halo"></div><img src="${s.image_url}" class="slide-product-img img-blurup" loading="lazy" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>
-                <button class="slide-feedback-hint" onclick="event.stopPropagation();ouvrirFeedbackBanniere('${(s.produit_id||'').toString()}')" title="Cette offre vous convient ?" aria-label="Donner votre avis sur cette offre">💬</button>`;
+                <div class="slide-media"><div class="slide-halo"></div><img src="${s.image_url}" class="slide-product-img img-blurup" loading="lazy" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
             } else {
                 slide.className = 'slide slide-default';
                 slide.innerHTML = `<div class="slide-inner slide-inner-full">
@@ -793,8 +792,7 @@ function initSlider(slidesData) {
                     <h2>Les meilleurs produits<br><span>Tech au Cameroun</span></h2>
                     <p>Livraison rapide à Douala • Qualité garantie</p>
                     <button class="slide-btn" onclick="$('produits').scrollIntoView({behavior:'smooth'})">Découvrir →</button>
-                </div>
-                <button class="slide-feedback-hint" onclick="event.stopPropagation();ouvrirFeedbackBanniere('')" title="Cette offre vous convient ?" aria-label="Donner votre avis sur cette offre">💬</button>`;
+                </div>`;
             }
             track.appendChild(slide);
             const dot = document.createElement('button');
@@ -1082,6 +1080,7 @@ async function openModal(productId) {
     $('prod-wa').href = `https://wa.me/${CONFIG.WA1}?text=${waMsg}`;
     if (currentUser) { $('prod-actions').style.display='flex'; $('prod-login-hint').style.display='none'; }
     else { $('prod-actions').style.display='none'; $('prod-login-hint').style.display='block'; }
+    $('feedback-produit-zone').innerHTML = htmlFeedbackProduit(p.id, p.category);
     openOverlay('prod-overlay');
     chargerCrossSell(p);
     chargerAvis(p.id);
@@ -1234,73 +1233,64 @@ function volerVersPanier(imageUrl, fromEl) {
     });
 }
 
-// ===== RÉTROACTION BANNIÈRE (personnalisation légère) =====
+// ===== RÉTROACTION FICHE PRODUIT (personnalisation légère) =====
 const FEEDBACK_OPTIONS = [
-    { id: 'prix', label: '💸 Prix trop élevé', effet: 'Priorité aux meilleurs prix' },
-    { id: 'style', label: '🔄 Pas le bon style', effet: 'On te montre autre chose' },
-    { id: 'equipe', label: '✅ Déjà équipé', effet: 'Accessoires mis en avant' },
-    { id: 'plus', label: '🎯 Parfait, plus comme ça', effet: 'On garde ce cap' }
+    { id: 'plus', label: '👍 Je veux en voir plus', effet: 'On te montre plus de ce style' },
+    { id: 'moins', label: '👎 Je ne veux plus voir ça', effet: 'On réduira ce type de produit' },
+    { id: 'cher', label: '💸 Trop cher pour moi', effet: 'Priorité aux meilleurs prix' },
+    { id: 'possede', label: '✅ Déjà acheté, discutons-en', effet: 'On t\'ouvre WhatsApp' }
 ];
 
-window.ouvrirFeedbackBanniere = (produitId) => {
-    if ($('feedback-banniere-overlay')) return; // déjà ouvert
-    const el = document.createElement('div');
-    el.id = 'feedback-banniere-overlay';
-    el.className = 'feedback-banniere-overlay';
-    el.innerHTML = `
-        <div class="feedback-banniere-panel">
-            <button class="modal-x" onclick="fermerFeedbackBanniere()">✕</button>
-            <p class="feedback-banniere-question">Cette offre ne vous correspond pas vraiment ?<br><span>Aidez-nous à personnaliser votre shopping 🇨🇲</span></p>
-            <div class="feedback-banniere-choix">
-                ${FEEDBACK_OPTIONS.map(o => `<button onclick="choisirFeedbackBanniere('${o.id}','${produitId}')">${o.label}</button>`).join('')}
-            </div>
-        </div>`;
-    document.body.appendChild(el);
-    requestAnimationFrame(() => el.classList.add('show'));
-};
+function htmlFeedbackProduit(produitId, categorie) {
+    return `<div class="feedback-produit-inline">
+        <p class="feedback-produit-question">Cette offre vous convient ?</p>
+        <div class="feedback-produit-choix">
+            ${FEEDBACK_OPTIONS.map(o => `<button onclick="choisirFeedbackProduit('${o.id}','${produitId}','${(categorie||'').replace(/'/g,"\\'")}')">${o.label}</button>`).join('')}
+        </div>
+    </div>`;
+}
 
-window.fermerFeedbackBanniere = () => {
-    const el = $('feedback-banniere-overlay');
-    if (!el) return;
-    el.classList.remove('show');
-    setTimeout(() => el.remove(), 250);
-};
-
-window.choisirFeedbackBanniere = (choixId, produitId) => {
+window.choisirFeedbackProduit = (choixId, produitId, categorie) => {
     const option = FEEDBACK_OPTIONS.find(o => o.id === choixId);
+    const p = allProducts.find(x => x.id === produitId);
+
+    if (choixId === 'possede') {
+        // Ouvre directement la discussion WhatsApp, comme demandé.
+        const texte = encodeURIComponent(`Bonjour, j'ai déjà acheté "${p?.name||'ce produit'}" chez vous, je voudrais en discuter.`);
+        window.open(`https://wa.me/${CONFIG.WA1}?text=${texte}`, '_blank');
+    }
+
     // Préférence gardée localement (aucune donnée envoyée à un serveur) et
     // utilisée pour affiner la grille produits de cette visite.
-    let categoriePref = null;
-    if (choixId === 'plus' && produitId) {
-        const p = allProducts.find(x => x.id === produitId);
-        if (p) categoriePref = p.category;
-    }
-    if (choixId === 'equipe') categoriePref = 'Accessoires';
+    let categoriesMoins = JSON.parse(localStorage.getItem('cmkt_pref_categories_moins') || '[]');
+    let categoriesPlus = JSON.parse(localStorage.getItem('cmkt_pref_categories_plus') || '[]');
+    if (choixId === 'moins' && categorie) { categoriesMoins = [...new Set([...categoriesMoins, categorie])]; localStorage.setItem('cmkt_pref_categories_moins', JSON.stringify(categoriesMoins)); }
+    if (choixId === 'plus' && categorie) { categoriesPlus = [...new Set([...categoriesPlus, categorie])]; localStorage.setItem('cmkt_pref_categories_plus', JSON.stringify(categoriesPlus)); }
+    localStorage.setItem('cmkt_pref_shopping', JSON.stringify({ choix: choixId, categorie, le: Date.now() }));
 
-    localStorage.setItem('cmkt_pref_shopping', JSON.stringify({
-        choix: choixId, categorie: categoriePref, le: Date.now()
-    }));
-
-    const panel = document.querySelector('.feedback-banniere-panel');
-    if (panel) panel.innerHTML = `<p class="feedback-banniere-merci">Merci ! 🙌<br><span>${option?.effet || 'Préférence enregistrée'}</span></p>`;
-    setTimeout(() => { fermerFeedbackBanniere(); appliquerPreferenceShopping(); }, 1100);
+    const zone = $('feedback-produit-zone');
+    if (zone) zone.innerHTML = `<div class="feedback-produit-merci">Merci ! 🙌 ${option?.effet || 'Préférence enregistrée'}</div>`;
+    setTimeout(appliquerPreferenceShopping, 300);
 };
 
-// Applique la préférence enregistrée : tri par prix croissant, ou filtre
-// sur une catégorie pertinente. Reste discret — n'écrase pas un choix que
-// le client vient de faire lui-même dans les onglets de catégorie.
+// Applique les préférences enregistrées à la grille : tri par prix
+// croissant si "trop cher" a été choisi, et un léger réordonnancement qui
+// met en avant les catégories aimées / recule celles boudées. Reste
+// discret — n'écrase jamais un filtre de catégorie choisi manuellement.
 function appliquerPreferenceShopping() {
     const brut = localStorage.getItem('cmkt_pref_shopping');
-    if (!brut) return;
+    if (!brut || !allProducts.length) return;
     try {
         const pref = JSON.parse(brut);
-        if (pref.choix === 'prix') {
-            allProducts.sort((a, b) => getPrix(a) - getPrix(b));
-            renderProducts(allProducts);
-        } else if (pref.categorie) {
-            const pill = document.querySelector(`.cat-pill[data-cat="${pref.categorie}"]`);
-            if (pill) pill.click();
+        const categoriesMoins = JSON.parse(localStorage.getItem('cmkt_pref_categories_moins') || '[]');
+        const categoriesPlus = JSON.parse(localStorage.getItem('cmkt_pref_categories_plus') || '[]');
+        let liste = [...allProducts];
+        if (categoriesPlus.length || categoriesMoins.length) {
+            const poids = p => (categoriesPlus.includes(p.category) ? -1 : 0) + (categoriesMoins.includes(p.category) ? 1 : 0);
+            liste.sort((a, b) => poids(a) - poids(b));
         }
+        if (pref.choix === 'cher') liste.sort((a, b) => getPrix(a) - getPrix(b));
+        renderProducts(liste);
     } catch (e) { /* préférence ignorée si corrompue */ }
 }
 
