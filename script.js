@@ -1896,11 +1896,17 @@ async function afficherPanneauAdmin() {
     const users = usersResult.data;
     const paramMap = Object.fromEntries((params||[]).map(p=>[p.cle,p.valeur]));
 
-    const totalV=(reservations||[]).reduce((s,r)=>s+parseFloat(r.total),0);
+    // Revenu réel : uniquement les commandes dont le paiement est confirmé
+    // (valide/livrée) — jamais celles encore en attente de paiement,
+    // échouées ou annulées.
+    const totalV=(reservations||[]).filter(r=>['valide','livre'].includes(r.statut)).reduce((s,r)=>s+parseFloat(r.total),0);
     const enAtt=(reservations||[]).filter(r=>r.statut==='en attente').length;
     const sfaible=(prods||[]).filter(p=>p.quantity<5&&p.quantity>0);
     const szero=(prods||[]).filter(p=>p.quantity===0);
-    window._prods=prods||[]; window._res=reservations||[];
+    // N'apparaît dans "Commandes" que ce qui a réellement été payé —
+    // jamais une tentative de paiement en cours ou échouée.
+    const commandesPayees = (reservations||[]).filter(r => !['paiement_en_cours','paiement_echoue'].includes(r.statut));
+    window._prods=prods||[]; window._res=commandesPayees;
 
     page.innerHTML=`
     <div style="font-family:Inter,sans-serif">
@@ -1923,7 +1929,7 @@ async function afficherPanneauAdmin() {
         <!-- DASHBOARD -->
         <div id="tab-dash">
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">
-                ${[['💰','Total ventes',fmt(totalV)+' F'],['🧾','Réservations',(reservations||[]).length],['⏳','En attente',enAtt],['📦','Produits',(prods||[]).length],['👥','Clients',(users||[]).length],['⚠️','Alertes stock',sfaible.length+szero.length]].map(([ico,lbl,val])=>`
+                ${[['💰','Total ventes',fmt(totalV)+' F'],['🧾','Commandes',commandesPayees.length],['⏳','En attente',enAtt],['📦','Produits',(prods||[]).length],['👥','Clients',(users||[]).length],['⚠️','Alertes stock',sfaible.length+szero.length]].map(([ico,lbl,val])=>`
                 <div style="background:white;border:1px solid #e8e8e8;border-radius:12px;padding:16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
                     <div style="font-size:1.7rem;margin-bottom:6px">${ico}</div>
                     <div style="font-size:1.2rem;font-weight:800;color:#1a5c2a;font-family:Poppins,sans-serif">${val}</div>
@@ -2003,7 +2009,7 @@ async function afficherPanneauAdmin() {
             <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
                 <h2 style="font-size:1rem;margin-bottom:14px">🧾 Commandes</h2>
                 <input type="text" id="cmd-search" placeholder="🔎 Rechercher code ou client..." oninput="filtrerCmdsAdmin(this.value)" style="width:100%;background:#f4f6f4;border:1.5px solid #e8e8e8;padding:10px 14px;color:#1a1a1a;border-radius:9px;font-size:0.88rem;margin-bottom:14px;font-family:Inter,sans-serif">
-                <div id="cmds-admin-table">${renderCmdsAdmin(reservations||[])}</div>
+                <div id="cmds-admin-table">${renderCmdsAdmin(commandesPayees)}</div>
             </div>
         </div>
 
