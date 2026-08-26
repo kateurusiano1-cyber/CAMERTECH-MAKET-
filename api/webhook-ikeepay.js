@@ -39,7 +39,7 @@ module.exports = async (req, res) => {
         if (!orderId) return res.status(200).json({ received: true }); // rien à traiter
 
         const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-        const { data: resa } = await supabase.from('reservations').select('code, total, statut').eq('code', orderId).single();
+        const { data: resa } = await supabase.from('reservations').select('*').eq('code', orderId).single();
 
         if (!resa) {
             console.error(`Webhook iKeePay: commande ${orderId} introuvable`);
@@ -63,6 +63,9 @@ module.exports = async (req, res) => {
                 transaction_id: refFournisseur || null,
                 paye_le: new Date().toISOString()
             }).eq('code', orderId);
+            // (Envoi automatique de la facture par email désactivé pour
+            // l'instant — reste disponible via le bouton de téléchargement
+            // côté client et côté admin.)
         } else if (statutRecu === 'failed' || statutRecu === 'expired' || payload?.event === 'payment.failed') {
             await supabase.from('reservations').update({ statut: 'paiement_echoue' }).eq('code', orderId);
         }

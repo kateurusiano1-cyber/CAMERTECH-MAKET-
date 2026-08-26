@@ -1726,8 +1726,57 @@ async function chargerCommandes() {
             <div style="color:var(--green);font-weight:700;margin-top:4px">${fmt(r.total)} FCFA</div>
             ${peutRetourner ? `<button onclick="ouvrirDemandeRetour('${r.id}','${r.code}')" style="margin-top:8px;background:none;border:1px solid var(--border);color:var(--text2);padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🔄 Demander un retour</button>` : ''}
         </div>`;}).join('');
+
+    // Section "Mes reçus" : uniquement les commandes payées et non masquées.
+    const factures = (data||[]).filter(r => (r.statut==='valide'||r.statut==='livre') && !r.facture_masquee_client);
+    const zoneFactures = $('factures-list');
+    zoneFactures.innerHTML = !factures.length ? '<p style="color:var(--text3);font-size:0.85rem">Aucun reçu pour le moment.</p>'
+        : factures.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--border)">
+            <div>
+                <div style="font-family:monospace;font-size:0.82rem;color:var(--green);font-weight:700">${r.code}</div>
+                <div style="color:var(--text3);font-size:0.72rem">${new Date(r.created_at).toLocaleDateString('fr-FR')} • ${fmt(r.total)} FCFA</div>
+            </div>
+            <div style="display:flex;gap:6px">
+                <button onclick="telechargerFacture('${r.code}')" title="Télécharger" style="background:none;border:1px solid var(--border);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.8rem">🧾</button>
+                <button onclick="masquerFacture('${r.code}')" title="Retirer de mes reçus" style="background:none;border:1px solid var(--border);color:var(--danger);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.8rem">🗑️</button>
+            </div>
+        </div>`).join('');
+
     openOverlay('cmds-overlay');
 }
+
+window.telechargerFacture = async (code) => {
+    try {
+        const idToken = await window.firebaseAuth.currentUser.getIdToken();
+        const resp = await fetch(`/api/facture?code=${encodeURIComponent(code)}`, {
+            headers: { 'Authorization': 'Bearer ' + idToken }
+        });
+        if (!resp.ok) { const j = await resp.json().catch(()=>({})); alert('❌ ' + (j.error || 'Impossible de télécharger la facture')); return; }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `facture-${code}.pdf`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        alert('❌ Erreur lors du téléchargement');
+    }
+};
+
+window.masquerFacture = async (code) => {
+    if (!confirm('Retirer ce reçu de ta liste ? Tu pourras toujours le retrouver si besoin en nous contactant.')) return;
+    try {
+        const idToken = await window.firebaseAuth.currentUser.getIdToken();
+        await fetch('/api/facture', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+            body: JSON.stringify({ code, masquer: true })
+        });
+        chargerCommandes();
+    } catch (e) {
+        alert('❌ Erreur');
+    }
+};
 
 let retourReservationId = null;
 window.ouvrirDemandeRetour = (reservationId, code) => {
@@ -2286,14 +2335,15 @@ window.sauvegarderParametres = async () => {
 
 function renderCmdsAdmin(data) {
     if (!data.length) return '<p style="color:#888;text-align:center;padding:20px">Aucune commande.</p>';
+    window._resParCode = {}; data.forEach(r => window._resParCode[r.code] = r);
     return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.8rem">
-        <thead><tr>${['Code','Client','Zone','Total','Date','Statut','Action'].map(h=>`<th style="color:#888;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0f0;font-size:0.72rem;text-transform:uppercase">${h}</th>`).join('')}</tr></thead>
+        <thead><tr>${['Code','Client','Zone','Total','Date & heure','Statut','Action',''].map(h=>`<th style="color:#888;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0f0;font-size:0.72rem;text-transform:uppercase">${h}</th>`).join('')}</tr></thead>
         <tbody>${data.map(r=>`<tr style="border-bottom:1px solid #f8f8f8">
             <td style="padding:10px;font-family:monospace;color:#1a5c2a;font-weight:700">${r.code}</td>
             <td style="padding:10px">${r.nom_client}<br><span style="color:#888;font-size:0.72rem">${r.telephone}</span></td>
             <td style="padding:10px;color:#888;font-size:0.78rem">📍${r.zone_livraison||'—'}</td>
             <td style="padding:10px;font-weight:600">${fmt(r.total)} F</td>
-            <td style="padding:10px;color:#888;font-size:0.75rem">${new Date(r.created_at).toLocaleDateString('fr-FR')}</td>
+            <td style="padding:10px;color:#888;font-size:0.75rem">${new Date(r.created_at).toLocaleDateString('fr-FR')} à ${new Date(r.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</td>
             <td style="padding:10px"><span style="padding:3px 10px;border-radius:8px;font-size:0.7rem;font-weight:700;background:${r.statut==='en attente'?'#fff8f0':r.statut==='valide'?'#f0fff4':'#fff0f0'};color:${r.statut==='en attente'?'#ff6600':r.statut==='valide'?'#2dc653':'#e63946'}">${r.statut}</span></td>
             <td style="padding:10px"><select onchange="changerStatutAdmin('${r.id}',this.value)" style="background:#f4f6f4;color:#1a1a1a;border:1px solid #e8e8e8;border-radius:6px;padding:5px;font-size:0.75rem">
                 <option value="">Changer...</option>
@@ -2302,9 +2352,59 @@ function renderCmdsAdmin(data) {
                 <option value="livre">🚚 Livrée</option>
                 <option value="annule">❌ Annulée</option>
             </select></td>
+            <td style="padding:10px"><button onclick="ouvrirDetailsCmdAdmin('${r.code}')" style="background:none;border:1px solid #e8e8e8;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem">👁️ Détails</button></td>
         </tr>`).join('')}</tbody>
     </table></div>`;
 }
+
+window.ouvrirDetailsCmdAdmin = (code) => {
+    const r = window._resParCode?.[code];
+    if (!r) return;
+    const peutFacturer = r.statut==='valide' || r.statut==='livre';
+    const el = document.createElement('div');
+    el.className = 'modal-overlay';
+    el.style.display = 'flex';
+    el.style.zIndex = '5000';
+    el.innerHTML = `<div class="modal" style="max-width:480px">
+        <button class="modal-x" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        <h2 style="font-size:1.05rem;margin-bottom:14px">🧾 Commande ${r.code}</h2>
+        <div style="font-size:0.85rem;line-height:1.9;color:#333">
+            <div><strong>Client :</strong> ${r.nom_client} — ${r.telephone}</div>
+            <div><strong>Date :</strong> ${new Date(r.created_at).toLocaleDateString('fr-FR')} à ${new Date(r.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
+            <div><strong>Zone :</strong> ${r.zone_livraison||'—'} ${r.frais_livraison?`(frais: ${fmt(r.frais_livraison)} F)`:''}</div>
+            <div><strong>Statut :</strong> ${r.statut}${r.paye_le ? ` — payé le ${new Date(r.paye_le).toLocaleString('fr-FR')}` : ''}</div>
+            ${r.transaction_id ? `<div><strong>Référence paiement :</strong> ${r.transaction_id}</div>` : ''}
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee">
+            <strong style="font-size:0.85rem">Articles :</strong>
+            ${(r.items||[]).map(i=>`<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">
+                <span>${i.name} ×${i.qty}</span><span>${fmt((i.prix||0)*(i.qty||1))} F</span>
+            </div>`).join('')}
+            <div style="display:flex;justify-content:space-between;font-weight:700;color:#1a5c2a;padding-top:8px;border-top:1px solid #eee;margin-top:6px">
+                <span>TOTAL</span><span>${fmt(r.total)} F</span>
+            </div>
+        </div>
+        ${peutFacturer ? `<button onclick="telechargerFactureAdmin('${r.code}')" style="width:100%;margin-top:16px;background:#1a5c2a;color:white;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">🧾 Télécharger le reçu complet</button>` : `<p style="margin-top:16px;color:#888;font-size:0.8rem">Reçu disponible une fois le paiement confirmé.</p>`}
+    </div>`;
+    document.body.appendChild(el);
+};
+
+window.telechargerFactureAdmin = async (code) => {
+    try {
+        const resp = await fetch(`/api/facture?code=${encodeURIComponent(code)}`, {
+            headers: { 'Authorization': 'Bearer ' + (sessionStorage.getItem('cmkt_admin_token') || '') }
+        });
+        if (!resp.ok) { alert('❌ Impossible de télécharger le reçu'); return; }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `facture-${code}.pdf`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        alert('❌ Erreur lors du téléchargement');
+    }
+};
 
 let adminTabActuel = 'tab-dash';
 window.showTab = id => {
