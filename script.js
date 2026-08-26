@@ -1152,7 +1152,7 @@ async function chargerAvis(productId) {
         <div id="form-avis-${productId}" style="display:none;background:var(--bg);border-radius:10px;padding:14px;margin-bottom:14px;border:1px solid var(--border)">
             <h4 style="margin-bottom:10px;font-size:0.95rem">Votre avis</h4>
             <div id="stars-${productId}" style="display:flex;gap:4px;margin-bottom:10px">
-                ${[1,2,3,4,5].map(i=>`<button onclick="setNote(${i},'${productId}')" style="font-size:1.5rem;cursor:pointer;filter:grayscale(1);background:none;border:none;padding:0" class="star-btn-${productId}">★</button>`).join('')}
+                ${[1,2,3,4,5].map(i=>`<button onclick="setNote(${i},'${productId}')" onmouseenter="previewNote(${i},'${productId}')" onmouseleave="previewNote(selectedNote,'${productId}')" style="font-size:1.6rem;cursor:pointer;color:var(--border);background:none;border:none;padding:2px;transition:color 0.15s var(--ease),transform 0.15s var(--ease)" class="star-btn-${productId}">★</button>`).join('')}
             </div>
             <textarea id="avis-txt-${productId}" placeholder="Votre commentaire..." rows="3" style="width:100%;background:var(--card);border:1.5px solid var(--border);padding:10px;color:var(--text);border-radius:8px;font-size:0.88rem;resize:vertical;font-family:Inter,sans-serif;margin-bottom:10px"></textarea>
             <label style="display:inline-block;background:var(--card);color:var(--text);padding:7px 14px;border-radius:7px;cursor:pointer;border:1px solid var(--border);font-size:0.82rem;margin-bottom:10px">
@@ -1177,7 +1177,13 @@ async function chargerAvis(productId) {
 window.toggleFormAvis = id => { const el=$(`form-avis-${id}`); if(el) el.style.display=el.style.display==='none'?'block':'none'; };
 window.setNote = (n, id) => {
     selectedNote = n;
-    document.querySelectorAll(`.star-btn-${id}`).forEach((btn,i) => btn.style.filter=i<n?'grayscale(0)':'grayscale(1)');
+    previewNote(n, id);
+};
+window.previewNote = (n, id) => {
+    document.querySelectorAll(`.star-btn-${id}`).forEach((btn,i) => {
+        btn.style.color = i<n ? '#f4c430' : 'var(--border)';
+        btn.style.transform = i<n ? 'scale(1.12)' : 'scale(1)';
+    });
 };
 window.previewAvis = (input, id) => {
     avisFile = input.files[0]; if(!avisFile)return;
