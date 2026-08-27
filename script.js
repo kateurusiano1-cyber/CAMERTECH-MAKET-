@@ -567,10 +567,25 @@ function setupAuth() {
         currentUser = null;
         localStorage.removeItem('cmkt_user');
         $('user-zone').style.display = 'none';
+        $('user-menu').style.display = 'none';
         $('btn-auth-show').style.display = '';
         panier = []; updatePanierBtn();
         renderProducts(allProducts);
     };
+
+    // Le bouton déconnexion est caché dans un petit menu (clic sur le nom)
+    // plutôt que visible en permanence dans le header.
+    $('user-nom').onclick = (e) => {
+        e.stopPropagation();
+        const menu = $('user-menu');
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    };
+    document.addEventListener('click', (e) => {
+        const menu = $('user-menu');
+        if (menu && menu.style.display !== 'none' && !menu.contains(e.target) && e.target !== $('user-nom')) {
+            menu.style.display = 'none';
+        }
+    });
 
     $('btn-commandes').onclick = chargerCommandes;
     $('btn-favoris').onclick = afficherFavoris;
@@ -1735,7 +1750,7 @@ function afficherMesCommandes(liste) {
             <div style="color:var(--text2);font-size:0.82rem;margin-top:6px">${r.items.map(i=>`${i.name} ×${i.qty}`).join(', ')}</div>
             <div style="color:var(--green);font-weight:700;margin-top:4px">${fmt(r.total)} FCFA</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-                <button onclick="telechargerFacture('${r.code}')" style="background:linear-gradient(135deg,var(--green),var(--green-light));color:white;border:none;padding:9px 16px;border-radius:var(--radius-pill);font-size:0.82rem;font-weight:700;cursor:pointer;font-family:var(--font-title);letter-spacing:0.3px;box-shadow:0 3px 10px rgba(14,124,74,0.28);transition:transform 0.15s var(--ease)">${estPaye?'🧾 Facture':'📄 Suivi (non payé)'}</button>
+                <button onclick="telechargerFacture('${r.code}')" style="background:linear-gradient(135deg,var(--green),var(--green-light));color:white;border:none;padding:9px 16px;border-radius:var(--radius-pill);font-size:0.82rem;font-weight:700;cursor:pointer;font-family:var(--font-title);letter-spacing:0.3px;box-shadow:0 3px 10px rgba(14,124,74,0.28);transition:transform 0.15s var(--ease)">⬇️ Télécharger ${estPaye?'(Facture)':'(non payé)'}</button>
                 ${peutRetourner ? `<button onclick="ouvrirDemandeRetour('${r.id}','${r.code}')" style="background:none;border:1px solid var(--border);color:var(--text2);padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🔄 Demander un retour</button>` : ''}
             </div>
         </div>`;}).join('');

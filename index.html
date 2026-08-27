@@ -207,12 +207,14 @@
             <input type="text" id="search-bar" placeholder="🔎 Rechercher un produit..." class="search-input" data-i18n-ph="rechercher_ph">
         </div>
         <div class="header-right">
-            <div id="user-zone" style="display:none;align-items:center;gap:8px">
-                <span id="user-nom" class="user-nom"></span>
+            <div id="user-zone" style="display:none;align-items:center;gap:8px;position:relative">
+                <span id="user-nom" class="user-nom" style="cursor:pointer" title="Mon compte"></span>
                 <span id="user-points" class="user-points glass" title="Mes points fidélité" style="display:none"></span>
                 <button class="btn-icon glass" id="btn-favoris" title="Mes favoris">🤍</button>
                 <button class="btn-icon glass" id="btn-commandes" title="Mes commandes">📋</button>
-                <button class="btn-icon glass btn-logout" id="btn-logout" title="Déconnexion">⏻</button>
+                <div id="user-menu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-hover);min-width:160px;z-index:50;overflow:hidden">
+                    <button id="btn-logout" style="width:100%;text-align:left;background:none;border:none;padding:11px 14px;font-size:0.85rem;color:var(--danger);cursor:pointer;font-family:var(--font-body);display:flex;align-items:center;gap:8px">⏻ Déconnexion</button>
+                </div>
             </div>
             <button class="btn-connexion" id="btn-auth-show" data-i18n="btn_connexion">👤 Connexion</button>
             <button class="btn-panier" id="panier-btn" style="display:none">
