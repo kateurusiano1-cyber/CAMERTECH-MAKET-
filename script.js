@@ -1713,37 +1713,54 @@ async function suivreCommande() {
 async function chargerCommandes() {
     if(!currentUser)return;
     const {data}=await db.from('reservations').select('*').eq('utilisateur_id',currentUser.id).order('created_at',{ascending:false});
-    const list=$('cmds-list');
-    const septJours = 7*24*60*60*1000;
-    list.innerHTML=!data?.length?'<p style="color:var(--text3);text-align:center;padding:20px">Aucune commande.</p>'
-        :data.map(r=>{
-            const peutRetourner = r.statut==='livre' && (Date.now() - new Date(r.created_at).getTime()) < septJours;
-            return `<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid var(--border)">
-            <div style="font-family:monospace;color:var(--green);font-weight:700">${r.code}</div>
-            <div style="color:var(--text3);font-size:0.78rem;margin:4px 0">📅 ${new Date(r.created_at).toLocaleString('fr-FR')} • 📍 ${r.zone_livraison||'—'}</div>
-            <span style="display:inline-block;padding:3px 12px;border-radius:10px;font-size:0.72rem;font-weight:700;background:${r.statut==='en attente'?'#fff8f0':r.statut==='valide'?'#f0fff4':'#fff0f0'};color:${r.statut==='en attente'?'var(--orange)':r.statut==='valide'?'var(--success)':'var(--danger)'}">${r.statut}</span>
-            <div style="color:var(--text2);font-size:0.82rem;margin-top:6px">${r.items.map(i=>`${i.name} ×${i.qty}`).join(', ')}</div>
-            <div style="color:var(--green);font-weight:700;margin-top:4px">${fmt(r.total)} FCFA</div>
-            ${peutRetourner ? `<button onclick="ouvrirDemandeRetour('${r.id}','${r.code}')" style="margin-top:8px;background:none;border:1px solid var(--border);color:var(--text2);padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🔄 Demander un retour</button>` : ''}
-        </div>`;}).join('');
-
-    // Section "Mes reçus" : uniquement les commandes payées et non masquées.
-    const factures = (data||[]).filter(r => (r.statut==='valide'||r.statut==='livre') && !r.facture_masquee_client);
-    const zoneFactures = $('factures-list');
-    zoneFactures.innerHTML = !factures.length ? '<p style="color:var(--text3);font-size:0.85rem">Aucun reçu pour le moment.</p>'
-        : factures.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--border)">
-            <div>
-                <div style="font-family:monospace;font-size:0.82rem;color:var(--green);font-weight:700">${r.code}</div>
-                <div style="color:var(--text3);font-size:0.72rem">${new Date(r.created_at).toLocaleDateString('fr-FR')} • ${fmt(r.total)} FCFA</div>
-            </div>
-            <div style="display:flex;gap:6px">
-                <button onclick="telechargerFacture('${r.code}')" title="Télécharger" style="background:none;border:1px solid var(--border);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.8rem">🧾</button>
-                <button onclick="masquerFacture('${r.code}')" title="Retirer de mes reçus" style="background:none;border:1px solid var(--border);color:var(--danger);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:0.8rem">🗑️</button>
-            </div>
-        </div>`).join('');
-
+    window._mesCommandes = (data||[]).filter(r => !r.masquee_client);
+    afficherMesCommandes(window._mesCommandes);
     openOverlay('cmds-overlay');
 }
+
+function afficherMesCommandes(liste) {
+    const list=$('cmds-list');
+    const septJours = 7*24*60*60*1000;
+    list.innerHTML=!liste.length?'<p style="color:var(--text3);text-align:center;padding:20px">Aucune commande.</p>'
+        :liste.map(r=>{
+            const peutRetourner = r.statut==='livre' && (Date.now() - new Date(r.created_at).getTime()) < septJours;
+            const estPaye = r.statut==='valide' || r.statut==='livre';
+            return `<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid var(--border)">
+            <div style="display:flex;justify-content:space-between;align-items:start">
+                <div style="font-family:monospace;color:var(--green);font-weight:700">${r.code}</div>
+                <button onclick="supprimerCommandeClient('${r.code}')" title="Retirer de mon historique" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:0.9rem;padding:0 2px">🗑️</button>
+            </div>
+            <div style="color:var(--text3);font-size:0.78rem;margin:4px 0">📅 ${new Date(r.created_at).toLocaleString('fr-FR')} • 📍 ${r.zone_livraison||'—'}</div>
+            <span style="display:inline-block;padding:3px 12px;border-radius:10px;font-size:0.72rem;font-weight:700;background:${r.statut==='en attente'?'#fff8f0':estPaye?'#f0fff4':'#fff0f0'};color:${r.statut==='en attente'?'var(--orange)':estPaye?'var(--success)':'var(--danger)'}">${r.statut}</span>
+            <div style="color:var(--text2);font-size:0.82rem;margin-top:6px">${r.items.map(i=>`${i.name} ×${i.qty}`).join(', ')}</div>
+            <div style="color:var(--green);font-weight:700;margin-top:4px">${fmt(r.total)} FCFA</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+                <button onclick="telechargerFacture('${r.code}')" style="background:none;border:1px solid var(--border);color:var(--text2);padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${estPaye?'🧾 Facture':'📄 Suivi (non payé)'}</button>
+                ${peutRetourner ? `<button onclick="ouvrirDemandeRetour('${r.id}','${r.code}')" style="background:none;border:1px solid var(--border);color:var(--text2);padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🔄 Demander un retour</button>` : ''}
+            </div>
+        </div>`;}).join('');
+}
+
+window.rechercherMesCommandes = (q) => {
+    q = q.trim().toLowerCase();
+    const filtre = !q ? window._mesCommandes : window._mesCommandes.filter(r => r.code.toLowerCase().includes(q));
+    afficherMesCommandes(filtre);
+};
+
+window.supprimerCommandeClient = async (code) => {
+    if (!confirm(`Retirer la commande ${code} de ton historique ?\n\nElle reste consultable par le support si besoin, mais tu ne la verras plus ici.`)) return;
+    try {
+        const idToken = await window.firebaseAuth.currentUser.getIdToken();
+        await fetch('/api/facture', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+            body: JSON.stringify({ code, masquer: true })
+        });
+        chargerCommandes();
+    } catch (e) {
+        alert('❌ Erreur');
+    }
+};
 
 window.telechargerFacture = async (code) => {
     try {
@@ -1763,20 +1780,7 @@ window.telechargerFacture = async (code) => {
     }
 };
 
-window.masquerFacture = async (code) => {
-    if (!confirm('Retirer ce reçu de ta liste ? Tu pourras toujours le retrouver si besoin en nous contactant.')) return;
-    try {
-        const idToken = await window.firebaseAuth.currentUser.getIdToken();
-        await fetch('/api/facture', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-            body: JSON.stringify({ code, masquer: true })
-        });
-        chargerCommandes();
-    } catch (e) {
-        alert('❌ Erreur');
-    }
-};
+
 
 let retourReservationId = null;
 window.ouvrirDemandeRetour = (reservationId, code) => {
@@ -2360,7 +2364,7 @@ function renderCmdsAdmin(data) {
 window.ouvrirDetailsCmdAdmin = (code) => {
     const r = window._resParCode?.[code];
     if (!r) return;
-    const peutFacturer = r.statut==='valide' || r.statut==='livre';
+    const estPaye = r.statut==='valide' || r.statut==='livre';
     const el = document.createElement('div');
     el.className = 'modal-overlay';
     el.style.display = 'flex';
@@ -2384,7 +2388,7 @@ window.ouvrirDetailsCmdAdmin = (code) => {
                 <span>TOTAL</span><span>${fmt(r.total)} F</span>
             </div>
         </div>
-        ${peutFacturer ? `<button onclick="telechargerFactureAdmin('${r.code}')" style="width:100%;margin-top:16px;background:#1a5c2a;color:white;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">🧾 Télécharger le reçu complet</button>` : `<p style="margin-top:16px;color:#888;font-size:0.8rem">Reçu disponible une fois le paiement confirmé.</p>`}
+        <button onclick="telechargerFactureAdmin('${r.code}')" style="width:100%;margin-top:16px;background:#1a5c2a;color:white;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">${estPaye?'🧾 Télécharger le reçu complet':'📄 Télécharger le suivi (non payé)'}</button>
     </div>`;
     document.body.appendChild(el);
 };

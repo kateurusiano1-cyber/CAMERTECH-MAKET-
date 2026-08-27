@@ -619,11 +619,8 @@
     <div class="modal modal-histo">
         <button class="modal-x" id="cmds-close">✕</button>
         <h2>📋 Mes Commandes</h2>
+        <input type="text" id="cmd-search-client" placeholder="🔎 Rechercher par numéro de commande..." oninput="rechercherMesCommandes(this.value)" style="width:100%;background:var(--bg);border:1.5px solid var(--border);padding:10px 14px;color:var(--text);border-radius:9px;font-size:0.85rem;margin-bottom:14px;font-family:var(--font-body)">
         <div id="cmds-list"></div>
-        <div id="factures-section" style="margin-top:22px;padding-top:18px;border-top:1px solid var(--border)">
-            <h3 style="font-size:0.95rem;margin-bottom:10px;font-family:var(--font-title)">🧾 Mes reçus</h3>
-            <div id="factures-list"></div>
-        </div>
     </div>
 </div>
 

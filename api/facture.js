@@ -1,9 +1,9 @@
 // api/facture.js
-// GET  : génère et renvoie le PDF de facture d'une commande — accès
-//        propriétaire (jeton Firebase) OU admin (jeton admin).
-// POST : masque/réaffiche le reçu côté client (n'efface jamais la
-//        commande elle-même, juste sa visibilité dans "Mes commandes" —
-//        l'admin continue de tout voir dans tous les cas).
+// GET  : génère et renvoie le PDF (facture si payé, reçu de suivi marqué
+//        "NON PAYÉ" sinon) — accès propriétaire (jeton Firebase) OU admin
+//        (jeton admin).
+// POST : masque/réaffiche une commande entière côté client (n'efface
+//        jamais rien côté admin — juste sa visibilité dans "Mes commandes").
 
 const { createClient } = require('@supabase/supabase-js');
 const { verifierRequeteUtilisateur } = require('./_lib/verifierFirebaseToken');
@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
             if (!user) return res.status(404).json({ error: 'Profil introuvable' });
             const { data: resa } = await supabase.from('reservations').select('utilisateur_id').eq('code', code).single();
             if (!resa || resa.utilisateur_id !== user.id) return res.status(403).json({ error: 'Cette commande ne vous appartient pas' });
-            await supabase.from('reservations').update({ facture_masquee_client: !!masquer }).eq('code', code);
+            await supabase.from('reservations').update({ masquee_client: !!masquer }).eq('code', code);
             return res.status(200).json({ ok: true });
         } catch (e) {
             console.error('Erreur facture (masquage):', e.message);
@@ -52,13 +52,14 @@ module.exports = async (req, res) => {
 
         const { data: resa } = await supabase.from('reservations').select('*').eq('code', code).single();
         if (!resa) return res.status(404).json({ error: 'Commande introuvable' });
-        if (resa.statut !== 'valide' && resa.statut !== 'livre') {
-            return res.status(400).json({ error: 'Facture disponible uniquement après paiement confirmé' });
-        }
 
+        // Téléchargeable dans tous les cas désormais — le document précise
+        // lui-même s'il s'agit d'une facture payée ou d'un simple suivi de
+        // commande non payée.
         const pdf = await genererFacturePdf(resa);
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="facture-${resa.code}.pdf"`);
+        const prefixe = (resa.statut === 'valide' || resa.statut === 'livre') ? 'facture' : 'suivi-commande';
+        res.setHeader('Content-Disposition', `attachment; filename="${prefixe}-${resa.code}.pdf"`);
         return res.status(200).send(pdf);
     } catch (e) {
         console.error('Erreur facture:', e.message);
