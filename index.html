@@ -9,6 +9,12 @@
     <meta name="author" content="CAMERTECH MARKET">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://camertechmarket.com/">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0E7C4A">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="CamerTech">
 
     <!-- Open Graph / réseaux sociaux -->
     <meta property="og:type" content="website">
@@ -209,13 +215,14 @@
         <div class="header-right">
             <div id="user-zone" style="display:none;align-items:center;gap:8px;position:relative">
                 <span id="user-nom" class="user-nom" style="cursor:pointer" title="Mon compte"></span>
-                <span id="user-points" class="user-points glass" title="Mes points fidélité" style="display:none"></span>
-                <button class="btn-icon glass" id="btn-favoris" title="Mes favoris">🤍</button>
+                <button class="btn-icon glass" id="btn-fidelite-favoris" title="Mes favoris & points fidélité">🤍</button>
                 <button class="btn-icon glass" id="btn-commandes" title="Mes commandes">📋</button>
-                <div id="user-menu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-hover);min-width:160px;z-index:50;overflow:hidden">
+                <div id="user-menu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-hover);min-width:170px;z-index:50;overflow:hidden">
+                    <div id="user-menu-nom" style="padding:10px 14px;font-size:0.82rem;font-weight:700;color:var(--text);border-bottom:1px solid var(--border)"></div>
                     <button id="btn-logout" style="width:100%;text-align:left;background:none;border:none;padding:11px 14px;font-size:0.85rem;color:var(--danger);cursor:pointer;font-family:var(--font-body);display:flex;align-items:center;gap:8px">⏻ Déconnexion</button>
                 </div>
             </div>
+            <button id="btn-install-pwa" class="btn-icon glass" title="Installer l'application" style="display:none;color:var(--green)">📲</button>
             <button class="btn-connexion" id="btn-auth-show" data-i18n="btn_connexion">👤 Connexion</button>
             <button class="btn-panier" id="panier-btn" style="display:none">
                 🛒 <span class="panier-badge" id="panier-count">0</span>

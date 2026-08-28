@@ -48,6 +48,53 @@ const getPrix = p => (p.promo_active || p.flash_active) && p.promo_prix ? p.prom
 const fmt = n => parseInt(n).toLocaleString('fr-FR');
 const $ = id => document.getElementById(id);
 
+// ===== APPLICATION INSTALLABLE (PWA) =====
+let evenementInstallPwa = null;
+
+function setupPwa() {
+    // Service worker : cache uniquement les fichiers statiques (jamais les
+    // données produits/panier/commandes), pour un fonctionnement hors-ligne
+    // partiel et une installation possible sur mobile.
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    // Déjà installée (mode standalone) : pas besoin de proposer l'install.
+    const dejaInstallee = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (dejaInstallee) return;
+
+    // Android/Chrome : le navigateur nous prévient quand l'installation
+    // est possible — on garde l'événement pour le déclencher nous-mêmes
+    // au clic sur notre propre bouton (plus discret que le bandeau natif).
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        evenementInstallPwa = e;
+        $('btn-install-pwa').style.display = 'flex';
+    });
+
+    $('btn-install-pwa').onclick = async () => {
+        if (evenementInstallPwa) {
+            evenementInstallPwa.prompt();
+            const { outcome } = await evenementInstallPwa.userChoice;
+            if (outcome === 'accepted') $('btn-install-pwa').style.display = 'none';
+            evenementInstallPwa = null;
+        } else {
+            // iOS Safari ne déclenche jamais beforeinstallprompt — on
+            // guide manuellement (seul moyen possible sur iPhone/iPad).
+            alert("Pour installer l'app sur iPhone/iPad :\n\n1. Appuie sur le bouton Partager (carré avec une flèche) en bas de Safari\n2. Choisis \"Sur l'écran d'accueil\"\n3. Confirme");
+        }
+    };
+
+    // iOS : jamais d'événement natif, on affiche quand même le bouton (il
+    // ouvrira les instructions manuelles ci-dessus).
+    const estIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (estIOS) $('btn-install-pwa').style.display = 'flex';
+
+    window.addEventListener('appinstalled', () => {
+        $('btn-install-pwa').style.display = 'none';
+    });
+}
+
 // ===== AVATAR (Gravatar avec repli sur initiales colorées) =====
 // Implémentation MD5 autonome (nécessaire pour construire l'URL Gravatar,
 // qui exige un hash MD5 de l'email — aucune dépendance externe ajoutée).
@@ -136,6 +183,8 @@ function closeOverlay(id) { const el=$(id); if(el){el.style.display='none'; docu
 
 // ===== DOM READY =====
 document.addEventListener('DOMContentLoaded', async () => {
+    setupPwa();
+
     // Vérifier page admin
     const path = window.location.pathname.replace(/\//g,'').replace('.html','');
     if (path === CONFIG.ADMIN_PATH) { afficherLoginAdmin(); return; }
@@ -588,14 +637,14 @@ function setupAuth() {
     });
 
     $('btn-commandes').onclick = chargerCommandes;
-    $('btn-favoris').onclick = afficherFavoris;
+    $('btn-fidelite-favoris').onclick = afficherPanneauFideliteFavoris;
 }
 
 function showUserUI() {
-    $('user-nom').innerHTML = htmlAvatar(currentUser.nom, currentUser.email) + ' ' + currentUser.nom.split(' ')[0];
+    $('user-nom').innerHTML = htmlAvatar(currentUser.nom, currentUser.email);
+    $('user-menu-nom').textContent = currentUser.nom;
     $('user-zone').style.display = 'flex';
     $('btn-auth-show').style.display = 'none';
-    afficherPoints();
     chargerFavoris();
 }
 
@@ -605,20 +654,25 @@ function palierFidelite(points) {
     if (points >= 500) return { nom: 'Argent', icone: '🥈' };
     return { nom: 'Bronze', icone: '🥉' };
 }
-function afficherPoints() {
-    const pts = currentUser.points || 0;
-    const palier = palierFidelite(pts);
-    const el = $('user-points');
-    el.style.display = 'inline-flex';
-    el.textContent = `${palier.icone} ${pts} pts`;
-    el.onclick = () => afficherModalFidelite();
-}
-function afficherModalFidelite() {
+
+// Panneau combiné favoris + points fidélité (une seule icône dans le
+// header, au lieu de deux éléments séparés).
+function afficherPanneauFideliteFavoris() {
     const pts = currentUser.points || 0;
     const palier = palierFidelite(pts);
     const prochain = pts < 500 ? 500 : pts < 2000 ? 2000 : null;
-    alert(`${palier.icone} Palier ${palier.nom}\n\n⭐ ${pts} points cumulés\n(1 point gagné tous les 1 000 FCFA dépensés, dès qu'une commande est validée)` +
-        (prochain ? `\n\nPlus que ${prochain - pts} points pour atteindre le palier suivant !` : `\n\n🎉 Tu as atteint le palier maximum !`));
+    const el = document.createElement('div');
+    el.className = 'modal-overlay';
+    el.style.display = 'flex';
+    el.innerHTML = `<div class="modal" style="max-width:380px;text-align:center;padding:26px 22px">
+        <button class="modal-x" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        <div style="font-size:2.2rem;margin-bottom:6px">${palier.icone}</div>
+        <div style="font-family:var(--font-title);font-weight:700;font-size:1.3rem;color:var(--green)">${pts} pts</div>
+        <div style="color:var(--text2);font-size:0.85rem;margin-top:4px">Palier ${palier.nom}${prochain ? ` — encore ${prochain-pts} pts avant le palier suivant` : ' — palier maximum atteint 🎉'}</div>
+        <p style="color:var(--text3);font-size:0.75rem;margin-top:10px">1 point gagné tous les 1 000 FCFA dépensés, dès qu'une commande est validée.</p>
+        <button onclick="this.closest('.modal-overlay').remove();afficherFavoris()" style="width:100%;margin-top:18px;background:var(--card);border:1.5px solid var(--border);color:var(--text);padding:12px;border-radius:var(--radius-pill);font-weight:600;cursor:pointer;font-family:var(--font-body)">🤍 Voir mes favoris</button>
+    </div>`;
+    document.body.appendChild(el);
 }
 
 // ===== FAVORIS =====
