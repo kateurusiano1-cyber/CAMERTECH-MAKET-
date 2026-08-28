@@ -92,6 +92,13 @@ function setupPwa() {
 
     window.addEventListener('appinstalled', () => {
         $('btn-install-pwa').style.display = 'none';
+        // Demande l'autorisation notifications juste après l'installation
+        // (utile pour prévenir plus tard des changements de statut de
+        // commande) — seulement si jamais demandée avant, et seulement
+        // si le navigateur supporte l'API.
+        if ('Notification' in window && Notification.permission === 'default') {
+            setTimeout(() => Notification.requestPermission().catch(() => {}), 1200);
+        }
     });
 }
 
@@ -1833,6 +1840,7 @@ window.supprimerCommandeClient = async (code) => {
 
 window.telechargerFacture = async (code) => {
     try {
+        if (!window.firebaseAuth?.currentUser) { alert('❌ Session expirée, reconnecte-toi puis réessaie.'); return; }
         const idToken = await window.firebaseAuth.currentUser.getIdToken();
         const resp = await fetch(`/api/facture?code=${encodeURIComponent(code)}`, {
             headers: { 'Authorization': 'Bearer ' + idToken }
@@ -1840,12 +1848,20 @@ window.telechargerFacture = async (code) => {
         if (!resp.ok) { const j = await resp.json().catch(()=>({})); alert('❌ ' + (j.error || 'Impossible de télécharger la facture')); return; }
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `facture-${code}.pdf`;
-        document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
+        try {
+            const a = document.createElement('a');
+            a.href = url; a.download = `facture-${code}.pdf`;
+            document.body.appendChild(a); a.click(); a.remove();
+        } catch (eDl) {
+            // Repli si le téléchargement forcé est bloqué (fréquent dans
+            // certaines apps installées/webviews) : ouvrir le PDF dans un
+            // nouvel onglet, l'utilisateur peut l'enregistrer depuis là.
+            window.open(url, '_blank');
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (e) {
-        alert('❌ Erreur lors du téléchargement');
+        console.error('Erreur téléchargement facture:', e);
+        alert('❌ Erreur lors du téléchargement : ' + (e.message || 'inconnue'));
     }
 };
 
@@ -2467,15 +2483,20 @@ window.telechargerFactureAdmin = async (code) => {
         const resp = await fetch(`/api/facture?code=${encodeURIComponent(code)}`, {
             headers: { 'Authorization': 'Bearer ' + (sessionStorage.getItem('cmkt_admin_token') || '') }
         });
-        if (!resp.ok) { alert('❌ Impossible de télécharger le reçu'); return; }
+        if (!resp.ok) { const j = await resp.json().catch(()=>({})); alert('❌ ' + (j.error || 'Impossible de télécharger le reçu')); return; }
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `facture-${code}.pdf`;
-        document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
+        try {
+            const a = document.createElement('a');
+            a.href = url; a.download = `facture-${code}.pdf`;
+            document.body.appendChild(a); a.click(); a.remove();
+        } catch (eDl) {
+            window.open(url, '_blank');
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (e) {
-        alert('❌ Erreur lors du téléchargement');
+        console.error('Erreur téléchargement facture (admin):', e);
+        alert('❌ Erreur lors du téléchargement : ' + (e.message || 'inconnue'));
     }
 };
 
