@@ -222,7 +222,20 @@
                     <button id="btn-logout" style="width:100%;text-align:left;background:none;border:none;padding:11px 14px;font-size:0.85rem;color:var(--danger);cursor:pointer;font-family:var(--font-body);display:flex;align-items:center;gap:8px">⏻ Déconnexion</button>
                 </div>
             </div>
-            <button id="btn-install-pwa" class="btn-icon glass" title="Installer l'application" style="display:none;color:var(--green)">📲</button>
+            <button id="btn-install-pwa" class="btn-icon-svg" title="Installer l'application" style="display:none">
+                <svg width="30" height="30" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <clipPath id="clipCercleInstall"><circle cx="50" cy="50" r="48"/></clipPath>
+                    </defs>
+                    <circle cx="50" cy="50" r="48" fill="var(--green-light)"/>
+                    <g clip-path="url(#clipCercleInstall)">
+                        <polygon points="55,15 100,60 100,100 40,100 15,75" fill="var(--green-dark)" opacity="0.55"/>
+                    </g>
+                    <path d="M35 42 L50 58 L65 42" stroke="white" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    <line x1="50" y1="20" x2="50" y2="55" stroke="white" stroke-width="9" stroke-linecap="round"/>
+                    <line x1="30" y1="72" x2="70" y2="72" stroke="white" stroke-width="9" stroke-linecap="round"/>
+                </svg>
+            </button>
             <button class="btn-connexion" id="btn-auth-show" data-i18n="btn_connexion">👤 Connexion</button>
             <button class="btn-panier" id="panier-btn" style="display:none">
                 🛒 <span class="panier-badge" id="panier-count">0</span>

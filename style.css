@@ -388,11 +388,13 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 
 /* RESPONSIVE */
 @media (max-width: 900px) {
-    .header-main { flex-wrap: wrap; justify-content: center; }
+    .header-main { flex-wrap: wrap; gap: 8px; }
     .header-search { display: block; flex: 1 1 100%; max-width: 100%; order: 3; margin-top: 8px; }
-    .header-left { flex: 1 1 100%; justify-content: center; margin-bottom: 6px; }
-    .header-right { width: 100%; justify-content: space-between; margin-left: 0; }
-    #user-zone { flex: 1 1 auto; justify-content: flex-start; }
+    .logo-text { display: none; }
+    .logo-img { height: 36px; width: 36px; }
+    .header-left { gap: 6px; }
+    .header-right { gap: 6px; }
+    .btn-icon { padding: 7px 9px; }
 }
 @media (max-width: 768px) {
     .tuiles-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -473,3 +475,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 @media (prefers-reduced-motion: reduce) {
     .feedback-produit-inline { animation: none !important; }
 }
+
+/* Bouton d'installation PWA (icône SVG personnalisée) */
+.btn-icon-svg { background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s var(--ease); border-radius: 50%; }
+.btn-icon-svg:hover { transform: scale(1.1); }
