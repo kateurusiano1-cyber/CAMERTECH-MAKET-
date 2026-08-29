@@ -4,6 +4,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "jose": "^4.15.5",
-    "pdfkit": "^0.15.0"
+    "pdfkit": "^0.15.0",
+    "web-push": "^3.6.7"
   }
 }

@@ -17,6 +17,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
+const { envoyerPushUtilisateur } = require('./_lib/envoyerPush');
 
 const TABLE_REELLE = { bannieres: 'bannières' }; // nom réel de la table en base
 
@@ -124,6 +125,18 @@ module.exports = async (req, res) => {
             // Liste blanche stricte : seul le statut est modifiable ici.
             const { data, error } = await supabase.from('reservations').update({ statut: payload?.statut }).eq('id', id).select().single();
             if (error) throw error;
+            if (data?.utilisateur_id && data?.statut) {
+                const messages = {
+                    'en attente': { titre: '⏳ Commande en préparation', corps: `Ta commande ${data.code} est en préparation.` },
+                    'livre': { titre: '🚚 Commande livrée !', corps: `Ta commande ${data.code} a été livrée. Merci pour ta confiance !` },
+                    'annule': { titre: '❌ Commande annulée', corps: `Ta commande ${data.code} a été annulée.` }
+                };
+                const msg = messages[data.statut];
+                if (msg) {
+                    try { await envoyerPushUtilisateur(supabase, data.utilisateur_id, { ...msg, url: '/' }); }
+                    catch (e) { console.error('Erreur push statut:', e.message); }
+                }
+            }
             return res.status(200).json({ data });
         }
 

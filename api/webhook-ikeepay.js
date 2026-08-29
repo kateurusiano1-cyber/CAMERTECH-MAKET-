@@ -12,6 +12,7 @@
 //      vérification manuelle), et l'incident est journalisé.
 
 const { createClient } = require('@supabase/supabase-js');
+const { envoyerPushUtilisateur } = require('./_lib/envoyerPush');
 
 module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
@@ -66,6 +67,13 @@ module.exports = async (req, res) => {
             // (Envoi automatique de la facture par email désactivé pour
             // l'instant — reste disponible via le bouton de téléchargement
             // côté client et côté admin.)
+            try {
+                await envoyerPushUtilisateur(supabase, resa.utilisateur_id, {
+                    titre: '✅ Commande validée !',
+                    corps: `Ta commande ${resa.code} est confirmée (${Math.round(resa.total)} FCFA).`,
+                    url: '/'
+                });
+            } catch (e) { console.error('Erreur push validation:', e.message); }
         } else if (statutRecu === 'failed' || statutRecu === 'expired' || payload?.event === 'payment.failed') {
             await supabase.from('reservations').update({ statut: 'paiement_echoue' }).eq('code', orderId);
         }

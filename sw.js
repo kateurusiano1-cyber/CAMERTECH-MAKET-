@@ -51,3 +51,30 @@ self.addEventListener('fetch', (event) => {
         })
     );
 });
+
+// ===== NOTIFICATIONS PUSH =====
+self.addEventListener('push', (event) => {
+    let donnees = {};
+    try { donnees = event.data ? event.data.json() : {}; } catch (e) {}
+    const titre = donnees.titre || 'CAMERTECH MARKET';
+    event.waitUntil(
+        self.registration.showNotification(titre, {
+            body: donnees.corps || '',
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            data: { url: donnees.url || '/' }
+        })
+    );
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const url = event.notification.data?.url || '/';
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window' }).then((clientsArr) => {
+            const dejaOuvert = clientsArr.find((c) => c.url.includes(self.location.origin));
+            if (dejaOuvert) return dejaOuvert.focus();
+            return self.clients.openWindow(url);
+        })
+    );
+});

@@ -97,9 +97,50 @@ function setupPwa() {
         // commande) — seulement si jamais demandée avant, et seulement
         // si le navigateur supporte l'API.
         if ('Notification' in window && Notification.permission === 'default') {
-            setTimeout(() => Notification.requestPermission().catch(() => {}), 1200);
+            setTimeout(async () => {
+                const permission = await Notification.requestPermission().catch(() => 'denied');
+                if (permission === 'granted') abonnerPushSiConnecte();
+            }, 1200);
         }
     });
+
+    // Si déjà autorisé (installation précédente) et déjà connecté, on
+    // (ré)abonne silencieusement — utile après un changement d'appareil.
+    if ('Notification' in window && Notification.permission === 'granted') {
+        setTimeout(abonnerPushSiConnecte, 2000);
+    }
+}
+
+// Convertit la clé VAPID publique (base64url) au format attendu par
+// pushManager.subscribe (Uint8Array).
+function urlBase64ToUint8Array(base64) {
+    const padding = '='.repeat((4 - base64.length % 4) % 4);
+    const base64Safe = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64Safe);
+    return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+async function abonnerPushSiConnecte() {
+    if (!currentUser || Notification.permission !== 'granted' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (!CONFIG.VAPID_PUBLIC_KEY) return;
+    try {
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(CONFIG.VAPID_PUBLIC_KEY)
+            });
+        }
+        const idToken = await window.firebaseAuth.currentUser.getIdToken();
+        await fetch('/api/push-subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+            body: JSON.stringify({ subscription: sub.toJSON() })
+        });
+    } catch (e) {
+        console.error('Erreur abonnement push:', e);
+    }
 }
 
 // ===== AVATAR (Gravatar avec repli sur initiales colorées) =====
@@ -653,6 +694,7 @@ function showUserUI() {
     $('user-zone').style.display = 'flex';
     $('btn-auth-show').style.display = 'none';
     chargerFavoris();
+    abonnerPushSiConnecte();
 }
 
 // ===== FIDELITE =====
