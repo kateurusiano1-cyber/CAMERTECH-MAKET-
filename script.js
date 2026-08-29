@@ -943,6 +943,49 @@ function setupSearch() {
         const q = norm(e.target.value.trim());
         renderProducts(q ? allProducts.filter(p => norm(p.name).includes(q) || norm(p.description||'').includes(q) || norm(p.category).includes(q)) : allProducts);
     };
+
+    // Recherche par photo : ouvre l'appareil photo (autorisation caméra
+    // demandée par le navigateur/OS à ce moment précis, pas avant).
+    $('btn-recherche-photo').onclick = () => $('input-recherche-photo').click();
+    $('input-recherche-photo').onchange = async (e) => {
+        const fichier = e.target.files?.[0];
+        e.target.value = '';
+        if (!fichier) return;
+        const btn = $('btn-recherche-photo');
+        btn.textContent = '⏳'; btn.disabled = true;
+        try {
+            const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(fichier);
+            });
+            const resp = await fetch('/api/recherche-photo', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64, media_type: fichier.type })
+            });
+            const result = await resp.json();
+            if (!resp.ok) { alert('❌ ' + (result.error || 'Recherche impossible, réessaie.')); return; }
+
+            const motscles = (result.motscles || []).map(norm);
+            let resultats = allProducts.filter(p => {
+                const texte = norm(p.name) + norm(p.description||'') + norm(p.category);
+                return motscles.some(m => texte.includes(m));
+            });
+            if (!resultats.length && result.category) {
+                resultats = allProducts.filter(p => p.category === result.category);
+            }
+            if (!resultats.length) { alert('😕 Aucun produit similaire trouvé dans le catalogue.'); return; }
+
+            $('search-bar').value = '';
+            renderProducts(resultats);
+            $('produits').scrollIntoView({behavior:'smooth'});
+        } catch (err) {
+            alert('❌ Erreur lors de la recherche par photo.');
+        } finally {
+            btn.textContent = '📷'; btn.disabled = false;
+        }
+    };
 }
 
 // ===== PRODUITS =====
