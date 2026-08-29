@@ -1485,6 +1485,40 @@ function setupPanier() {
         });
     };
     $('btn-fermer-success').onclick = () => { closeOverlay('success-overlay'); panier=[]; updatePanierBtn(); syncPanierServeur(); };
+
+    $('btn-reserver').onclick = reserverCommande;
+    $('btn-copier-reservation').onclick = () => {
+        navigator.clipboard.writeText($('reservation-code-display').textContent).then(() => {
+            $('btn-copier-reservation').textContent='✅ Copié !';
+            setTimeout(()=>$('btn-copier-reservation').textContent='📋 Copier le code',2000);
+        });
+    };
+    $('btn-fermer-reservation').onclick = () => closeOverlay('reservation-overlay');
+}
+
+// Réserve les articles du panier avec un code, AVANT tout choix de zone de
+// livraison ou ajout de frais — aucun paiement effectué à ce stade.
+async function reserverCommande() {
+    if (!currentUser) { alert('Connecte-toi pour réserver ta commande.'); return; }
+    if (!panier.length) { alert('Ton panier est vide.'); return; }
+    const btn = $('btn-reserver');
+    btn.disabled = true; btn.textContent = 'Réservation en cours...';
+    try {
+        const total = panier.reduce((s,p)=>s+p.prix*p.qty,0); // sans frais de livraison
+        const code = 'CMT-'+Math.random().toString(36).substring(2,5).toUpperCase()+'-'+Date.now().toString().slice(-4);
+        await db.from('reservations').insert([{
+            utilisateur_id: currentUser.id, nom_client: currentUser.nom, telephone: currentUser.telephone,
+            code, items: panier.map(p=>({name:p.name,qty:p.qty,prix:p.prix})),
+            total, statut: 'reservee', zone_livraison: null, frais_livraison: 0
+        }]);
+        $('reservation-code-display').textContent = code;
+        closeOverlay('panier-overlay');
+        openOverlay('reservation-overlay');
+    } catch (e) {
+        alert('❌ Erreur lors de la réservation. Réessaie.');
+    } finally {
+        btn.disabled = false; btn.textContent = '📌 Réserver ma commande (sans payer maintenant)';
+    }
 }
 
 function openPanier() {

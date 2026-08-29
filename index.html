@@ -484,6 +484,7 @@
         <button class="modal-x" id="panier-close">✕</button>
         <h2 data-i18n="titre_panier">🛒 Mon Panier</h2>
         <div id="panier-items"></div>
+        <button id="btn-reserver" style="width:100%;background:none;border:1.5px dashed var(--green);color:var(--green);padding:12px;border-radius:var(--radius-sm);font-weight:600;cursor:pointer;font-family:var(--font-body);font-size:0.85rem;margin-bottom:14px">📌 Réserver ma commande (sans payer maintenant)</button>
         <div class="livraison-box">
             <label data-i18n="label_zone">📍 Zone de livraison</label>
             <select id="zone-select" aria-label="Choisir votre zone de livraison">
@@ -607,6 +608,18 @@
         <button class="btn-green" id="btn-copier-success" style="margin-top:14px">📋 Copier le code</button>
         <a id="success-wa" href="#" target="_blank" class="btn-outline" style="display:block;text-align:center;margin-top:10px;text-decoration:none">📱 Contacter par WhatsApp</a>
         <button class="btn-outline" id="btn-fermer-success" style="margin-top:10px;width:100%">Fermer</button>
+    </div>
+</div>
+
+<!-- MODAL RESERVATION -->
+<div class="modal-overlay" id="reservation-overlay" style="display:none">
+    <div class="modal modal-code">
+        <h2>📌 Commande réservée !</h2>
+        <p style="color:var(--text3)">Ton code de réservation (garde-le précieusement) :</p>
+        <div id="reservation-code-display" class="code-display"></div>
+        <p style="color:var(--text3);font-size:0.8rem;margin-top:10px">Aucun paiement effectué pour l'instant. Présente ce code en boutique ou finalise le paiement plus tard depuis "Mes Commandes".</p>
+        <button class="btn-green" id="btn-copier-reservation" style="margin-top:14px">📋 Copier le code</button>
+        <button class="btn-outline" id="btn-fermer-reservation" style="margin-top:10px;width:100%">Fermer</button>
     </div>
 </div>
 
