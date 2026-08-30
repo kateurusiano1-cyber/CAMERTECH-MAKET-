@@ -121,8 +121,10 @@ function urlBase64ToUint8Array(base64) {
 }
 
 async function abonnerPushSiConnecte() {
-    if (!currentUser || Notification.permission !== 'granted' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    if (!CONFIG.VAPID_PUBLIC_KEY) return;
+    if (!currentUser) return;
+    if (Notification.permission !== 'granted') { console.log('Push: permission =', Notification.permission); return; }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { alert('🔍 Diagnostic push : ce navigateur ne supporte pas les notifications push.'); return; }
+    if (!CONFIG.VAPID_PUBLIC_KEY) { alert('🔍 Diagnostic push : clé VAPID manquante côté site.'); return; }
     try {
         const reg = await navigator.serviceWorker.ready;
         let sub = await reg.pushManager.getSubscription();
@@ -133,13 +135,18 @@ async function abonnerPushSiConnecte() {
             });
         }
         const idToken = await window.firebaseAuth.currentUser.getIdToken();
-        await fetch('/api/push-subscribe', {
+        const resp = await fetch('/api/push-subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
             body: JSON.stringify({ subscription: sub.toJSON() })
         });
+        if (!resp.ok) {
+            const j = await resp.json().catch(()=>({}));
+            alert('🔍 Diagnostic push : le serveur a refusé l\'abonnement — ' + (j.error || resp.status));
+        }
     } catch (e) {
         console.error('Erreur abonnement push:', e);
+        alert('🔍 Diagnostic push : ' + (e.message || e));
     }
 }
 
