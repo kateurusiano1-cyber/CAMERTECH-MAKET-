@@ -120,12 +120,28 @@ function urlBase64ToUint8Array(base64) {
     return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
 
+// Attend que Firebase ait fini de restaurer la session (asynchrone au
+// chargement de la page) avant de renvoyer l'utilisateur Firebase réel —
+// évite de planter en demandant un jeton avant que ce soit prêt.
+function attendreFirebaseUser() {
+    return new Promise((resolve) => {
+        if (window.firebaseAuth?.currentUser) { resolve(window.firebaseAuth.currentUser); return; }
+        const unsub = window.fbOnAuthStateChanged(window.firebaseAuth, (u) => {
+            unsub();
+            resolve(u);
+        });
+    });
+}
+
 async function abonnerPushSiConnecte() {
     if (!currentUser) return;
     if (Notification.permission !== 'granted') { console.log('Push: permission =', Notification.permission); return; }
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) { alert('🔍 Diagnostic push : ce navigateur ne supporte pas les notifications push.'); return; }
     if (!CONFIG.VAPID_PUBLIC_KEY) { alert('🔍 Diagnostic push : clé VAPID manquante côté site.'); return; }
     try {
+        const fbUser = await attendreFirebaseUser();
+        if (!fbUser) return; // vraiment déconnecté, rien à faire
+
         const reg = await navigator.serviceWorker.ready;
         let sub = await reg.pushManager.getSubscription();
         if (!sub) {
@@ -134,7 +150,7 @@ async function abonnerPushSiConnecte() {
                 applicationServerKey: urlBase64ToUint8Array(CONFIG.VAPID_PUBLIC_KEY)
             });
         }
-        const idToken = await window.firebaseAuth.currentUser.getIdToken();
+        const idToken = await fbUser.getIdToken();
         const resp = await fetch('/api/push-subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
@@ -1952,7 +1968,9 @@ window.rechercherMesCommandes = (q) => {
 window.supprimerCommandeClient = async (code) => {
     if (!confirm(`Retirer la commande ${code} de ton historique ?\n\nElle reste consultable par le support si besoin, mais tu ne la verras plus ici.`)) return;
     try {
-        const idToken = await window.firebaseAuth.currentUser.getIdToken();
+        const fbUser = await attendreFirebaseUser();
+        if (!fbUser) { alert('❌ Session expirée, reconnecte-toi puis réessaie.'); return; }
+        const idToken = await fbUser.getIdToken();
         await fetch('/api/facture', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
@@ -1966,8 +1984,9 @@ window.supprimerCommandeClient = async (code) => {
 
 window.telechargerFacture = async (code) => {
     try {
-        if (!window.firebaseAuth?.currentUser) { alert('❌ Session expirée, reconnecte-toi puis réessaie.'); return; }
-        const idToken = await window.firebaseAuth.currentUser.getIdToken();
+        const fbUser = await attendreFirebaseUser();
+        if (!fbUser) { alert('❌ Session expirée, reconnecte-toi puis réessaie.'); return; }
+        const idToken = await fbUser.getIdToken();
         const resp = await fetch(`/api/facture?code=${encodeURIComponent(code)}`, {
             headers: { 'Authorization': 'Bearer ' + idToken }
         });
