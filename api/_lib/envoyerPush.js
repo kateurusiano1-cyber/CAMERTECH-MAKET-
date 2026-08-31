@@ -23,7 +23,12 @@ async function envoyerPushUtilisateur(supabase, utilisateurId, { titre, corps, u
     const { data: abonnements } = await supabase.from('push_subscriptions').select('*').eq('utilisateur_id', utilisateurId);
     if (!abonnements || !abonnements.length) return;
 
-    const payload = JSON.stringify({ titre, corps, url: url || '/' });
+    // Nombre de commandes non payées de ce client — affiché en badge sur
+    // l'icône de l'app (Android/Chrome), en plus de la notification.
+    const { count } = await supabase.from('reservations').select('id', { count: 'exact', head: true })
+        .eq('utilisateur_id', utilisateurId).in('statut', ['reservee', 'paiement_en_cours']);
+
+    const payload = JSON.stringify({ titre, corps, url: url || '/', badge: count || 0 });
 
     await Promise.all(abonnements.map(async (abo) => {
         try {

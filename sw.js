@@ -52,19 +52,34 @@ self.addEventListener('fetch', (event) => {
     );
 });
 
-// ===== NOTIFICATIONS PUSH =====
+// ===== NOTIFICATIONS PUSH + BADGE SUR L'ICÔNE =====
 self.addEventListener('push', (event) => {
     let donnees = {};
     try { donnees = event.data ? event.data.json() : {}; } catch (e) {}
     const titre = donnees.titre || 'CAMERTECH MARKET';
-    event.waitUntil(
-        self.registration.showNotification(titre, {
+
+    event.waitUntil((async () => {
+        // Le badge (nombre sur l'icône) est le vrai signal recherché ici —
+        // Android/Chrome uniquement, ignoré silencieusement ailleurs (iOS).
+        if (typeof donnees.badge === 'number' && 'setAppBadge' in self.registration) {
+            try {
+                if (donnees.badge > 0) await self.registration.setAppBadge(donnees.badge);
+                else await self.registration.clearAppBadge();
+            } catch (e) { /* API non supportée sur cet appareil */ }
+        }
+
+        // Une notification reste obligatoire pour respecter les règles des
+        // navigateurs (Chrome désactive les abonnements "silencieux" sans
+        // notification visible) — rendue la plus discrète possible : pas de
+        // son, pas de vibration.
+        await self.registration.showNotification(titre, {
             body: donnees.corps || '',
             icon: '/icon-192.png',
             badge: '/icon-192.png',
+            silent: true,
             data: { url: donnees.url || '/' }
-        })
-    );
+        });
+    })());
 });
 
 self.addEventListener('notificationclick', (event) => {

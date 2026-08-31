@@ -718,6 +718,10 @@ function showUserUI() {
     $('btn-auth-show').style.display = 'none';
     chargerFavoris();
     abonnerPushSiConnecte();
+    if ('setAppBadge' in navigator) {
+        db.from('reservations').select('id',{count:'exact',head:true}).eq('utilisateur_id',currentUser.id).in('statut',['reservee','paiement_en_cours'])
+            .then(({count}) => { if (count>0) navigator.setAppBadge(count); else navigator.clearAppBadge(); }).catch(()=>{});
+    }
 }
 
 // ===== FIDELITE =====
@@ -1866,6 +1870,7 @@ async function attendreConfirmationCommande(code, tentative = 0) {
 // Affiche la page de succès à partir d'une commande déjà enregistrée en base
 // (utilisé au retour de paiement, quand le panier en mémoire a été perdu par la redirection)
 function afficherSuccesDepuisResa(resa) {
+    syncBadgeCommandes(window._mesCommandes ? window._mesCommandes.filter(r => r.code !== resa.code) : []);
     const sauvegarde = sessionStorage.getItem('cmkt_panier_'+resa.code);
     if (sauvegarde) {
         const d = JSON.parse(sauvegarde);
@@ -1953,6 +1958,18 @@ async function chargerCommandes() {
     window._mesCommandes = (data||[]).filter(r => !r.masquee_client);
     afficherMesCommandes(window._mesCommandes);
     openOverlay('cmds-overlay');
+    syncBadgeCommandes(window._mesCommandes);
+}
+
+// Met à jour le badge sur l'icône de l'app (Android/Chrome uniquement,
+// ignoré ailleurs) avec le nombre de commandes non payées.
+function syncBadgeCommandes(liste) {
+    if (!('setAppBadge' in navigator)) return;
+    const nonPayees = (liste || []).filter(r => ['reservee','paiement_en_cours'].includes(r.statut)).length;
+    try {
+        if (nonPayees > 0) navigator.setAppBadge(nonPayees);
+        else navigator.clearAppBadge();
+    } catch (e) { /* API non supportée sur cet appareil */ }
 }
 
 function afficherMesCommandes(liste) {
