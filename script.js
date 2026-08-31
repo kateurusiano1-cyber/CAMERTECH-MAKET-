@@ -1796,6 +1796,25 @@ async function confirmerPaiement() {
 }
 
 // Ouvre le widget iKeePay en overlay (iframe intégrée, aucune redirection externe)
+// Reprend le paiement d'une commande déjà créée (retrouvée via son code
+// dans "Mes Commandes"), sans repasser par le panier. Réutilise exactement
+// le même circuit que pour une commande neuve : montant revérifié côté
+// serveur, widget iKeePay, confirmation par webhook.
+window.payerCommandeExistante = async (code) => {
+    closeOverlay('cmds-overlay');
+    try {
+        const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reference: code })
+        });
+        const result = await resp.json();
+        if (!result.success) { alert('❌ ' + (result.error || 'Impossible de préparer le paiement.')); return; }
+        ouvrirWidgetIkeepay(result, code);
+    } catch (e) {
+        alert('❌ Erreur, réessaie.');
+    }
+};
+
 function ouvrirWidgetIkeepay(paiement, code) {
     const params = new URLSearchParams({
         pk: paiement.pk,
@@ -1943,6 +1962,7 @@ function afficherMesCommandes(liste) {
         :liste.map(r=>{
             const peutRetourner = r.statut==='livre' && (Date.now() - new Date(r.created_at).getTime()) < septJours;
             const estPaye = r.statut==='valide' || r.statut==='livre';
+            const peutPayer = !estPaye && r.statut !== 'annule';
             return `<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid var(--border)">
             <div style="display:flex;justify-content:space-between;align-items:start">
                 <div style="font-family:monospace;color:var(--green);font-weight:700">${r.code}</div>
@@ -1953,7 +1973,8 @@ function afficherMesCommandes(liste) {
             <div style="color:var(--text2);font-size:0.82rem;margin-top:6px">${r.items.map(i=>`${i.name} ×${i.qty}`).join(', ')}</div>
             <div style="color:var(--green);font-weight:700;margin-top:4px">${fmt(r.total)} FCFA</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-                <button onclick="telechargerFacture('${r.code}')" style="background:linear-gradient(135deg,var(--green),var(--green-light));color:white;border:none;padding:9px 16px;border-radius:var(--radius-pill);font-size:0.82rem;font-weight:700;cursor:pointer;font-family:var(--font-title);letter-spacing:0.3px;box-shadow:0 3px 10px rgba(14,124,74,0.28);transition:transform 0.15s var(--ease)">⬇️ Télécharger ${estPaye?'(Facture)':'(non payé)'}</button>
+                ${peutPayer ? `<button onclick="payerCommandeExistante('${r.code}')" style="background:linear-gradient(135deg,var(--orange),var(--orange-light));color:white;border:none;padding:9px 16px;border-radius:var(--radius-pill);font-size:0.82rem;font-weight:700;cursor:pointer;font-family:var(--font-title);letter-spacing:0.3px;box-shadow:0 3px 10px rgba(255,107,26,0.3)">💳 Payer maintenant</button>` : ''}
+                <button onclick="telechargerFacture('${r.code}')" style="background:${peutPayer?'none':'linear-gradient(135deg,var(--green),var(--green-light))'};color:${peutPayer?'var(--text2)':'white'};border:${peutPayer?'1px solid var(--border)':'none'};padding:9px 16px;border-radius:var(--radius-pill);font-size:0.82rem;font-weight:700;cursor:pointer;font-family:${peutPayer?'var(--font-body)':'var(--font-title)'};letter-spacing:0.3px;${peutPayer?'':'box-shadow:0 3px 10px rgba(14,124,74,0.28)'}">⬇️ ${peutPayer?'Suivi':'Télécharger (Facture)'}</button>
                 ${peutRetourner ? `<button onclick="ouvrirDemandeRetour('${r.id}','${r.code}')" style="background:none;border:1px solid var(--border);color:var(--text2);padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🔄 Demander un retour</button>` : ''}
             </div>
         </div>`;}).join('');
