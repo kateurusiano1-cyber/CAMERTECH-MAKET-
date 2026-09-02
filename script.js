@@ -1964,12 +1964,14 @@ async function chargerCommandes() {
 // Met à jour le badge sur l'icône de l'app (Android/Chrome uniquement,
 // ignoré ailleurs) avec le nombre de commandes non payées.
 function syncBadgeCommandes(liste) {
-    if (!('setAppBadge' in navigator)) return;
+    if (!('setAppBadge' in navigator)) { console.log('Badge: API non supportée sur ce navigateur'); return; }
     const nonPayees = (liste || []).filter(r => ['reservee','paiement_en_cours'].includes(r.statut)).length;
-    try {
-        if (nonPayees > 0) navigator.setAppBadge(nonPayees);
-        else navigator.clearAppBadge();
-    } catch (e) { /* API non supportée sur cet appareil */ }
+    navigator.setAppBadge(nonPayees > 0 ? nonPayees : 0).then(() => {
+        console.log('Badge défini à', nonPayees);
+    }).catch((e) => {
+        console.error('Erreur badge:', e);
+        alert('🔍 Diagnostic badge : ' + (e.message || e));
+    });
 }
 
 function afficherMesCommandes(liste) {
