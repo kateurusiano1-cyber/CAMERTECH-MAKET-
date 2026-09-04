@@ -57,6 +57,17 @@ function setupPwa() {
     // partiel et une installation possible sur mobile.
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+        // Actualisation en direct : dès qu'une nouvelle version du site est
+        // déployée et prend le relais, la page se recharge automatiquement
+        // une seule fois pour afficher le contenu à jour — sans que le
+        // client ait besoin de désinstaller/réinstaller quoi que ce soit.
+        let dejaRecharge = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (dejaRecharge) return;
+            dejaRecharge = true;
+            window.location.reload();
+        });
     }
 
     // Déjà installée (mode standalone) : pas besoin de proposer l'install.
