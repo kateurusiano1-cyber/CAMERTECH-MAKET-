@@ -115,6 +115,7 @@
         <a class="sidebar-link" id="sl-suivi" data-i18n="nav_suivi">🚚 Suivi de commande</a>
         <a class="sidebar-link" id="sl-loc" data-i18n="nav_loc">🏪 Localisation boutique</a>
         <a class="sidebar-link" id="sl-retour" data-i18n="nav_retour">🔄 Politique de retour</a>
+        <a class="sidebar-link" id="sl-telecharger-app" style="font-weight:700;color:var(--green)">📲 Télécharger l'app</a>
         <a class="sidebar-link" href="https://wa.me/237699781160" target="_blank" data-i18n="nav_contact">📞 Nous contacter</a>
         <div class="sidebar-sep" data-i18n="sep_preferences">Préférences</div>
         <div class="sidebar-pref">
@@ -623,6 +624,40 @@
         <p style="color:var(--text3);font-size:0.8rem;margin-top:10px">Aucun paiement effectué pour l'instant. Présente ce code en boutique ou finalise le paiement plus tard depuis "Mes Commandes".</p>
         <button class="btn-green" id="btn-copier-reservation" style="margin-top:14px">📋 Copier le code</button>
         <button class="btn-outline" id="btn-fermer-reservation" style="margin-top:10px;width:100%">Fermer</button>
+    </div>
+</div>
+
+<!-- MODAL PRESENTATION TELECHARGEMENT APP -->
+<div class="modal-overlay" id="telecharger-app-overlay" style="display:none">
+    <div class="modal" style="max-width:420px;text-align:center;padding:0;overflow:hidden">
+        <button class="modal-x" onclick="closeOverlay('telecharger-app-overlay')" style="z-index:5">✕</button>
+        <div style="background:linear-gradient(135deg,var(--green-dark),var(--green) 70%,var(--green-light));padding:36px 24px 28px;color:white">
+            <img src="icon-192.png" alt="Logo" style="width:76px;height:76px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,0.25);margin-bottom:14px">
+            <h2 style="font-family:var(--font-title);font-size:1.3rem;margin:0">CAMERTECH MARKET</h2>
+            <p style="opacity:0.9;font-size:0.85rem;margin-top:4px">Installe l'app pour une expérience plus rapide</p>
+        </div>
+        <div style="padding:24px">
+            <div style="text-align:left;display:flex;flex-direction:column;gap:14px;margin-bottom:22px">
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">⚡</span>
+                    <div><strong style="font-size:0.88rem">Plus rapide</strong><div style="color:var(--text3);font-size:0.78rem">Un raccourci direct sur ton écran d'accueil, sans passer par le navigateur.</div></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">🔔</span>
+                    <div><strong style="font-size:0.88rem">Alertes de commande</strong><div style="color:var(--text3);font-size:0.78rem">Sois prévenu dès que ta commande est confirmée ou livrée.</div></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">📶</span>
+                    <div><strong style="font-size:0.88rem">Fonctionne même hors ligne</strong><div style="color:var(--text3);font-size:0.78rem">Consulte le site même avec une connexion faible.</div></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">🆓</span>
+                    <div><strong style="font-size:0.88rem">100% gratuit</strong><div style="color:var(--text3);font-size:0.78rem">Aucun espace de stockage lourd, aucun paiement.</div></div>
+                </div>
+            </div>
+            <button id="btn-telecharger-app-principal" style="width:100%;background:linear-gradient(135deg,var(--orange),var(--orange-light));color:white;border:none;padding:16px;border-radius:var(--radius-pill);font-weight:800;font-size:1rem;cursor:pointer;font-family:var(--font-title);letter-spacing:0.3px;box-shadow:0 8px 22px rgba(255,107,26,0.4);animation:pulseTelecharger 1.8s infinite">⬇️ Télécharger maintenant</button>
+            <p id="telecharger-app-note" style="color:var(--text3);font-size:0.75rem;margin-top:12px"></p>
+        </div>
     </div>
 </div>
 

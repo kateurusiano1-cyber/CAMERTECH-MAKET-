@@ -124,6 +124,37 @@ function setupPwa() {
 
 // Convertit la clé VAPID publique (base64url) au format attendu par
 // pushManager.subscribe (Uint8Array).
+// Page de présentation dédiée (menu "Télécharger l'app"), avec un gros
+// bouton d'action — réutilise la même mécanique d'installation que le
+// petit bouton du header, juste avec plus de contexte pour l'utilisateur.
+function ouvrirPresentationTelechargement() {
+    const dejaInstallee = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const btn = $('btn-telecharger-app-principal');
+    const note = $('telecharger-app-note');
+    const estIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+    if (dejaInstallee) {
+        btn.style.display = 'none';
+        note.textContent = "✅ L'app est déjà installée sur cet appareil !";
+    } else {
+        btn.style.display = 'block';
+        note.textContent = estIOS ? 'Sur iPhone/iPad, Safari te guide pas à pas au clic.' : '';
+        btn.onclick = async () => {
+            if (evenementInstallPwa) {
+                evenementInstallPwa.prompt();
+                const { outcome } = await evenementInstallPwa.userChoice;
+                if (outcome === 'accepted') { closeOverlay('telecharger-app-overlay'); $('btn-install-pwa').style.display = 'none'; }
+                evenementInstallPwa = null;
+            } else if (estIOS) {
+                alert("Pour installer l'app sur iPhone/iPad :\n\n1. Appuie sur le bouton Partager (carré avec une flèche) en bas de Safari\n2. Choisis \"Sur l'écran d'accueil\"\n3. Confirme");
+            } else {
+                alert("Ton navigateur ne propose pas encore l'installation automatique ici.\n\nSur Android/Chrome, essaie depuis le menu du navigateur (⋮) → \"Installer l'application\".");
+            }
+        };
+    }
+    openOverlay('telecharger-app-overlay');
+}
+
 function urlBase64ToUint8Array(base64) {
     const padding = '='.repeat((4 - base64.length % 4) % 4);
     const base64Safe = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -499,6 +530,7 @@ function setupSidebar() {
     $('sl-suivi').onclick = () => { closeSidebar(); openOverlay('suivi-overlay'); };
     $('sl-loc').onclick = () => { closeSidebar(); openOverlay('loc-overlay'); };
     $('sl-retour').onclick = () => { closeSidebar(); openOverlay('retour-overlay'); };
+    $('sl-telecharger-app').onclick = () => { closeSidebar(); ouvrirPresentationTelechargement(); };
 
     $('theme-toggle').onchange = () => {
         const t = $('theme-toggle').checked ? 'dark' : 'light';
