@@ -227,10 +227,12 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 .loader { text-align: center; color: var(--text3); padding: 60px; font-size: 0.95rem; font-family: var(--font-body); }
 
 /* ===== GRILLE PRODUITS =====
-   Mobile-first : 2 colonnes par défaut (fiable quel que soit le contexte
-   de rendu, y compris PWA installée), élargi seulement sur grand écran. */
+   Mobile-first : 2 colonnes par défaut, quel que soit le contexte. Le seuil
+   d'élargissement est volontairement haut (900px) pour rester fiable même
+   si un téléphone détecte une largeur d'écran plus grande que prévu
+   (réglages d'affichage/zoom réduits, contexte PWA particulier, etc.). */
 .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; min-height: 380px; }
-@media (min-width: 640px) {
+@media (min-width: 900px) {
     .grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 18px; }
 }
 #banniere-top.banniere-top { min-height: 38px; }
