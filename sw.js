@@ -5,7 +5,7 @@
 // servies depuis le cache, pour ne jamais afficher de stock/prix/statut
 // périmé au client.
 
-const CACHE_NOM = 'camertech-cache-v1';
+const CACHE_NOM = 'camertech-cache-v2';
 const FICHIERS_STATIQUES = [
     '/', '/index.html', '/style.css', '/script.js', '/config.js',
     '/logo.png', '/icon-192.png', '/icon-512.png', '/manifest.json'
@@ -39,7 +39,11 @@ self.addEventListener('fetch', (event) => {
 
     event.respondWith(
         caches.match(event.request).then((reponseCache) => {
-            const fetchReseau = fetch(event.request).then((reponseReseau) => {
+            // cache: 'no-store' force à ignorer complètement le cache HTTP
+            // du navigateur (en plus de notre propre Cache API ci-dessus) —
+            // sans ça, un fichier statique peut rester periné même après un
+            // nouveau déploiement, malgré tout notre code "réseau prioritaire".
+            const fetchReseau = fetch(event.request, { cache: 'no-store' }).then((reponseReseau) => {
                 if (reponseReseau && reponseReseau.status === 200) {
                     const clone = reponseReseau.clone();
                     caches.open(CACHE_NOM).then((cache) => cache.put(event.request, clone));
