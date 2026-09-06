@@ -3,6 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        // Fix : certains navigateurs/WebView (ex. XOS sur Infinix/Tecno/itel) ignorent
+        // "width=device-width" et calculent un viewport erroné (souvent 980px) au lieu
+        // de la vraie largeur d'écran. On détecte l'écart et on force la vraie valeur
+        // AVANT le premier rendu, en remplaçant le mot-clé par un chiffre exact.
+        (function () {
+            try {
+                var vp = document.querySelector('meta[name="viewport"]');
+                var reel = window.screen && window.screen.width;
+                if (vp && reel && window.innerWidth > reel + 40) {
+                    vp.setAttribute('content', 'width=' + reel + ', initial-scale=1.0, maximum-scale=1.0');
+                }
+            } catch (e) {}
+        })();
+    </script>
     <title>CAMERTECH MARKET — Achat en ligne de produits tech à Douala, Cameroun</title>
     <meta name="description" content="CAMERTECH MARKET : boutique en ligne de produits tech (smartphones, accessoires, électronique) à Douala, Cameroun. Livraison rapide, paiement Mobile Money (MTN, Orange), retrait en agence dans tout Douala.">
     <meta name="keywords" content="camertech market, achat tech Cameroun, boutique en ligne Douala, smartphone Douala, accessoires électroniques Cameroun, mobile money, livraison Douala">

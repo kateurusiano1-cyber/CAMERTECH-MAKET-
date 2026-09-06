@@ -296,9 +296,6 @@ function closeOverlay(id) { const el=$(id); if(el){el.style.display='none'; docu
 
 // ===== DOM READY =====
 document.addEventListener('DOMContentLoaded', async () => {
-    // 🔍 Diagnostic temporaire — largeur d'écran réellement détectée.
-    alert(`🔍 Diagnostic écran :\ninnerWidth = ${window.innerWidth}px\ndevicePixelRatio = ${window.devicePixelRatio}\nscreen.width = ${screen.width}px`);
-
     setupPwa();
 
     // Vérifier page admin
