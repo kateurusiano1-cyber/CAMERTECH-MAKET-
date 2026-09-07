@@ -14,6 +14,7 @@
 //   reservations : update (uniquement le champ "statut")
 //   utilisateurs : list   (lecture seule, pour le tableau de bord admin)
 //                  delete (profil Supabase + compte de connexion Firebase)
+//   codes_promo  : list | insert | update | delete
 
 const { createClient } = require('@supabase/supabase-js');
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
@@ -159,6 +160,50 @@ module.exports = async (req, res) => {
             // coordonnées pour une suppression manuelle en 1 clic dans la
             // console Firebase (Authentication → Users).
             return res.status(200).json({ ok: true, firebase_uid: profil.firebase_uid, email: profil.email });
+        }
+
+        if (ressource === 'codes_promo' && action === 'list') {
+            const { data, error } = await supabase.from('codes_promo').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            return res.status(200).json({ data });
+        }
+        if (ressource === 'codes_promo' && action === 'insert') {
+            const p = payload || {};
+            if (!p.code || !p.type || !p.valeur) return res.status(400).json({ error: 'Code, type et valeur requis' });
+            const { data, error } = await supabase.from('codes_promo').insert([{
+                code: String(p.code).trim().toUpperCase(),
+                type: p.type === 'montant' ? 'montant' : 'pourcentage',
+                valeur: Math.abs(parseFloat(p.valeur)) || 0,
+                actif: p.actif !== false,
+                date_expiration: p.date_expiration || null,
+                usage_max: p.usage_max ? parseInt(p.usage_max, 10) : null,
+                montant_min: p.montant_min ? parseFloat(p.montant_min) : null
+            }]).select().single();
+            if (error) {
+                if (error.code === '23505') return res.status(400).json({ error: 'Ce code existe déjà' });
+                throw error;
+            }
+            return res.status(200).json({ data });
+        }
+        if (ressource === 'codes_promo' && action === 'update') {
+            if (!id) return res.status(400).json({ error: 'id manquant' });
+            // Liste blanche stricte des champs modifiables.
+            const p = payload || {};
+            const maj = {};
+            if ('actif' in p) maj.actif = !!p.actif;
+            if ('valeur' in p) maj.valeur = Math.abs(parseFloat(p.valeur)) || 0;
+            if ('usage_max' in p) maj.usage_max = p.usage_max ? parseInt(p.usage_max, 10) : null;
+            if ('date_expiration' in p) maj.date_expiration = p.date_expiration || null;
+            if ('montant_min' in p) maj.montant_min = p.montant_min ? parseFloat(p.montant_min) : null;
+            const { data, error } = await supabase.from('codes_promo').update(maj).eq('id', id).select().single();
+            if (error) throw error;
+            return res.status(200).json({ data });
+        }
+        if (ressource === 'codes_promo' && action === 'delete') {
+            if (!id) return res.status(400).json({ error: 'id manquant' });
+            const { error } = await supabase.from('codes_promo').delete().eq('id', id);
+            if (error) throw error;
+            return res.status(200).json({ ok: true });
         }
 
         return res.status(400).json({ error: 'Combinaison ressource/action non autorisée' });

@@ -571,6 +571,11 @@
             <div id="livraison-info" style="display:none" class="livraison-info"></div>
             <div id="zone-warning" style="display:none" class="livraison-info lv-warn"></div>
         </div>
+        <div class="promo-box" style="display:flex;gap:8px;margin:12px 0 4px">
+            <input id="promo-input" placeholder="Code promo (optionnel)" style="flex:1;padding:10px 12px;border-radius:var(--radius-sm);border:1.5px solid var(--border);font-family:var(--font-body);text-transform:uppercase">
+            <button id="btn-appliquer-promo" style="background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:0 16px;font-weight:600;cursor:pointer;font-size:0.85rem;white-space:nowrap">Appliquer</button>
+        </div>
+        <p id="promo-message" style="font-size:0.78rem;margin:0 0 10px;min-height:14px"></p>
         <div id="panier-totaux"></div>
         <textarea id="note-cmd" placeholder="Note pour la commande (optionnel)..." rows="2" data-i18n-ph="ph_note"></textarea>
         <button class="btn-green" id="btn-payer" style="display:none" data-i18n="btn_payer">💳 Payer maintenant (Mobile Money)</button>

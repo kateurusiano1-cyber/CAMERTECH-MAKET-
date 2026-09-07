@@ -1675,6 +1675,7 @@ function setupPanier() {
     $('panier-overlay').onclick = e => { if(e.target===$('panier-overlay')) closeOverlay('panier-overlay'); };
     $('zone-select').onchange = updateLivraison;
     $('btn-payer').onclick = initierPaiement;
+    $('btn-appliquer-promo').onclick = appliquerCodePromo;
     $('btn-copier').onclick = () => {
         navigator.clipboard.writeText($('code-display').textContent).then(() => {
             $('btn-copier').textContent='✅ Copié !';
@@ -1717,7 +1718,8 @@ async function reserverCommande() {
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
             body: JSON.stringify({
                 items: panier.map(p => ({ id: p.id, qty: p.qty })),
-                reservation: true
+                reservation: true,
+                code_promo: ($('promo-input').value || '').trim() || undefined
             })
         });
         const result = await resp.json();
@@ -1747,6 +1749,8 @@ function openPanier() {
     openOverlay('panier-overlay');
 }
 
+let codePromoApplique = null; // { code, reduction, sousTotal } — remis à zéro dès que le panier change
+
 function renderPanier() {
     const items = $('panier-items');
     items.innerHTML='';
@@ -1761,13 +1765,56 @@ function renderPanier() {
         d.querySelector('.btn-rm').onclick = e => { panier.splice(parseInt(e.target.dataset.idx),1); updatePanierBtn(); syncPanierServeur(); openPanier(); };
         items.appendChild(d);
     });
+    // Le panier a changé : une réduction déjà affichée ne correspond plus
+    // forcément aux bonnes règles (montant minimum, etc.) — on la retire de
+    // l'affichage, le serveur revalidera de toute façon au moment de payer.
+    if (codePromoApplique && codePromoApplique.sousTotal !== sousTotal) {
+        codePromoApplique = null;
+        $('promo-message').textContent = '';
+    }
+    updateTotaux(sousTotal);
+}
+
+async function appliquerCodePromo() {
+    const saisi = ($('promo-input').value || '').trim();
+    const msg = $('promo-message');
+    if (!saisi) { codePromoApplique = null; msg.textContent = ''; renderPanier(); return; }
+    if (!currentUser) { msg.style.color = 'var(--danger)'; msg.textContent = 'Connecte-toi pour utiliser un code promo.'; return; }
+
+    const sousTotal = panier.reduce((s,p)=>s+p.prix*p.qty,0);
+    msg.style.color = 'var(--text3)'; msg.textContent = 'Vérification du code...';
+    try {
+        const fbUser = await attendreFirebaseUser();
+        const idToken = await fbUser.getIdToken();
+        const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+            body: JSON.stringify({ items: panier.map(p => ({ id: p.id, qty: p.qty })), code_promo: saisi, preview: true })
+        });
+        const result = await resp.json();
+        if (!result.success || !result.code_valide) {
+            codePromoApplique = null;
+            msg.style.color = 'var(--danger)';
+            msg.textContent = '❌ ' + (result.message || result.error || 'Code invalide.');
+        } else {
+            codePromoApplique = { code: saisi, reduction: result.reduction, sousTotal };
+            msg.style.color = 'var(--success)';
+            msg.textContent = '✅ ' + result.message;
+        }
+    } catch (e) {
+        codePromoApplique = null;
+        msg.style.color = 'var(--danger)';
+        msg.textContent = 'Erreur de vérification, réessaie.';
+    }
     updateTotaux(sousTotal);
 }
 
 function updateTotaux(sousTotal) {
-    const total = sousTotal + fraisLivraison;
+    const reduction = (codePromoApplique && codePromoApplique.sousTotal === sousTotal) ? codePromoApplique.reduction : 0;
+    const total = Math.max(0, sousTotal - reduction) + fraisLivraison;
     $('panier-totaux').innerHTML=`<div class="totaux-box">
         <div class="total-ligne"><span>Sous-total</span><span>${fmt(sousTotal)} FCFA</span></div>
+        ${reduction > 0 ? `<div class="total-ligne" style="color:var(--success)"><span>Réduction</span><span>-${fmt(reduction)} FCFA</span></div>` : ''}
         <div class="total-ligne"><span>Livraison</span><span>${fraisLivraison>0?fmt(fraisLivraison)+' FCFA':'—'}</span></div>
         <div class="total-final"><span>Total</span><span>${fmt(total)} FCFA</span></div>
     </div>`;
@@ -1869,7 +1916,8 @@ async function confirmerPaiement() {
                 items: panier.map(p => ({ id: p.id, qty: p.qty })),
                 zone_livraison: userZone,
                 frais_livraison: fraisLivraison,
-                note: $('note-cmd').value || null
+                note: $('note-cmd').value || null,
+                code_promo: ($('promo-input').value || '').trim() || undefined
             })
         });
         const result = await resp.json();
@@ -2270,7 +2318,7 @@ async function afficherPanneauAdmin() {
     page.style.display='block';
     page.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-family:Inter,sans-serif">Chargement du panneau...</div>';
 
-    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},{data:retours},feedbackStats]=await Promise.all([
+    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},{data:retours},feedbackStats,codesPromoResult]=await Promise.all([
         db.from('products').select('*').order('created_at',{ascending:false}),
         adminAction('utilisateurs','list').catch(()=>({data:[]})),
         db.from('reservations').select('*').order('created_at',{ascending:false}),
@@ -2278,9 +2326,11 @@ async function afficherPanneauAdmin() {
         db.from('bannières').select('*').eq('actif',true),
         db.from('parametres').select('*'),
         db.from('retours').select('*').order('created_at',{ascending:false}),
-        adminAction('feedback_produits','stats').catch(()=>({total:0,parChoix:{},parProduit:{},recents:[]}))
+        adminAction('feedback_produits','stats').catch(()=>({total:0,parChoix:{},parProduit:{},recents:[]})),
+        adminAction('codes_promo','list').catch(()=>({data:[]}))
     ]);
     const users = usersResult.data;
+    const codesPromo = codesPromoResult.data || [];
     const paramMap = Object.fromEntries((params||[]).map(p=>[p.cle,p.valeur]));
 
     // Revenu réel : uniquement les commandes dont le paiement est confirmé
@@ -2308,6 +2358,7 @@ async function afficherPanneauAdmin() {
                 <button onclick="showTab('tab-mktg')" class="adm-tab" id="tb-mktg">📢 Marketing</button>
                 <button onclick="showTab('tab-param')" class="adm-tab" id="tb-param">⚙️ Paramètres</button>
                 <button onclick="showTab('tab-retours')" class="adm-tab" id="tb-retours">🔄 Retours</button>
+                <button onclick="showTab('tab-promo')" class="adm-tab" id="tb-promo">🏷️ Codes promo</button>
                 <button onclick="window.location.href='/'" class="adm-tab">🏪 Site</button>
                 <button onclick="ouvrirPresentationTelechargement()" class="adm-tab" style="background:rgba(255,255,255,0.15)">📲 Installer l'app Admin</button>
             </div>
@@ -2584,6 +2635,49 @@ async function afficherPanneauAdmin() {
             </div>
         </div>
 
+        <!-- CODES PROMO -->
+        <div id="tab-promo" style="display:none">
+            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+                <h2 style="font-size:1rem;margin-bottom:14px">🏷️ Créer un code promo</h2>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
+                    <input id="promo-new-code" placeholder="CODE (ex: BIENVENUE10)" style="padding:10px;border-radius:8px;border:1px solid #ddd;text-transform:uppercase">
+                    <select id="promo-new-type" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                        <option value="pourcentage">Pourcentage (%)</option>
+                        <option value="montant">Montant fixe (FCFA)</option>
+                    </select>
+                    <input id="promo-new-valeur" type="number" min="1" placeholder="Valeur" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                    <input id="promo-new-min" type="number" min="0" placeholder="Achat minimum (FCFA, optionnel)" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                    <input id="promo-new-max-usage" type="number" min="1" placeholder="Utilisations max (optionnel)" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                    <input id="promo-new-expiration" type="date" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                </div>
+                <button onclick="creerCodePromo()" style="background:#1a5c2a;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">➕ Créer le code</button>
+                <p id="promo-new-res" style="min-height:18px;font-size:0.82rem;margin-top:8px"></p>
+            </div>
+            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+                <h2 style="font-size:1rem;margin-bottom:14px">📋 Codes existants (${(codesPromo||[]).length})</h2>
+                ${!(codesPromo||[]).length ? '<p style="color:#888">Aucun code promo créé.</p>' :
+                (codesPromo||[]).map(c=>{
+                    const expire = c.date_expiration ? new Date(c.date_expiration) : null;
+                    const expiré = expire && expire < new Date();
+                    return `<div style="background:#f8f8f8;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                        <div>
+                            <div style="font-family:monospace;font-weight:700;color:#1a5c2a;font-size:0.95rem">${c.code}</div>
+                            <div style="font-size:0.8rem;color:#555;margin-top:2px">${c.type==='pourcentage' ? c.valeur+'%' : fmt(c.valeur)+' FCFA'} de réduction${c.montant_min ? ` · dès ${fmt(c.montant_min)} FCFA d'achat` : ''}</div>
+                            <div style="font-size:0.75rem;color:#888;margin-top:2px">
+                                Utilisé ${c.usage_actuel||0}${c.usage_max ? ' / '+c.usage_max : ''} fois
+                                ${expire ? ` · ${expiré?'expiré le':'expire le'} ${expire.toLocaleDateString('fr-FR')}` : ''}
+                            </div>
+                            <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${c.actif && !expiré?'#f0fff4':'#fff0f0'};color:${c.actif && !expiré?'#2dc653':'#e63946'}">${c.actif && !expiré ? 'Actif' : (expiré ? 'Expiré' : 'Désactivé')}</span>
+                        </div>
+                        <div style="display:flex;gap:6px">
+                            <button onclick="toggleCodePromo('${c.id}',${!c.actif})" style="background:#fff8f0;color:#ff6600;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${c.actif?'⏸️ Désactiver':'▶️ Activer'}</button>
+                            <button onclick="supprimerCodePromo('${c.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️ Supprimer</button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>
+
         </div>
     </div>
     <style>
@@ -2603,6 +2697,35 @@ async function afficherPanneauAdmin() {
 
 window.changerStatutRetour = async (id, statut) => {
     await db.from('retours').update({ statut }).eq('id', id);
+    afficherPanneauAdmin();
+};
+
+window.creerCodePromo = async () => {
+    const res = document.getElementById('promo-new-res');
+    const code = document.getElementById('promo-new-code').value.trim();
+    const type = document.getElementById('promo-new-type').value;
+    const valeur = document.getElementById('promo-new-valeur').value;
+    const montant_min = document.getElementById('promo-new-min').value;
+    const usage_max = document.getElementById('promo-new-max-usage').value;
+    const date_expiration = document.getElementById('promo-new-expiration').value;
+    if (!code || !valeur) { res.style.color = 'var(--danger)'; res.textContent = 'Code et valeur requis.'; return; }
+    res.style.color = '#888'; res.textContent = 'Création...';
+    try {
+        await adminAction('codes_promo', 'insert', { payload: { code, type, valeur, montant_min, usage_max, date_expiration } });
+        afficherPanneauAdmin();
+    } catch (e) {
+        res.style.color = '#e63946'; res.textContent = '❌ ' + (e.message || 'Erreur');
+    }
+};
+
+window.toggleCodePromo = async (id, actif) => {
+    await adminAction('codes_promo', 'update', { id, payload: { actif } });
+    afficherPanneauAdmin();
+};
+
+window.supprimerCodePromo = async (id) => {
+    if (!confirm('Supprimer définitivement ce code promo ?')) return;
+    await adminAction('codes_promo', 'delete', { id });
     afficherPanneauAdmin();
 };
 
@@ -2753,10 +2876,10 @@ window.telechargerFactureAdmin = async (code) => {
 let adminTabActuel = 'tab-dash';
 window.showTab = id => {
     adminTabActuel = id;
-    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param','tab-retours'].forEach(t=>{
+    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param','tab-retours','tab-promo'].forEach(t=>{
         const el=document.getElementById(t); if(el) el.style.display=t===id?'block':'none';
     });
-    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param','tb-retours'].forEach(b=>{
+    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param','tb-retours','tb-promo'].forEach(b=>{
         const el=document.getElementById(b); if(el) el.classList.toggle('active', b==='tb-'+id.replace('tab-',''));
     });
 };

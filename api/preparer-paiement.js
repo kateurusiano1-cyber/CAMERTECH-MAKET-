@@ -39,6 +39,34 @@ function genererCodeCommande() {
     return 'CMT-' + crypto.randomBytes(5).toString('hex').toUpperCase();
 }
 
+// Valide un code promo par rapport aux VRAIES règles en base (jamais un
+// pourcentage envoyé par le navigateur). Ne modifie rien — l'incrémentation
+// du compteur d'usage se fait séparément, uniquement quand la commande est
+// réellement créée (jamais au moment d'un simple aperçu).
+async function validerCodePromo(supabase, codeSaisi, sousTotal) {
+    if (!codeSaisi) return { valide: false, reduction: 0 };
+    const code = String(codeSaisi).trim().toUpperCase();
+    if (!code) return { valide: false, reduction: 0 };
+
+    const { data: promo } = await supabase.from('codes_promo').select('*').eq('code', code).single();
+    if (!promo) return { valide: false, reduction: 0, message: 'Code promo introuvable.' };
+    if (!promo.actif) return { valide: false, reduction: 0, message: "Ce code promo n'est plus actif." };
+    if (promo.date_expiration && new Date(promo.date_expiration) < new Date()) {
+        return { valide: false, reduction: 0, message: 'Ce code promo a expiré.' };
+    }
+    if (promo.usage_max != null && promo.usage_actuel >= promo.usage_max) {
+        return { valide: false, reduction: 0, message: "Ce code promo a atteint sa limite d'utilisation." };
+    }
+    if (promo.montant_min && sousTotal < promo.montant_min) {
+        return { valide: false, reduction: 0, message: `Ce code nécessite un minimum de ${Math.round(promo.montant_min)} FCFA d'achat.` };
+    }
+
+    let reduction = promo.type === 'pourcentage' ? Math.round(sousTotal * (promo.valeur / 100)) : Math.round(promo.valeur);
+    reduction = Math.max(0, Math.min(reduction, sousTotal)); // jamais négatif, jamais plus que le sous-total
+
+    return { valide: true, reduction, id: promo.id, code: promo.code, message: `Code "${promo.code}" appliqué : -${reduction} FCFA` };
+}
+
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -66,7 +94,7 @@ module.exports = async (req, res) => {
         if (errUser || !user) return res.status(404).json({ error: 'Profil introuvable' });
 
         const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-        const { reference, items, zone_livraison, frais_livraison, note, reservation } = body;
+        const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview } = body;
 
         let resa;
 
@@ -90,20 +118,37 @@ module.exports = async (req, res) => {
                 .from('products').select('id,name,resale_price,promo_active,promo_prix,flash_active').in('id', ids);
             if (errProd) return res.status(500).json({ error: 'Impossible de vérifier les produits' });
 
-            let total = 0;
+            let sousTotal = 0;
             const itemsValides = [];
             for (const it of items) {
                 const p = produits && produits.find(x => x.id === it.id);
                 if (!p) return res.status(400).json({ error: `Produit introuvable ou retiré du catalogue (id: ${it && it.id})` });
                 const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
                 const prix = prixReel(p);
-                total += prix * qty;
+                sousTotal += prix * qty;
                 itemsValides.push({ id: p.id, name: p.name, qty, prix });
             }
 
             const estReservation = !!reservation;
             const frais = estReservation ? 0 : Math.max(0, parseInt(frais_livraison, 10) || 0);
-            if (!estReservation) total += frais;
+
+            // La réduction s'applique sur le sous-total des articles, jamais
+            // sur les frais de livraison.
+            const promoResult = await validerCodePromo(supabase, code_promo, sousTotal);
+            const total = Math.max(0, sousTotal - promoResult.reduction) + frais;
+
+            if (preview) {
+                // Aperçu uniquement : rien n'est créé ni compté comme utilisé,
+                // ça sert juste à afficher la réduction avant de payer.
+                return res.status(200).json({
+                    success: true,
+                    sous_total: sousTotal,
+                    reduction: promoResult.reduction,
+                    total,
+                    code_valide: promoResult.valide,
+                    message: promoResult.message || null
+                });
+            }
 
             const code = genererCodeCommande();
             const { data: nouvelle, error: errInsert } = await supabase.from('reservations').insert([{
@@ -112,7 +157,8 @@ module.exports = async (req, res) => {
                 statut: estReservation ? 'reservee' : 'paiement_en_cours',
                 zone_livraison: zone_livraison || null,
                 frais_livraison: frais,
-                note: note || null
+                note: note || null,
+                code_promo: promoResult.valide ? promoResult.code : null
             }]).select('code, total, statut, utilisateur_id').single();
 
             if (errInsert || !nouvelle) {
@@ -120,6 +166,15 @@ module.exports = async (req, res) => {
                 return res.status(500).json({ error: 'Impossible de créer la commande' });
             }
             resa = nouvelle;
+
+            // Le compteur d'usage n'est incrémenté que si la commande est
+            // réellement créée (jamais lors d'un aperçu) — via une fonction
+            // SQL atomique pour rester correct même avec des paiements
+            // simultanés sur le même code.
+            if (promoResult.valide && promoResult.id) {
+                try { await supabase.rpc('increment_promo_usage', { promo_id: promoResult.id }); }
+                catch (e) { console.error('Erreur incrémentation code promo:', e.message); }
+            }
 
             if (estReservation) {
                 // Réservation sans paiement : pas besoin du widget iKeePay.
