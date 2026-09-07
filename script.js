@@ -1675,7 +1675,6 @@ function setupPanier() {
     $('panier-overlay').onclick = e => { if(e.target===$('panier-overlay')) closeOverlay('panier-overlay'); };
     $('zone-select').onchange = updateLivraison;
     $('btn-payer').onclick = initierPaiement;
-    $('btn-reserver').onclick = reserverSansPaiement;
     $('btn-copier').onclick = () => {
         navigator.clipboard.writeText($('code-display').textContent).then(() => {
             $('btn-copier').textContent='✅ Copié !';
@@ -1709,18 +1708,25 @@ async function reserverCommande() {
     const btn = $('btn-reserver');
     btn.disabled = true; btn.textContent = 'Réservation en cours...';
     try {
-        const total = panier.reduce((s,p)=>s+p.prix*p.qty,0); // sans frais de livraison
-        const code = 'CMT-'+Math.random().toString(36).substring(2,5).toUpperCase()+'-'+Date.now().toString().slice(-4);
-        await db.from('reservations').insert([{
-            utilisateur_id: currentUser.id, nom_client: currentUser.nom, telephone: currentUser.telephone,
-            code, items: panier.map(p=>({name:p.name,qty:p.qty,prix:p.prix})),
-            total, statut: 'reservee', zone_livraison: null, frais_livraison: 0
-        }]);
-        $('reservation-code-display').textContent = code;
+        // Le serveur relit les vrais prix produits et calcule lui-même le
+        // total — le navigateur n'envoie que les id + quantités.
+        const fbUser = await attendreFirebaseUser();
+        const idToken = await fbUser.getIdToken();
+        const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+            body: JSON.stringify({
+                items: panier.map(p => ({ id: p.id, qty: p.qty })),
+                reservation: true
+            })
+        });
+        const result = await resp.json();
+        if (!result.success) throw new Error(result.error || 'Impossible de réserver.');
+        $('reservation-code-display').textContent = result.code;
         closeOverlay('panier-overlay');
         openOverlay('reservation-overlay');
     } catch (e) {
-        alert('❌ Erreur lors de la réservation. Réessaie.');
+        alert('❌ ' + (e.message || 'Erreur lors de la réservation. Réessaie.'));
     } finally {
         btn.disabled = false; btn.textContent = '📌 Réserver ma commande (sans payer maintenant)';
     }
@@ -1846,46 +1852,32 @@ async function confirmerPaiement() {
     btn.disabled=true; btn.textContent='Traitement...';
     status.style.color='var(--text3)'; status.textContent='📲 Préparation du paiement...';
     try {
-        const total=panier.reduce((s,p)=>s+p.prix*p.qty,0)+fraisLivraison;
-        const code='CMT-'+Math.random().toString(36).substring(2,5).toUpperCase()+'-'+Date.now().toString().slice(-4);
-        await db.from('reservations').insert([{
-            utilisateur_id:currentUser.id, nom_client:currentUser.nom, telephone:currentUser.telephone,
-            code, items:panier.map(p=>({name:p.name,qty:p.qty,prix:p.prix})),
-            total, zone_livraison:userZone, frais_livraison:fraisLivraison, statut:'paiement_en_cours',
-            note:$('note-cmd').value||null
-        }]);
-        sessionStorage.setItem('cmkt_panier_'+code, JSON.stringify({ items: panier, total, zone: userZone, frais: fraisLivraison }));
-
         if (modeH2H) {
-            // Mode H2H : notre serveur relit le vrai montant et déclenche
-            // directement la demande de paiement MTN/Orange (prompt USSD).
-            const resp = await fetch(CONFIG.API.PAIEMENT_H2H, {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({ reference: code, telephone: tel, operateur: selectedOp })
-            });
-            const result = await resp.json();
-            if (!result.success) throw new Error(result.error||'Échec paiement');
-            if (result.payment_link) {
-                status.textContent='✅ Redirection...';
-                setTimeout(() => { window.location.href = result.payment_link; }, 500);
-                return;
-            }
-            status.style.color='var(--success)'; status.textContent='📲 Vérifie ton téléphone et valide la demande de paiement...';
-            btn.disabled=true; btn.textContent='En attente de confirmation...';
-            await attendreConfirmationCommande(code);
-        } else {
-            // Mode widget : le serveur relit le vrai montant de la commande
-            // qu'on vient de créer (jamais celui calculé ici) avant de nous
-            // donner le feu vert.
-            const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({ reference: code })
-            });
-            const result = await resp.json();
-            if (!result.success) throw new Error(result.error||'Échec paiement');
-            status.textContent=''; btn.disabled=false; btn.textContent='Payer maintenant';
-            ouvrirWidgetIkeepay(result, code);
+            // Mode H2H (non actif actuellement — CONFIG.PAIEMENT_MODE = 'widget')
+            throw new Error('Ce mode de paiement n\'est pas disponible actuellement.');
         }
+
+        // Mode widget : le serveur recalcule lui-même le total à partir des
+        // vrais prix produits, crée la commande, et génère le code — le
+        // navigateur n'envoie que les id + quantités du panier.
+        const fbUser = await attendreFirebaseUser();
+        const idToken = await fbUser.getIdToken();
+        const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'Authorization': 'Bearer ' + idToken },
+            body:JSON.stringify({
+                items: panier.map(p => ({ id: p.id, qty: p.qty })),
+                zone_livraison: userZone,
+                frais_livraison: fraisLivraison,
+                note: $('note-cmd').value || null
+            })
+        });
+        const result = await resp.json();
+        if (!result.success) throw new Error(result.error||'Échec paiement');
+        const code = result.order_id;
+        sessionStorage.setItem('cmkt_panier_'+code, JSON.stringify({ items: panier, total: result.amount, zone: userZone, frais: fraisLivraison }));
+        status.textContent=''; btn.disabled=false; btn.textContent='Payer maintenant';
+        ouvrirWidgetIkeepay(result, code);
     } catch(e) {
         status.style.color='var(--danger)'; status.textContent='❌ '+(e.message||'Erreur. Réessayez.');
         btn.disabled=false; btn.textContent='Payer maintenant';
@@ -1900,8 +1892,10 @@ async function confirmerPaiement() {
 window.payerCommandeExistante = async (code) => {
     closeOverlay('cmds-overlay');
     try {
+        const fbUser = await attendreFirebaseUser();
+        const idToken = await fbUser.getIdToken();
         const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
             body: JSON.stringify({ reference: code })
         });
         const result = await resp.json();
@@ -1975,24 +1969,6 @@ function afficherSuccesDepuisResa(resa) {
     }
     afficherSucces(resa.code, resa.total);
     panier = []; updatePanierBtn(); syncPanierServeur();
-}
-
-async function reserverSansPaiement() {
-    if (!currentUser) { alert('Connectez-vous pour réserver.'); return; }
-    if (!userZone) { alert('Choisissez votre zone de livraison.'); return; }
-    const total=panier.reduce((s,p)=>s+p.prix*p.qty,0)+fraisLivraison;
-    const code='CMT-'+Math.random().toString(36).substring(2,5).toUpperCase()+'-'+Date.now().toString().slice(-4);
-    await db.from('reservations').insert([{
-        utilisateur_id:currentUser.id, nom_client:currentUser.nom, telephone:currentUser.telephone,
-        code, items:panier.map(p=>({name:p.name,qty:p.qty,prix:p.prix})),
-        total, zone_livraison:userZone, frais_livraison:fraisLivraison, statut:'en attente',
-        note:$('note-cmd').value||null
-    }]);
-    closeOverlay('panier-overlay');
-    afficherCode(code,total);
-    const waMsg=encodeURIComponent(`🛒 CAMERTECH MARKET\n\n👤 ${currentUser.nom}\n📞 ${currentUser.telephone}\n📍 Zone: ${userZone}\n🔑 Code: ${code}\n\n${panier.map(p=>`• ${p.name} ×${p.qty} = ${fmt(p.prix*p.qty)} F`).join('\n')}\n\n💰 TOTAL: ${fmt(total)} FCFA`);
-    setTimeout(()=>window.open(`https://wa.me/${CONFIG.WA1}?text=${waMsg}`,'_blank'),500);
-    panier=[]; updatePanierBtn(); syncPanierServeur();
 }
 
 function afficherCode(code, total) {
