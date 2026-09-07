@@ -2283,6 +2283,7 @@ async function afficherPanneauAdmin() {
                 <button onclick="showTab('tab-param')" class="adm-tab" id="tb-param">⚙️ Paramètres</button>
                 <button onclick="showTab('tab-retours')" class="adm-tab" id="tb-retours">🔄 Retours</button>
                 <button onclick="window.location.href='/'" class="adm-tab">🏪 Site</button>
+                <button onclick="ouvrirPresentationTelechargement()" class="adm-tab" style="background:rgba(255,255,255,0.15)">📲 Installer l'app Admin</button>
             </div>
         </div>
         <div style="max-width:1200px;margin:0 auto;padding:20px 16px">

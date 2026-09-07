@@ -9,12 +9,23 @@
     <meta name="author" content="CAMERTECH MARKET">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://camertechmarket.com/">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0E7C4A">
-    <link rel="apple-touch-icon" href="/icon-192.png">
+    <link rel="manifest" href="/manifest.json" id="pwa-manifest-link">
+    <meta name="theme-color" content="#0E7C4A" id="pwa-theme-color">
+    <link rel="apple-touch-icon" href="/icon-192.png" id="pwa-apple-icon">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="CamerTech">
+    <meta name="apple-mobile-web-app-title" content="CamerTech" id="pwa-apple-title">
+    <script>
+        // PWA distincte pour l'espace admin (manifest, icône, couleur, nom
+        // propres) — doit s'exécuter tôt, avant que le navigateur évalue
+        // l'installabilité de la page.
+        if (window.location.pathname.replace(/\//g,'') === 'admin-cmr2025') {
+            document.getElementById('pwa-manifest-link').setAttribute('href', '/manifest-admin.json');
+            document.getElementById('pwa-theme-color').setAttribute('content', '#C62828');
+            document.getElementById('pwa-apple-icon').setAttribute('href', '/icon-admin-192.png');
+            document.getElementById('pwa-apple-title').setAttribute('content', 'CT Admin');
+        }
+    </script>
 
     <!-- Open Graph / réseaux sociaux -->
     <meta property="og:type" content="website">
@@ -628,7 +639,7 @@
 </div>
 
 <!-- MODAL PRESENTATION TELECHARGEMENT APP -->
-<div class="modal-overlay" id="telecharger-app-overlay" style="display:none">
+<div class="modal-overlay" id="telecharger-app-overlay" style="display:none;z-index:5000">
     <div class="modal" style="max-width:420px;text-align:center;padding:0;overflow:hidden">
         <button class="modal-x" onclick="closeOverlay('telecharger-app-overlay')" style="z-index:5">✕</button>
         <div style="background:linear-gradient(135deg,var(--green-dark),var(--green) 70%,var(--green-light));padding:36px 24px 28px;color:white">
