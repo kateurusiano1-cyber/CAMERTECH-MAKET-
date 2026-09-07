@@ -2,6 +2,7 @@
   "name": "CAMERTECH MARKET",
   "short_name": "CamerTech",
   "description": "Boutique en ligne de produits tech à Douala, Cameroun.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
