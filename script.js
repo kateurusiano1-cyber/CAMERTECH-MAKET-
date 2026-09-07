@@ -127,11 +127,62 @@ function setupPwa() {
 // Page de présentation dédiée (menu "Télécharger l'app"), avec un gros
 // bouton d'action — réutilise la même mécanique d'installation que le
 // petit bouton du header, juste avec plus de contexte pour l'utilisateur.
+// Page de présentation dédiée (menu "Télécharger l'app" côté client, bouton
+// "Installer l'app Admin" côté panneau admin) — réutilise la même mécanique
+// d'installation que le petit bouton du header.
+// Construite entièrement en JS (au lieu de s'appuyer sur le HTML statique
+// #telecharger-app-overlay) car l'écran de connexion admin remplace tout
+// document.body.innerHTML : le HTML statique n'existe plus une fois dans
+// le panneau admin, donc l'ancienne version (basée sur $('...')) échouait
+// silencieusement sans jamais afficher la fenêtre.
 function ouvrirPresentationTelechargement() {
     const dejaInstallee = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    const btn = $('btn-telecharger-app-principal');
-    const note = $('telecharger-app-note');
     const estIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const estAdmin = window.location.pathname.replace(/\//g, '') === 'admin-cmr2025';
+
+    const nom = estAdmin ? 'CT Admin' : 'CAMERTECH MARKET';
+    const icone = estAdmin ? 'icon-admin-192.png' : 'icon-192.png';
+    const degrade = estAdmin ? 'linear-gradient(135deg,#8e1c1c,#C62828 70%,#e35353)' : 'linear-gradient(135deg,var(--green-dark),var(--green) 70%,var(--green-light))';
+    const sousTitre = estAdmin ? "Installe l'app admin pour une gestion plus rapide" : "Installe l'app pour une expérience plus rapide";
+
+    const el = document.createElement('div');
+    el.className = 'modal-overlay';
+    el.style.display = 'flex';
+    el.style.zIndex = '5000';
+    el.innerHTML = `<div class="modal" style="max-width:420px;text-align:center;padding:0;overflow:hidden">
+        <button class="modal-x" onclick="this.closest('.modal-overlay').remove()" style="z-index:5">✕</button>
+        <div style="background:${degrade};padding:36px 24px 28px;color:white">
+            <img src="${icone}" alt="Logo" style="width:76px;height:76px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,0.25);margin-bottom:14px">
+            <h2 style="font-family:var(--font-title);font-size:1.3rem;margin:0">${nom}</h2>
+            <p style="opacity:0.9;font-size:0.85rem;margin-top:4px">${sousTitre}</p>
+        </div>
+        <div style="padding:24px">
+            <div style="text-align:left;display:flex;flex-direction:column;gap:14px;margin-bottom:22px">
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">⚡</span>
+                    <div><strong style="font-size:0.88rem">Plus rapide</strong><div style="color:var(--text3);font-size:0.78rem">Un raccourci direct sur ton écran d'accueil, sans passer par le navigateur.</div></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">🔔</span>
+                    <div><strong style="font-size:0.88rem">Alertes de commande</strong><div style="color:var(--text3);font-size:0.78rem">Sois prévenu dès que ta commande est confirmée ou livrée.</div></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">📶</span>
+                    <div><strong style="font-size:0.88rem">Fonctionne même hors ligne</strong><div style="color:var(--text3);font-size:0.78rem">Consulte le site même avec une connexion faible.</div></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">🆓</span>
+                    <div><strong style="font-size:0.88rem">100% gratuit</strong><div style="color:var(--text3);font-size:0.78rem">Aucun espace de stockage lourd, aucun paiement.</div></div>
+                </div>
+            </div>
+            <button id="btn-telecharger-app-principal" style="width:100%;background:linear-gradient(135deg,var(--orange),var(--orange-light));color:white;border:none;padding:16px;border-radius:var(--radius-pill);font-weight:800;font-size:1rem;cursor:pointer;font-family:var(--font-title);letter-spacing:0.3px;box-shadow:0 8px 22px rgba(255,107,26,0.4);animation:pulseTelecharger 1.8s infinite">⬇️ Télécharger maintenant</button>
+            <p id="telecharger-app-note" style="color:var(--text3);font-size:0.75rem;margin-top:12px"></p>
+        </div>
+    </div>`;
+    document.body.appendChild(el);
+
+    const btn = el.querySelector('#btn-telecharger-app-principal');
+    const note = el.querySelector('#telecharger-app-note');
 
     if (dejaInstallee) {
         btn.style.display = 'none';
@@ -143,7 +194,7 @@ function ouvrirPresentationTelechargement() {
             if (evenementInstallPwa) {
                 evenementInstallPwa.prompt();
                 const { outcome } = await evenementInstallPwa.userChoice;
-                if (outcome === 'accepted') { closeOverlay('telecharger-app-overlay'); $('btn-install-pwa').style.display = 'none'; }
+                if (outcome === 'accepted') { el.remove(); }
                 evenementInstallPwa = null;
             } else if (estIOS) {
                 alert("Pour installer l'app sur iPhone/iPad :\n\n1. Appuie sur le bouton Partager (carré avec une flèche) en bas de Safari\n2. Choisis \"Sur l'écran d'accueil\"\n3. Confirme");
@@ -152,7 +203,6 @@ function ouvrirPresentationTelechargement() {
             }
         };
     }
-    openOverlay('telecharger-app-overlay');
 }
 
 function urlBase64ToUint8Array(base64) {
