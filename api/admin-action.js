@@ -15,6 +15,8 @@
 //   utilisateurs : list   (lecture seule, pour le tableau de bord admin)
 //                  delete (profil Supabase + compte de connexion Firebase)
 //   codes_promo  : list | insert | update | delete
+//   visiteurs    : list     (résumé de toutes les sessions, pour le tableau de bord)
+//                  timeline (chronologie détaillée d'une session précise)
 
 const { createClient } = require('@supabase/supabase-js');
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
@@ -204,6 +206,42 @@ module.exports = async (req, res) => {
             const { error } = await supabase.from('codes_promo').delete().eq('id', id);
             if (error) throw error;
             return res.status(200).json({ ok: true });
+        }
+
+        if (ressource === 'visiteurs' && action === 'list') {
+            const { data: sessions, error: errSessions } = await supabase
+                .from('visiteurs_sessions').select('*, utilisateurs(nom, telephone)')
+                .order('derniere_activite', { ascending: false }).limit(200);
+            if (errSessions) throw errSessions;
+
+            const ids = (sessions || []).map(s => s.session_id);
+            const { data: compteurs, error: errCompteurs } = await supabase
+                .from('visiteurs_evenements').select('session_id, type').in('session_id', ids);
+            if (errCompteurs) throw errCompteurs;
+
+            const parSession = {};
+            (compteurs || []).forEach(e => {
+                if (!parSession[e.session_id]) parSession[e.session_id] = { total: 0, pages: 0, produits: 0, paniers: 0 };
+                parSession[e.session_id].total++;
+                if (e.type === 'page_view') parSession[e.session_id].pages++;
+                if (e.type === 'produit_vu' || e.type === 'produit_impression') parSession[e.session_id].produits++;
+                if (e.type === 'panier_ajout') parSession[e.session_id].paniers++;
+            });
+
+            const data = (sessions || []).map(s => ({
+                ...s,
+                stats: parSession[s.session_id] || { total: 0, pages: 0, produits: 0, paniers: 0 }
+            }));
+            return res.status(200).json({ data });
+        }
+        if (ressource === 'visiteurs' && action === 'timeline') {
+            const sessionId = (payload && payload.session_id) || id;
+            if (!sessionId) return res.status(400).json({ error: 'session_id manquant' });
+            const { data, error } = await supabase
+                .from('visiteurs_evenements').select('*').eq('session_id', sessionId)
+                .order('created_at', { ascending: false }).limit(500);
+            if (error) throw error;
+            return res.status(200).json({ data });
         }
 
         return res.status(400).json({ error: 'Combinaison ressource/action non autorisée' });

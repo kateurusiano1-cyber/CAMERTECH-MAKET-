@@ -1,6 +1,111 @@
 // ===== INIT SUPABASE =====
 const db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
+// ===== TRACKING VISITEURS (anonyme, sans identité forcée) =====
+// Identifiant aléatoire (pas de nom, pas d'email tant que le visiteur ne
+// s'identifie pas lui-même en créant un compte). Écriture seule côté
+// navigateur : les tables visiteurs_sessions/visiteurs_evenements sont
+// verrouillées en lecture (voir supabase_visiteurs.sql) — un visiteur ne
+// peut jamais lire les données d'un autre, ni même les siennes, via l'API.
+const visiteurId = (() => {
+    let id = localStorage.getItem('cmkt_visiteur_id');
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem('cmkt_visiteur_id', id); }
+    return id;
+})();
+
+let _pageActuelle = null, _pageDebut = null;
+const _produitsDejaVus = new Set();
+
+function logVisiteur(type, cible, meta, duree_secondes) {
+    // "Fire and forget" : le tracking ne doit jamais bloquer ni casser
+    // l'expérience du site, donc on avale silencieusement les erreurs.
+    try {
+        db.from('visiteurs_evenements').insert([{ session_id: visiteurId, type, cible: cible||null, meta: meta||null, duree_secondes: duree_secondes||null }]).then(()=>{}, ()=>{});
+    } catch (e) {}
+}
+
+function _terminerPageActuelle() {
+    if (!_pageActuelle) return;
+    const duree = Math.round((Date.now() - _pageDebut) / 1000);
+    if (duree > 1) logVisiteur('page_view', _pageActuelle, null, duree);
+}
+
+function logPageVue(page) {
+    _terminerPageActuelle();
+    _pageActuelle = page || location.pathname;
+    _pageDebut = Date.now();
+}
+
+async function initTrackingVisiteur() {
+    try {
+        const { data: existante } = await db.from('visiteurs_sessions').select('nb_visites, derniere_activite').eq('session_id', visiteurId).maybeSingle();
+        const maintenant = new Date();
+        if (existante) {
+            // Plus de 30 min sans activité = on considère que c'est une
+            // nouvelle visite (comme la plupart des outils d'analytics).
+            const inactifDepuis = (maintenant - new Date(existante.derniere_activite)) / 60000;
+            await db.from('visiteurs_sessions').update({
+                derniere_activite: maintenant.toISOString(),
+                nb_visites: existante.nb_visites + (inactifDepuis > 30 ? 1 : 0),
+                utilisateur_id: currentUser ? currentUser.id : undefined
+            }).eq('session_id', visiteurId);
+        } else {
+            const params = new URLSearchParams(location.search);
+            await db.from('visiteurs_sessions').insert([{
+                session_id: visiteurId,
+                utilisateur_id: currentUser ? currentUser.id : null,
+                user_agent: navigator.userAgent,
+                referrer: document.referrer || null,
+                utm_source: params.get('utm_source'),
+                utm_medium: params.get('utm_medium'),
+                utm_campaign: params.get('utm_campaign')
+            }]);
+        }
+    } catch (e) {}
+    logPageVue(location.pathname);
+
+    // Enregistre la durée de la page en cours dès que le visiteur quitte/
+    // change d'onglet — sendBeacon fonctionne même pendant la fermeture de
+    // la page (contrairement à un fetch classique).
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') _envoyerDureeBeacon();
+    });
+    window.addEventListener('pagehide', _envoyerDureeBeacon);
+}
+
+function _envoyerDureeBeacon() {
+    if (!_pageActuelle || !navigator.sendBeacon) return;
+    const duree = Math.round((Date.now() - _pageDebut) / 1000);
+    if (duree < 2) return;
+    const url = `${CONFIG.SUPABASE_URL}/rest/v1/visiteurs_evenements`;
+    const blob = new Blob([JSON.stringify({ session_id: visiteurId, type: 'page_view', cible: _pageActuelle, duree_secondes: duree })], { type: 'application/json' });
+    try {
+        navigator.sendBeacon(url + `?apikey=${CONFIG.SUPABASE_ANON_KEY}`, blob);
+    } catch (e) {}
+}
+
+// Relie la session anonyme au profil dès qu'un visiteur se connecte ou crée
+// un compte — légitime puisqu'il s'identifie lui-même à ce moment précis.
+function lierSessionVisiteur() {
+    if (!currentUser) return;
+    try { db.from('visiteurs_sessions').update({ utilisateur_id: currentUser.id }).eq('session_id', visiteurId).then(()=>{}, ()=>{}); } catch (e) {}
+}
+
+// Repère les produits qui apparaissent réellement à l'écran (pas juste
+// "présents dans le DOM") — un produit tout en bas d'une grille jamais
+// scrollée ne compte pas comme "vu".
+const _observateurImpressions = new IntersectionObserver((entrees) => {
+    entrees.forEach(entree => {
+        if (!entree.isIntersecting) return;
+        const id = entree.target.dataset.trackId;
+        if (id && !_produitsDejaVus.has(id)) {
+            _produitsDejaVus.add(id);
+            logVisiteur('produit_impression', id, { nom: entree.target.dataset.trackNom });
+        }
+    });
+}, { threshold: 0.5 });
+
+
 // ===== ÉTAT =====
 let currentUser = null, isAdmin = false, currentAdmin = null;
 let favorisIds = new Set();
@@ -362,6 +467,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch(e) { localStorage.removeItem('cmkt_user'); }
 
+    initTrackingVisiteur();
+
     // Thème
     const theme = localStorage.getItem('cmkt_theme') || 'light';
     document.documentElement.setAttribute('data-theme', theme);
@@ -617,6 +724,7 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
         currentUser = profil;
         localStorage.setItem('cmkt_user', JSON.stringify(profil));
         showUserUI();
+        lierSessionVisiteur();
         await chargerPanierServeur();
         ecouterPanierEnDirect();
         return { ok: true };
@@ -641,6 +749,7 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
             currentUser = j.profil;
             localStorage.setItem('cmkt_user', JSON.stringify(j.profil));
             showUserUI();
+            lierSessionVisiteur();
             await chargerPanierServeur();
             ecouterPanierEnDirect();
             return { ok: true };
@@ -1078,6 +1187,7 @@ function setupCategories() {
             document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentCat = btn.dataset.cat;
+            logVisiteur('filtre_categorie', currentCat);
             renderProducts(allProducts);
             $('produits').scrollIntoView({behavior:'smooth'});
         };
@@ -1093,6 +1203,7 @@ function setupCategories() {
 
 function filtrerCat(cat) {
     currentCat = cat;
+    logVisiteur('filtre_categorie', cat);
     document.querySelectorAll('.cat-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
     renderProducts(allProducts);
     $('produits').scrollIntoView({behavior:'smooth'});
@@ -1101,9 +1212,14 @@ function filtrerCat(cat) {
 // ===== RECHERCHE =====
 function setupSearch() {
     const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
+    let _debounceRecherche = null;
     $('search-bar').oninput = e => {
         const q = norm(e.target.value.trim());
         renderProducts(q ? allProducts.filter(p => norm(p.name).includes(q) || norm(p.description||'').includes(q) || norm(p.category).includes(q)) : allProducts);
+        clearTimeout(_debounceRecherche);
+        if (e.target.value.trim().length >= 2) {
+            _debounceRecherche = setTimeout(() => logVisiteur('recherche', e.target.value.trim()), 1200);
+        }
     };
 
     // Recherche par photo : ouvre l'appareil photo (autorisation caméra
@@ -1266,6 +1382,9 @@ function renderProducts(products) {
         card.querySelector('.btn-acheter').onclick = e => { e.stopPropagation(); openModal(p.id); };
         card.querySelector('.btn-favori').onclick = e => { e.stopPropagation(); toggleFavori(p.id, e.currentTarget); };
         card.onclick = () => openModal(p.id);
+        card.dataset.trackId = p.id;
+        card.dataset.trackNom = txt.name;
+        _observateurImpressions.observe(card);
         if (isAdmin) {
             card.querySelector('.btn-sm-edit').onclick = e => { e.stopPropagation(); chargerEditAdmin(p.id); };
             card.querySelector('.btn-sm-del').onclick = e => { e.stopPropagation(); supprimerProduit(p.id); };
@@ -1332,6 +1451,7 @@ async function openModal(productId) {
     const p = allProducts.find(x => x.id === productId);
     if (!p) return;
     modalProduct = p;
+    logVisiteur('produit_vu', p.id, { nom: p.name, prix: getPrix(p) });
     $('qty-val').textContent = '1';
     const txt = texteProduit(p);
     $('prod-name').textContent = txt.name;
@@ -1378,6 +1498,7 @@ $('btn-add-cart').onclick = () => {
     const ex = panier.find(x => x.id === modalProduct.id);
     if (ex) ex.qty = Math.min(ex.qty+qty, modalProduct.quantity);
     else panier.push({ id:modalProduct.id, name:modalProduct.name, prix, qty, image_url:modalProduct.image_url });
+    logVisiteur('panier_ajout', modalProduct.id, { nom: modalProduct.name, qty, prix });
     updatePanierBtn();
     syncPanierServeur();
     const imgEl = document.querySelector('#prod-overlay .prod-img, #prod-overlay img');
@@ -1411,6 +1532,7 @@ window.addQuick = (id, evt) => {
     const ex = panier.find(x=>x.id===id);
     if (ex) ex.qty++;
     else panier.push({id:p.id, name:p.name, prix:getPrix(p), qty:1});
+    logVisiteur('panier_ajout', p.id, { nom: p.name, qty: ex ? ex.qty : 1, prix: getPrix(p) });
     updatePanierBtn();
     syncPanierServeur();
     const fromEl = evt?.currentTarget?.closest('div')?.querySelector('img') || evt?.currentTarget;
@@ -2318,7 +2440,7 @@ async function afficherPanneauAdmin() {
     page.style.display='block';
     page.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-family:Inter,sans-serif">Chargement du panneau...</div>';
 
-    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},{data:retours},feedbackStats,codesPromoResult]=await Promise.all([
+    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},{data:retours},feedbackStats,codesPromoResult,visiteursResult]=await Promise.all([
         db.from('products').select('*').order('created_at',{ascending:false}),
         adminAction('utilisateurs','list').catch(()=>({data:[]})),
         db.from('reservations').select('*').order('created_at',{ascending:false}),
@@ -2327,10 +2449,12 @@ async function afficherPanneauAdmin() {
         db.from('parametres').select('*'),
         db.from('retours').select('*').order('created_at',{ascending:false}),
         adminAction('feedback_produits','stats').catch(()=>({total:0,parChoix:{},parProduit:{},recents:[]})),
-        adminAction('codes_promo','list').catch(()=>({data:[]}))
+        adminAction('codes_promo','list').catch(()=>({data:[]})),
+        adminAction('visiteurs','list').catch(()=>({data:[]}))
     ]);
     const users = usersResult.data;
     const codesPromo = codesPromoResult.data || [];
+    const visiteurs = visiteursResult.data || [];
     const paramMap = Object.fromEntries((params||[]).map(p=>[p.cle,p.valeur]));
 
     // Revenu réel : uniquement les commandes dont le paiement est confirmé
@@ -2359,6 +2483,7 @@ async function afficherPanneauAdmin() {
                 <button onclick="showTab('tab-param')" class="adm-tab" id="tb-param">⚙️ Paramètres</button>
                 <button onclick="showTab('tab-retours')" class="adm-tab" id="tb-retours">🔄 Retours</button>
                 <button onclick="showTab('tab-promo')" class="adm-tab" id="tb-promo">🏷️ Codes promo</button>
+                <button onclick="showTab('tab-visiteurs')" class="adm-tab" id="tb-visiteurs">👥 Visiteurs</button>
                 <button onclick="window.location.href='/'" class="adm-tab">🏪 Site</button>
                 <button onclick="ouvrirPresentationTelechargement()" class="adm-tab" style="background:rgba(255,255,255,0.15)">📲 Installer l'app Admin</button>
             </div>
@@ -2678,6 +2803,31 @@ async function afficherPanneauAdmin() {
             </div>
         </div>
 
+        <!-- VISITEURS -->
+        <div id="tab-visiteurs" style="display:none">
+            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+                <h2 style="font-size:1rem;margin-bottom:4px">👥 Visiteurs (${visiteurs.length})</h2>
+                <p style="font-size:0.78rem;color:#888;margin-bottom:16px">Tracking anonyme (identifiant aléatoire) — un nom n'apparaît que si le visiteur a créé un compte.</p>
+                ${!visiteurs.length ? '<p style="color:#888">Aucune activité enregistrée pour le moment.</p>' :
+                visiteurs.map(v=>{
+                    const nomAffiche = v.utilisateurs ? `👤 ${v.utilisateurs.nom}` : `🕶️ Anonyme #${v.session_id.slice(0,8)}`;
+                    const dureeMin = Math.max(0, Math.round((new Date(v.derniere_activite) - new Date(v.premiere_visite))/60000));
+                    return `<div style="background:#f8f8f8;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                        <div>
+                            <div style="font-weight:700;font-size:0.9rem">${nomAffiche}</div>
+                            <div style="font-size:0.78rem;color:#888;margin-top:2px">
+                                Arrivé le ${new Date(v.premiere_visite).toLocaleString('fr-FR')} · dernière activité ${new Date(v.derniere_activite).toLocaleString('fr-FR')}
+                            </div>
+                            <div style="font-size:0.78rem;color:#555;margin-top:4px">
+                                ${v.nb_visites} visite(s) · session ${dureeMin} min · ${v.stats.pages} page(s) vue(s) · ${v.stats.produits} produit(s) consulté(s) · ${v.stats.paniers} ajout(s) panier
+                            </div>
+                        </div>
+                        <button onclick="voirTimelineVisiteur('${v.session_id}','${(nomAffiche+'').replace(/'/g,"")}')" style="background:#eef6ff;color:#1a5c9c;border:1px solid #cfe4fb;padding:8px 14px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap">📜 Chronologie</button>
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>
+
         </div>
     </div>
     <style>
@@ -2727,6 +2877,52 @@ window.supprimerCodePromo = async (id) => {
     if (!confirm('Supprimer définitivement ce code promo ?')) return;
     await adminAction('codes_promo', 'delete', { id });
     afficherPanneauAdmin();
+};
+
+const _iconesEvenements = {
+    page_view: '📄', produit_vu: '🔍', produit_impression: '👀',
+    panier_ajout: '🛒', recherche: '🔎', filtre_categorie: '📂', favori: '❤️'
+};
+const _libellesEvenements = {
+    page_view: 'Page consultée', produit_vu: 'Fiche produit ouverte', produit_impression: 'Produit vu défiler',
+    panier_ajout: 'Ajout au panier', recherche: 'Recherche', filtre_categorie: 'Filtre catégorie', favori: 'Favori'
+};
+
+window.voirTimelineVisiteur = async (sessionId, label) => {
+    const el = document.createElement('div');
+    el.className = 'modal-overlay';
+    el.style.cssText = 'display:flex;z-index:6000;position:fixed;inset:0;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;padding:16px';
+    el.innerHTML = `<div style="background:white;border-radius:14px;max-width:520px;width:100%;max-height:80vh;overflow-y:auto;padding:22px;position:relative">
+        <button onclick="this.closest('.modal-overlay').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:1.2rem;cursor:pointer">✕</button>
+        <h2 style="font-size:1rem;margin-bottom:14px">📜 Chronologie — ${label}</h2>
+        <div id="timeline-contenu" style="color:#888;font-size:0.85rem">Chargement...</div>
+    </div>`;
+    document.body.appendChild(el);
+
+    try {
+        const result = await adminAction('visiteurs', 'timeline', { payload: { session_id: sessionId } });
+        const evenements = result.data || [];
+        const contenu = el.querySelector('#timeline-contenu');
+        if (!evenements.length) { contenu.textContent = 'Aucun événement enregistré.'; return; }
+        contenu.innerHTML = evenements.map(e => {
+            const heure = new Date(e.created_at).toLocaleString('fr-FR');
+            let detail = e.cible || '';
+            if (e.type === 'produit_vu' || e.type === 'produit_impression' || e.type === 'panier_ajout') {
+                detail = (e.meta && e.meta.nom) ? e.meta.nom : detail;
+                if (e.type === 'panier_ajout' && e.meta) detail += ` (×${e.meta.qty}, ${fmt(e.meta.prix)} FCFA)`;
+            }
+            if (e.type === 'page_view' && e.duree_secondes) detail += ` — ${e.duree_secondes}s`;
+            return `<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #f0f0f0">
+                <span style="font-size:1.1rem">${_iconesEvenements[e.type]||'•'}</span>
+                <div>
+                    <div style="font-size:0.82rem;font-weight:600">${_libellesEvenements[e.type]||e.type}${detail ? ' — '+detail : ''}</div>
+                    <div style="font-size:0.72rem;color:#999">${heure}</div>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        el.querySelector('#timeline-contenu').textContent = 'Erreur de chargement.';
+    }
 };
 
 let popupFlyerFile = null;
@@ -2876,10 +3072,10 @@ window.telechargerFactureAdmin = async (code) => {
 let adminTabActuel = 'tab-dash';
 window.showTab = id => {
     adminTabActuel = id;
-    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param','tab-retours','tab-promo'].forEach(t=>{
+    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param','tab-retours','tab-promo','tab-visiteurs'].forEach(t=>{
         const el=document.getElementById(t); if(el) el.style.display=t===id?'block':'none';
     });
-    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param','tb-retours','tb-promo'].forEach(b=>{
+    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param','tb-retours','tb-promo','tb-visiteurs'].forEach(b=>{
         const el=document.getElementById(b); if(el) el.classList.toggle('active', b==='tb-'+id.replace('tab-',''));
     });
 };
