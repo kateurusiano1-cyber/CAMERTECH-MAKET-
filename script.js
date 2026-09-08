@@ -2299,7 +2299,15 @@ async function envoyerDemandeRetour() {
     const err = $('retour-err');
     if (!motif) { err.style.color='var(--danger)'; err.textContent = '❌ Explique brièvement le motif'; return; }
     try {
-        await db.from('retours').insert([{ reservation_id: retourReservationId, utilisateur_id: currentUser.id, code_commande: $('retour-code-affiche').textContent, motif }]);
+        const fbUser = await attendreFirebaseUser();
+        const idToken = await fbUser.getIdToken();
+        const resp = await fetch('/api/facture', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+            body: JSON.stringify({ type: 'retour', code: $('retour-code-affiche').textContent, motif })
+        });
+        const j = await resp.json();
+        if (!resp.ok) throw new Error(j.error || 'Erreur');
         err.style.color='var(--success)'; err.textContent = '✅ Demande envoyée, on te recontacte rapidement.';
         setTimeout(() => closeOverlay('demande-retour-overlay'), 1500);
     } catch(e) { err.style.color='var(--danger)'; err.textContent = '❌ ' + e.message; }
@@ -2440,19 +2448,20 @@ async function afficherPanneauAdmin() {
     page.style.display='block';
     page.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-family:Inter,sans-serif">Chargement du panneau...</div>';
 
-    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},{data:retours},feedbackStats,codesPromoResult,visiteursResult]=await Promise.all([
+    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},retoursResult,feedbackStats,codesPromoResult,visiteursResult]=await Promise.all([
         db.from('products').select('*').order('created_at',{ascending:false}),
         adminAction('utilisateurs','list').catch(()=>({data:[]})),
         db.from('reservations').select('*').order('created_at',{ascending:false}),
         db.from('avis').select('*').eq('valide',false),
         db.from('bannières').select('*').eq('actif',true),
         db.from('parametres').select('*'),
-        db.from('retours').select('*').order('created_at',{ascending:false}),
+        adminAction('retours','list').catch(()=>({data:[]})),
         adminAction('feedback_produits','stats').catch(()=>({total:0,parChoix:{},parProduit:{},recents:[]})),
         adminAction('codes_promo','list').catch(()=>({data:[]})),
         adminAction('visiteurs','list').catch(()=>({data:[]}))
     ]);
     const users = usersResult.data;
+    const retours = retoursResult.data || [];
     const codesPromo = codesPromoResult.data || [];
     const visiteurs = visiteursResult.data || [];
     const paramMap = Object.fromEntries((params||[]).map(p=>[p.cle,p.valeur]));
@@ -2846,7 +2855,7 @@ async function afficherPanneauAdmin() {
 }
 
 window.changerStatutRetour = async (id, statut) => {
-    await db.from('retours').update({ statut }).eq('id', id);
+    await adminAction('retours', 'update', { id, payload: { statut } });
     afficherPanneauAdmin();
 };
 
@@ -2982,8 +2991,7 @@ window.sauvegarderParametres = async () => {
                 rows.push({ cle: 'cat_img_' + slug, valeur: url });
             }
         }
-        const { error } = await db.from('parametres').upsert(rows, { onConflict: 'cle' });
-        if (error) throw error;
+        await adminAction('parametres', 'upsert', { payload: rows });
         paramCatFiles = {};
         res.style.color = '#2dc653'; res.textContent = '✅ Paramètres enregistrés — visibles immédiatement sur le site.';
     } catch (e) {

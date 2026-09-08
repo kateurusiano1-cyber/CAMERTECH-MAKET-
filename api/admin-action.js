@@ -17,6 +17,8 @@
 //   codes_promo  : list | insert | update | delete
 //   visiteurs    : list     (résumé de toutes les sessions, pour le tableau de bord)
 //                  timeline (chronologie détaillée d'une session précise)
+//   parametres   : list | upsert (adresse/tél agence, images de catégories — lecture publique conservée)
+//   retours      : list | update (uniquement le champ "statut") — la création (client) passe par api/facture.js
 
 const { createClient } = require('@supabase/supabase-js');
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
@@ -240,6 +242,36 @@ module.exports = async (req, res) => {
             const { data, error } = await supabase
                 .from('visiteurs_evenements').select('*').eq('session_id', sessionId)
                 .order('created_at', { ascending: false }).limit(500);
+            if (error) throw error;
+            return res.status(200).json({ data });
+        }
+
+        if (ressource === 'parametres' && action === 'list') {
+            const { data, error } = await supabase.from('parametres').select('*');
+            if (error) throw error;
+            return res.status(200).json({ data });
+        }
+        if (ressource === 'parametres' && action === 'upsert') {
+            const rows = Array.isArray(payload) ? payload : [];
+            if (!rows.length) return res.status(400).json({ error: 'Aucune donnée à enregistrer' });
+            // Liste blanche stricte des lignes acceptées (cle + valeur uniquement).
+            const propres = rows
+                .filter(r => r && typeof r.cle === 'string')
+                .map(r => ({ cle: r.cle, valeur: r.valeur != null ? String(r.valeur) : null }));
+            const { error } = await supabase.from('parametres').upsert(propres, { onConflict: 'cle' });
+            if (error) throw error;
+            return res.status(200).json({ ok: true });
+        }
+
+        if (ressource === 'retours' && action === 'list') {
+            const { data, error } = await supabase.from('retours').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            return res.status(200).json({ data });
+        }
+        if (ressource === 'retours' && action === 'update') {
+            if (!id) return res.status(400).json({ error: 'id manquant' });
+            // Liste blanche stricte : seul le statut est modifiable ici.
+            const { data, error } = await supabase.from('retours').update({ statut: payload?.statut }).eq('id', id).select().single();
             if (error) throw error;
             return res.status(200).json({ data });
         }
