@@ -151,6 +151,7 @@ module.exports = async (req, res) => {
             if (errProd) return res.status(500).json({ error: 'Impossible de vérifier les produits' });
 
             let sousTotal = 0;
+            let montantCombos = 0; // déjà à prix forfaitaire réduit — jamais re-remisé par un code promo
             const itemsValides = [];
 
             // Sépare les articles qui font partie d'un "Flash Combo" (tag
@@ -181,6 +182,7 @@ module.exports = async (req, res) => {
                     // qu'un prix éclaté arbitrairement entre les 3 articles).
                     itemsValides[itemsValides.length - itemsDuGroupe.length].prix = resultat.prix;
                     sousTotal += resultat.prix;
+                    montantCombos += resultat.prix;
                 } else {
                     idsDansCombosInvalides.push(...itemsDuGroupe);
                 }
@@ -199,9 +201,13 @@ module.exports = async (req, res) => {
             const estReservation = !!reservation;
             const frais = estReservation ? 0 : Math.max(0, parseInt(frais_livraison, 10) || 0);
 
-            // La réduction s'applique sur le sous-total des articles, jamais
-            // sur les frais de livraison.
-            const promoResult = await validerCodePromo(supabase, code_promo, sousTotal);
+            // La réduction s'applique sur le sous-total des articles hors
+            // Flash Combo, jamais sur les frais de livraison ni sur un kit
+            // déjà à prix forfaitaire réduit (non cumulable).
+            const sousTotalRemisable = Math.max(0, sousTotal - montantCombos);
+            const promoResult = (sousTotalRemisable === 0 && montantCombos > 0 && code_promo)
+                ? { valide: false, reduction: 0, message: "Ce code ne s'applique pas : ton panier ne contient qu'un Flash Combo, déjà à prix réduit." }
+                : await validerCodePromo(supabase, code_promo, sousTotalRemisable);
             const total = Math.max(0, sousTotal - promoResult.reduction) + frais;
 
             if (preview) {
