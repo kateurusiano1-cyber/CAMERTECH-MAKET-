@@ -1,4 +1,7 @@
 -- À exécuter dans Supabase SQL Editor
+-- Table déjà verrouillée dès sa création : plus aucun accès direct depuis
+-- le navigateur n'est nécessaire, tout passe par le serveur (voir
+-- api/facture.js pour la création, api/admin-action.js pour la gestion admin).
 
 create table if not exists retours (
   id uuid default gen_random_uuid() primary key,
@@ -11,6 +14,4 @@ create table if not exists retours (
 );
 
 alter table retours enable row level security;
-create policy "Lecture publique des retours" on retours for select to anon using (true);
-create policy "Ecriture publique des retours" on retours for insert to anon with check (true);
-create policy "Mise à jour publique des retours" on retours for update to anon using (true);
+-- Aucune policy créée ici : verrouillée dès le départ.
