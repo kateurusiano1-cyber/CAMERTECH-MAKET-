@@ -67,6 +67,38 @@ async function validerCodePromo(supabase, codeSaisi, sousTotal) {
     return { valide: true, reduction, id: promo.id, code: promo.code, message: `Code "${promo.code}" appliqué : -${reduction} FCFA` };
 }
 
+// Valide un groupe d'articles envoyé comme "Flash Combo" (1 produit
+// principal + N accessoires au choix). Ne fait JAMAIS confiance au prix
+// envoyé par le navigateur — relit l'offre réelle en base, vérifie que la
+// composition (principal + accessoires distincts, dans le pool autorisé,
+// offre active et dans les dates) correspond exactement, puis renvoie le
+// vrai prix forfaitaire. Si quoi que ce soit ne correspond pas, renvoie
+// valide:false — l'appelant retombe alors sur le prix normal de chaque
+// article, jamais sur une réduction non vérifiée.
+async function validerOffreGroupee(supabase, offreId, itemsDuGroupe) {
+    const { data: offre } = await supabase.from('offres_groupees').select('*').eq('id', offreId).single();
+    if (!offre || !offre.actif) return { valide: false };
+    const maintenant = new Date();
+    if (offre.date_debut && new Date(offre.date_debut) > maintenant) return { valide: false };
+    if (offre.date_fin && new Date(offre.date_fin) < maintenant) return { valide: false };
+
+    const nbAttendu = 1 + offre.nb_choix_requis;
+    if (itemsDuGroupe.length !== nbAttendu) return { valide: false };
+    if (itemsDuGroupe.some(it => (parseInt(it.qty, 10) || 1) !== 1)) return { valide: false }; // 1 kit à la fois
+
+    const principal = itemsDuGroupe.find(it => it.id === offre.produit_principal_id);
+    if (!principal) return { valide: false };
+    const accessoires = itemsDuGroupe.filter(it => it.id !== offre.produit_principal_id);
+    const idsAccessoires = accessoires.map(a => a.id);
+    if (new Set(idsAccessoires).size !== idsAccessoires.length) return { valide: false }; // pas de doublon
+
+    const { data: pool } = await supabase.from('offres_groupees_choix').select('produit_id').eq('offre_id', offreId);
+    const poolIds = new Set((pool || []).map(p => p.produit_id));
+    if (!idsAccessoires.every(id => poolIds.has(id))) return { valide: false };
+
+    return { valide: true, prix: offre.prix_ensemble, nom: offre.nom };
+}
+
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -120,7 +152,42 @@ module.exports = async (req, res) => {
 
             let sousTotal = 0;
             const itemsValides = [];
+
+            // Sépare les articles qui font partie d'un "Flash Combo" (tag
+            // combo_id envoyé par le navigateur, juste une suggestion — la
+            // composition et le prix réels sont revérifiés ci-dessous) des
+            // articles normaux.
+            const groupesCombo = {};
+            const itemsNormaux = [];
             for (const it of items) {
+                if (it && it.combo_id) {
+                    (groupesCombo[it.combo_id] = groupesCombo[it.combo_id] || []).push(it);
+                } else {
+                    itemsNormaux.push(it);
+                }
+            }
+
+            const idsDansCombosInvalides = []; // retombent en articles normaux si le combo ne colle pas
+            for (const [comboId, itemsDuGroupe] of Object.entries(groupesCombo)) {
+                const resultat = await validerOffreGroupee(supabase, comboId, itemsDuGroupe);
+                if (resultat.valide) {
+                    for (const it of itemsDuGroupe) {
+                        const p = produits && produits.find(x => x.id === it.id);
+                        if (!p) return res.status(400).json({ error: `Produit introuvable ou retiré du catalogue (id: ${it.id})` });
+                        itemsValides.push({ id: p.id, name: p.name, qty: 1, prix: 0, combo: resultat.nom });
+                    }
+                    // Le prix du kit est affiché en une seule fois, sur la
+                    // première ligne du groupe (plus lisible sur la facture
+                    // qu'un prix éclaté arbitrairement entre les 3 articles).
+                    itemsValides[itemsValides.length - itemsDuGroupe.length].prix = resultat.prix;
+                    sousTotal += resultat.prix;
+                } else {
+                    idsDansCombosInvalides.push(...itemsDuGroupe);
+                }
+            }
+            const aTraiterNormalement = [...itemsNormaux, ...idsDansCombosInvalides];
+
+            for (const it of aTraiterNormalement) {
                 const p = produits && produits.find(x => x.id === it.id);
                 if (!p) return res.status(400).json({ error: `Produit introuvable ou retiré du catalogue (id: ${it && it.id})` });
                 const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));

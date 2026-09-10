@@ -953,6 +953,146 @@ function afficherPanneauFideliteFavoris() {
     document.body.appendChild(el);
 }
 
+// ===== FLASH COMBO (kit sur-mesure à prix forfaitaire) =====
+let flashComboActif = null; // { id, nom, prix_ensemble, nb_choix_requis, produit_principal, choix:[...], date_fin }
+let flashComboMinuteur = null;
+
+async function chargerFlashCombo() {
+    try {
+        const maintenant = new Date().toISOString();
+        const { data: offres } = await db.from('offres_groupees')
+            .select('*, produit_principal:produit_principal_id(*)')
+            .eq('actif', true);
+        if (!offres || !offres.length) { $('flash-combo-bar').style.display = 'none'; return; }
+
+        // Ne garde que les offres réellement dans leur fenêtre de dates (si définie).
+        const valides = offres.filter(o =>
+            (!o.date_debut || o.date_debut <= maintenant) && (!o.date_fin || o.date_fin >= maintenant)
+        );
+        if (!valides.length) { $('flash-combo-bar').style.display = 'none'; return; }
+
+        // S'il y en a plusieurs actives, on met en avant celle qui se
+        // termine le plus tôt (la plus "urgente").
+        valides.sort((a, b) => (a.date_fin || '9999') > (b.date_fin || '9999') ? 1 : -1);
+        const offre = valides[0];
+
+        const { data: choixRows } = await db.from('offres_groupees_choix')
+            .select('produit_id, products(*)').eq('offre_id', offre.id);
+        offre.choix = (choixRows || []).map(c => c.products).filter(Boolean);
+
+        flashComboActif = offre;
+        afficherBandeauFlashCombo();
+    } catch (e) { console.error('Erreur chargement Flash Combo:', e); }
+}
+
+function afficherBandeauFlashCombo() {
+    const o = flashComboActif;
+    if (!o) return;
+    const bar = $('flash-combo-bar');
+    $('flash-combo-texte').textContent = `⚡ FLASH COMBO — ${o.nom} : compose ton kit à ${fmt(o.prix_ensemble)} FCFA !`;
+    bar.style.display = 'flex';
+    bar.onclick = ouvrirCompositionFlashCombo;
+
+    clearInterval(flashComboMinuteur);
+    const timerEl = $('flash-combo-timer');
+    if (!o.date_fin) { timerEl.style.display = 'none'; return; }
+    timerEl.style.display = 'inline-block';
+    const maj = () => {
+        const restant = new Date(o.date_fin) - new Date();
+        if (restant <= 0) { clearInterval(flashComboMinuteur); bar.style.display = 'none'; return; }
+        const h = Math.floor(restant / 3600000), m = Math.floor((restant % 3600000) / 60000), s = Math.floor((restant % 60000) / 1000);
+        timerEl.textContent = `⏳ ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    };
+    maj();
+    flashComboMinuteur = setInterval(maj, 1000);
+}
+
+function ouvrirCompositionFlashCombo() {
+    const o = flashComboActif;
+    if (!o || !o.produit_principal) return;
+    const choisis = new Set();
+
+    const el = document.createElement('div');
+    el.className = 'modal-overlay';
+    el.style.cssText = 'display:flex;z-index:5500;position:fixed;inset:0;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px';
+
+    const rendreContenu = () => {
+        const sommeIndividuelle = getPrix(o.produit_principal) + [...choisis].reduce((s, id) => {
+            const p = o.choix.find(c => c.id === id); return s + (p ? getPrix(p) : 0);
+        }, 0);
+        const economie = Math.max(0, sommeIndividuelle - o.prix_ensemble);
+
+        el.innerHTML = `<div style="background:white;border-radius:16px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;padding:0">
+            <div style="background:linear-gradient(135deg,#FF6B1A,#ff8a3d);padding:20px 22px;color:white;position:relative">
+                <button onclick="this.closest('.modal-overlay').remove()" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.25);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer">✕</button>
+                <div style="font-weight:800;font-size:1.05rem">⚡ ${o.nom}</div>
+                <div style="font-size:0.8rem;opacity:0.95;margin-top:2px">Choisis ${o.nb_choix_requis} accessoire(s) pour compléter ton kit</div>
+            </div>
+            <div style="padding:20px">
+                <div style="display:flex;gap:12px;align-items:center;background:#f8f8f8;border-radius:12px;padding:12px;margin-bottom:16px">
+                    ${o.produit_principal.image_url ? `<img src="${o.produit_principal.image_url}" style="width:56px;height:56px;object-fit:cover;border-radius:8px">` : ''}
+                    <div>
+                        <div style="font-weight:700;font-size:0.88rem">${o.produit_principal.name}</div>
+                        <div style="font-size:0.76rem;color:#888">Produit principal (inclus) — ${fmt(getPrix(o.produit_principal))} FCFA</div>
+                    </div>
+                </div>
+                <p style="font-size:0.8rem;font-weight:600;margin-bottom:8px">Choisis ${o.nb_choix_requis} accessoire(s) (${choisis.size}/${o.nb_choix_requis}) :</p>
+                <div style="display:grid;gap:8px;margin-bottom:16px">
+                    ${o.choix.map(p => {
+                        const enRupture = p.quantity <= 0;
+                        const coche = choisis.has(p.id);
+                        const desactive = enRupture || (!coche && choisis.size >= o.nb_choix_requis);
+                        return `<label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px solid ${coche?'#FF6B1A':'#eee'};border-radius:10px;cursor:${desactive?'not-allowed':'pointer'};opacity:${desactive?0.45:1};background:${coche?'#fff8f2':'white'}">
+                            <input type="checkbox" data-produit-id="${p.id}" class="flash-combo-choix-check" ${coche?'checked':''} ${desactive?'disabled':''}>
+                            ${p.image_url ? `<img src="${p.image_url}" style="width:36px;height:36px;object-fit:cover;border-radius:6px">` : ''}
+                            <div style="flex:1">
+                                <div style="font-size:0.82rem;font-weight:600">${p.name}</div>
+                                <div style="font-size:0.72rem;color:#999">${enRupture ? 'Rupture de stock' : fmt(getPrix(p)) + ' FCFA'}</div>
+                            </div>
+                        </label>`;
+                    }).join('')}
+                </div>
+                <div style="background:#f0fff4;border-radius:10px;padding:12px;margin-bottom:14px;font-size:0.85rem">
+                    <div style="display:flex;justify-content:space-between;color:#888;text-decoration:line-through"><span>Prix normal</span><span>${fmt(sommeIndividuelle)} FCFA</span></div>
+                    <div style="display:flex;justify-content:space-between;font-weight:800;font-size:1rem;color:#1a5c2a;margin-top:4px"><span>Prix du kit</span><span>${fmt(o.prix_ensemble)} FCFA</span></div>
+                    ${economie > 0 ? `<div style="text-align:right;color:#e63946;font-size:0.76rem;font-weight:700;margin-top:2px">Tu économises ${fmt(economie)} FCFA</div>` : ''}
+                </div>
+                <button id="flash-combo-btn-ajouter" ${choisis.size < o.nb_choix_requis ? 'disabled' : ''} style="width:100%;background:${choisis.size < o.nb_choix_requis ? '#ccc' : 'linear-gradient(135deg,var(--green-dark),var(--green))'};color:white;border:none;padding:14px;border-radius:12px;font-weight:800;cursor:${choisis.size < o.nb_choix_requis ? 'not-allowed' : 'pointer'};font-family:var(--font-title)">
+                    ${choisis.size < o.nb_choix_requis ? `Choisis encore ${o.nb_choix_requis - choisis.size} accessoire(s)` : '🛒 Ajouter le kit au panier'}
+                </button>
+            </div>
+        </div>`;
+
+        el.querySelectorAll('.flash-combo-choix-check').forEach(cb => {
+            cb.onchange = () => {
+                const id = cb.dataset.produitId;
+                if (cb.checked) choisis.add(id); else choisis.delete(id);
+                rendreContenu();
+            };
+        });
+        const btn = el.querySelector('#flash-combo-btn-ajouter');
+        if (btn && choisis.size >= o.nb_choix_requis) {
+            btn.onclick = () => {
+                if (!currentUser) { el.remove(); openOverlay('auth-overlay'); return; }
+                panier.push({ id: o.produit_principal.id, name: o.produit_principal.name, prix: o.prix_ensemble, qty: 1, image_url: o.produit_principal.image_url, combo_id: o.id, combo_nom: o.nom });
+                logVisiteur('panier_ajout', o.produit_principal.id, { nom: o.produit_principal.name, combo: o.nom });
+                for (const id of choisis) {
+                    const p = o.choix.find(c => c.id === id);
+                    panier.push({ id: p.id, name: p.name, prix: 0, qty: 1, image_url: p.image_url, combo_id: o.id, combo_nom: o.nom });
+                    logVisiteur('panier_ajout', p.id, { nom: p.name, combo: o.nom });
+                }
+                updatePanierBtn(); syncPanierServeur();
+                el.remove();
+                openPanier();
+            };
+        }
+    };
+
+    rendreContenu();
+    document.body.appendChild(el);
+}
+
+
 // ===== FAVORIS =====
 async function chargerFavoris() {
     if (!currentUser) return;
@@ -1276,6 +1416,7 @@ async function fetchProducts() {
         appliquerPreferenceShopping();
         chargerFlash(allProducts);
         injecterSchemaCatalogue(allProducts);
+        chargerFlashCombo();
         const { data: slidesData } = await db.from('bannières').select('*').eq('type', 'slider').eq('actif', true);
         initSlider(slidesData);
     } catch(e) { console.error(e); renderProducts([]); initSlider([]); }
@@ -1839,7 +1980,7 @@ async function reserverCommande() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
             body: JSON.stringify({
-                items: panier.map(p => ({ id: p.id, qty: p.qty })),
+                items: panier.map(p => ({ id: p.id, qty: p.qty, combo_id: p.combo_id })),
                 reservation: true,
                 code_promo: ($('promo-input').value || '').trim() || undefined
             })
@@ -1881,10 +2022,23 @@ function renderPanier() {
         const st=item.prix*item.qty; sousTotal+=st;
         const d=document.createElement('div');
         d.className='panier-item';
-        d.innerHTML=`<div class="panier-item-info"><strong>${item.name}</strong><span>${fmt(item.prix)} FCFA × ${item.qty}</span></div>
+        const ligneprix = (item.combo_id && item.prix === 0) ? '🎁 Inclus dans le combo' : `${fmt(item.prix)} FCFA × ${item.qty}`;
+        d.innerHTML=`<div class="panier-item-info"><strong>${item.name}</strong>${item.combo_id ? `<span style="color:var(--orange);font-size:0.7rem;font-weight:700"> — ${item.combo_nom}</span>` : ''}<span>${ligneprix}</span></div>
             <div class="panier-item-price">${fmt(st)} FCFA</div>
-            <button class="btn-rm" data-idx="${i}">✕</button>`;
-        d.querySelector('.btn-rm').onclick = e => { panier.splice(parseInt(e.target.dataset.idx),1); updatePanierBtn(); syncPanierServeur(); openPanier(); };
+            <button class="btn-rm" data-idx="${i}" title="${item.combo_id ? 'Retire tout le kit' : 'Retirer'}">✕</button>`;
+        d.querySelector('.btn-rm').onclick = e => {
+            const idx = parseInt(e.target.dataset.idx);
+            const cible = panier[idx];
+            if (cible && cible.combo_id) {
+                // Retire tout le kit d'un coup : laisser un combo incomplet
+                // afficherait un prix qui ne correspondrait plus à ce que le
+                // serveur facturera réellement au moment de payer.
+                panier = panier.filter(p => p.combo_id !== cible.combo_id);
+            } else {
+                panier.splice(idx, 1);
+            }
+            updatePanierBtn(); syncPanierServeur(); openPanier();
+        };
         items.appendChild(d);
     });
     // Le panier a changé : une réduction déjà affichée ne correspond plus
@@ -1911,7 +2065,7 @@ async function appliquerCodePromo() {
         const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-            body: JSON.stringify({ items: panier.map(p => ({ id: p.id, qty: p.qty })), code_promo: saisi, preview: true })
+            body: JSON.stringify({ items: panier.map(p => ({ id: p.id, qty: p.qty, combo_id: p.combo_id })), code_promo: saisi, preview: true })
         });
         const result = await resp.json();
         if (!result.success || !result.code_valide) {
@@ -2035,7 +2189,7 @@ async function confirmerPaiement() {
             method:'POST',
             headers:{ 'Content-Type':'application/json', 'Authorization': 'Bearer ' + idToken },
             body:JSON.stringify({
-                items: panier.map(p => ({ id: p.id, qty: p.qty })),
+                items: panier.map(p => ({ id: p.id, qty: p.qty, combo_id: p.combo_id })),
                 zone_livraison: userZone,
                 frais_livraison: fraisLivraison,
                 note: $('note-cmd').value || null,
@@ -2448,7 +2602,7 @@ async function afficherPanneauAdmin() {
     page.style.display='block';
     page.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-family:Inter,sans-serif">Chargement du panneau...</div>';
 
-    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},retoursResult,feedbackStats,codesPromoResult,visiteursResult]=await Promise.all([
+    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},retoursResult,feedbackStats,codesPromoResult,visiteursResult,offresResult]=await Promise.all([
         db.from('products').select('*').order('created_at',{ascending:false}),
         adminAction('utilisateurs','list').catch(()=>({data:[]})),
         db.from('reservations').select('*').order('created_at',{ascending:false}),
@@ -2458,12 +2612,14 @@ async function afficherPanneauAdmin() {
         adminAction('retours','list').catch(()=>({data:[]})),
         adminAction('feedback_produits','stats').catch(()=>({total:0,parChoix:{},parProduit:{},recents:[]})),
         adminAction('codes_promo','list').catch(()=>({data:[]})),
-        adminAction('visiteurs','list').catch(()=>({data:[]}))
+        adminAction('visiteurs','list').catch(()=>({data:[]})),
+        adminAction('offres_groupees','list').catch(()=>({data:[]}))
     ]);
     const users = usersResult.data;
     const retours = retoursResult.data || [];
     const codesPromo = codesPromoResult.data || [];
     const visiteurs = visiteursResult.data || [];
+    const offresGroupees = offresResult.data || [];
     const paramMap = Object.fromEntries((params||[]).map(p=>[p.cle,p.valeur]));
 
     // Revenu réel : uniquement les commandes dont le paiement est confirmé
@@ -2493,6 +2649,7 @@ async function afficherPanneauAdmin() {
                 <button onclick="showTab('tab-retours')" class="adm-tab" id="tb-retours">🔄 Retours</button>
                 <button onclick="showTab('tab-promo')" class="adm-tab" id="tb-promo">🏷️ Codes promo</button>
                 <button onclick="showTab('tab-visiteurs')" class="adm-tab" id="tb-visiteurs">👥 Visiteurs</button>
+                <button onclick="showTab('tab-combo')" class="adm-tab" id="tb-combo">⚡ Flash Combo</button>
                 <button onclick="window.location.href='/'" class="adm-tab">🏪 Site</button>
                 <button onclick="ouvrirPresentationTelechargement()" class="adm-tab" style="background:rgba(255,255,255,0.15)">📲 Installer l'app Admin</button>
             </div>
@@ -2837,6 +2994,61 @@ async function afficherPanneauAdmin() {
             </div>
         </div>
 
+        <!-- FLASH COMBO -->
+        <div id="tab-combo" style="display:none">
+            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+                <h2 style="font-size:1rem;margin-bottom:4px">⚡ Créer un Flash Combo</h2>
+                <p style="font-size:0.78rem;color:#888;margin-bottom:14px">1 produit principal + le client choisit ses accessoires parmi la liste ci-dessous, à un prix forfaitaire fixe.</p>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px">
+                    <input id="combo-new-nom" placeholder="Nom de l'offre (ex: Kit Audio)" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                    <select id="combo-new-principal" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                        <option value="">— Produit principal —</option>
+                        ${(prods||[]).map(p=>`<option value="${p.id}">${p.name} (${fmt(p.resale_price)} FCFA)</option>`).join('')}
+                    </select>
+                    <input id="combo-new-prix" type="number" min="1" placeholder="Prix forfaitaire du kit (FCFA)" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                    <input id="combo-new-nbchoix" type="number" min="1" max="5" value="2" placeholder="Nb accessoires au choix" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                    <input id="combo-new-debut" type="datetime-local" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                    <input id="combo-new-fin" type="datetime-local" style="padding:10px;border-radius:8px;border:1px solid #ddd">
+                </div>
+                <p style="font-size:0.8rem;font-weight:600;margin-bottom:6px">Accessoires éligibles (le client en choisira parmi ceux cochés) :</p>
+                <div style="max-height:220px;overflow-y:auto;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px">
+                    ${(prods||[]).map(p=>`<label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;cursor:pointer">
+                        <input type="checkbox" class="combo-new-choix-item" value="${p.id}"> ${p.name} <span style="color:#999">(${fmt(p.resale_price)} F)</span>
+                    </label>`).join('')}
+                </div>
+                <button onclick="creerOffreGroupee()" style="background:#1a5c2a;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">➕ Créer le Flash Combo</button>
+                <p id="combo-new-res" style="min-height:18px;font-size:0.82rem;margin-top:8px"></p>
+            </div>
+
+            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+                <h2 style="font-size:1rem;margin-bottom:14px">📋 Combos existants (${offresGroupees.length})</h2>
+                ${!offresGroupees.length ? '<p style="color:#888">Aucun Flash Combo créé.</p>' :
+                offresGroupees.map(o=>{
+                    const debut = o.date_debut ? new Date(o.date_debut) : null;
+                    const fin = o.date_fin ? new Date(o.date_fin) : null;
+                    const expire = fin && fin < new Date();
+                    const nomPrincipal = o.products ? o.products.name : '(produit supprimé)';
+                    return `<div style="background:#f8f8f8;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee">
+                        <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:10px">
+                            <div>
+                                <div style="font-weight:700;font-size:0.92rem">${o.nom} — <span style="color:#1a5c2a">${fmt(o.prix_ensemble)} FCFA</span></div>
+                                <div style="font-size:0.8rem;color:#555;margin-top:2px">Principal : ${nomPrincipal} + ${o.nb_choix_requis} accessoire(s) au choix parmi ${(o.choix||[]).length}</div>
+                                <div style="font-size:0.75rem;color:#888;margin-top:2px">
+                                    ${debut ? 'du ' + debut.toLocaleString('fr-FR') : ''} ${fin ? "jusqu'au " + fin.toLocaleString('fr-FR') : ''}
+                                </div>
+                                <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${o.actif && !expire?'#f0fff4':'#fff0f0'};color:${o.actif && !expire?'#2dc653':'#e63946'}">${o.actif && !expire ? 'Actif' : (expire ? 'Expiré' : 'Désactivé')}</span>
+                            </div>
+                            <div style="display:flex;gap:6px">
+                                <button onclick="toggleOffreGroupee('${o.id}',${!o.actif})" style="background:#fff8f0;color:#ff6600;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${o.actif?'⏸️ Désactiver':'▶️ Activer'}</button>
+                                <button onclick="supprimerOffreGroupee('${o.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️ Supprimer</button>
+                            </div>
+                        </div>
+                        <div style="margin-top:8px;font-size:0.76rem;color:#777">Pool : ${(o.choix||[]).map(c=>c ? c.name : '?').join(', ') || '—'}</div>
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>
+
         </div>
     </div>
     <style>
@@ -2885,6 +3097,40 @@ window.toggleCodePromo = async (id, actif) => {
 window.supprimerCodePromo = async (id) => {
     if (!confirm('Supprimer définitivement ce code promo ?')) return;
     await adminAction('codes_promo', 'delete', { id });
+    afficherPanneauAdmin();
+};
+
+window.creerOffreGroupee = async () => {
+    const res = document.getElementById('combo-new-res');
+    const nom = document.getElementById('combo-new-nom').value.trim() || 'Flash Combo';
+    const produit_principal_id = document.getElementById('combo-new-principal').value;
+    const prix_ensemble = document.getElementById('combo-new-prix').value;
+    const nb_choix_requis = document.getElementById('combo-new-nbchoix').value || 2;
+    const date_debut = document.getElementById('combo-new-debut').value || null;
+    const date_fin = document.getElementById('combo-new-fin').value || null;
+    const choix_ids = Array.from(document.querySelectorAll('.combo-new-choix-item:checked')).map(el => el.value);
+
+    if (!produit_principal_id || !prix_ensemble) { res.style.color = 'var(--danger)'; res.textContent = 'Produit principal et prix requis.'; return; }
+    if (choix_ids.length < 2) { res.style.color = 'var(--danger)'; res.textContent = 'Coche au moins 2 accessoires éligibles.'; return; }
+    if (choix_ids.includes(produit_principal_id)) { res.style.color = 'var(--danger)'; res.textContent = 'Le produit principal ne peut pas être aussi un accessoire.'; return; }
+
+    res.style.color = '#888'; res.textContent = 'Création...';
+    try {
+        await adminAction('offres_groupees', 'insert', { payload: { nom, produit_principal_id, prix_ensemble, nb_choix_requis, date_debut, date_fin, choix_ids } });
+        afficherPanneauAdmin();
+    } catch (e) {
+        res.style.color = '#e63946'; res.textContent = '❌ ' + (e.message || 'Erreur');
+    }
+};
+
+window.toggleOffreGroupee = async (id, actif) => {
+    await adminAction('offres_groupees', 'update', { id, payload: { actif } });
+    afficherPanneauAdmin();
+};
+
+window.supprimerOffreGroupee = async (id) => {
+    if (!confirm('Supprimer définitivement ce Flash Combo ?')) return;
+    await adminAction('offres_groupees', 'delete', { id });
     afficherPanneauAdmin();
 };
 
@@ -3080,10 +3326,10 @@ window.telechargerFactureAdmin = async (code) => {
 let adminTabActuel = 'tab-dash';
 window.showTab = id => {
     adminTabActuel = id;
-    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param','tab-retours','tab-promo','tab-visiteurs'].forEach(t=>{
+    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param','tab-retours','tab-promo','tab-visiteurs','tab-combo'].forEach(t=>{
         const el=document.getElementById(t); if(el) el.style.display=t===id?'block':'none';
     });
-    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param','tb-retours','tb-promo','tb-visiteurs'].forEach(b=>{
+    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param','tb-retours','tb-promo','tb-visiteurs','tb-combo'].forEach(b=>{
         const el=document.getElementById(b); if(el) el.classList.toggle('active', b==='tb-'+id.replace('tab-',''));
     });
 };

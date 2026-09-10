@@ -19,6 +19,7 @@
 //                  timeline (chronologie détaillée d'une session précise)
 //   parametres   : list | upsert (adresse/tél agence, images de catégories — lecture publique conservée)
 //   retours      : list | update (uniquement le champ "statut") — la création (client) passe par api/facture.js
+//   offres_groupees : list | insert | update | delete (Flash Combo — insert/update prennent aussi le tableau des accessoires éligibles)
 
 const { createClient } = require('@supabase/supabase-js');
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
@@ -274,6 +275,71 @@ module.exports = async (req, res) => {
             const { data, error } = await supabase.from('retours').update({ statut: payload?.statut }).eq('id', id).select().single();
             if (error) throw error;
             return res.status(200).json({ data });
+        }
+
+        if (ressource === 'offres_groupees' && action === 'list') {
+            const { data: offres, error: errOffres } = await supabase
+                .from('offres_groupees').select('*, products:produit_principal_id(id,name,image_url,resale_price)')
+                .order('created_at', { ascending: false });
+            if (errOffres) throw errOffres;
+            const { data: choix, error: errChoix } = await supabase
+                .from('offres_groupees_choix').select('offre_id, produit_id, products(id,name,image_url,resale_price,quantity)');
+            if (errChoix) throw errChoix;
+            const data = (offres || []).map(o => ({
+                ...o,
+                choix: (choix || []).filter(c => c.offre_id === o.id).map(c => c.products)
+            }));
+            return res.status(200).json({ data });
+        }
+        if (ressource === 'offres_groupees' && action === 'insert') {
+            const p = payload || {};
+            if (!p.produit_principal_id || !p.prix_ensemble || !Array.isArray(p.choix_ids) || p.choix_ids.length < 2) {
+                return res.status(400).json({ error: 'Produit principal, prix, et au moins 2 accessoires éligibles requis' });
+            }
+            const { data: offre, error: errInsert } = await supabase.from('offres_groupees').insert([{
+                nom: p.nom || 'Flash Combo',
+                description: p.description || null,
+                produit_principal_id: p.produit_principal_id,
+                prix_ensemble: Math.abs(parseFloat(p.prix_ensemble)) || 0,
+                nb_choix_requis: Math.max(1, parseInt(p.nb_choix_requis, 10) || 2),
+                actif: p.actif !== false,
+                date_debut: p.date_debut || null,
+                date_fin: p.date_fin || null
+            }]).select().single();
+            if (errInsert) throw errInsert;
+            const lignes = [...new Set(p.choix_ids)].map(pid => ({ offre_id: offre.id, produit_id: pid }));
+            const { error: errChoix } = await supabase.from('offres_groupees_choix').insert(lignes);
+            if (errChoix) throw errChoix;
+            return res.status(200).json({ data: offre });
+        }
+        if (ressource === 'offres_groupees' && action === 'update') {
+            if (!id) return res.status(400).json({ error: 'id manquant' });
+            const p = payload || {};
+            const maj = {};
+            if ('actif' in p) maj.actif = !!p.actif;
+            if ('prix_ensemble' in p) maj.prix_ensemble = Math.abs(parseFloat(p.prix_ensemble)) || 0;
+            if ('date_debut' in p) maj.date_debut = p.date_debut || null;
+            if ('date_fin' in p) maj.date_fin = p.date_fin || null;
+            if (Object.keys(maj).length) {
+                const { error } = await supabase.from('offres_groupees').update(maj).eq('id', id);
+                if (error) throw error;
+            }
+            if (Array.isArray(p.choix_ids)) {
+                // Remplace entièrement la liste des accessoires éligibles.
+                await supabase.from('offres_groupees_choix').delete().eq('offre_id', id);
+                const lignes = [...new Set(p.choix_ids)].map(pid => ({ offre_id: id, produit_id: pid }));
+                if (lignes.length) {
+                    const { error: errChoix } = await supabase.from('offres_groupees_choix').insert(lignes);
+                    if (errChoix) throw errChoix;
+                }
+            }
+            return res.status(200).json({ ok: true });
+        }
+        if (ressource === 'offres_groupees' && action === 'delete') {
+            if (!id) return res.status(400).json({ error: 'id manquant' });
+            const { error } = await supabase.from('offres_groupees').delete().eq('id', id);
+            if (error) throw error;
+            return res.status(200).json({ ok: true });
         }
 
         return res.status(400).json({ error: 'Combinaison ressource/action non autorisée' });

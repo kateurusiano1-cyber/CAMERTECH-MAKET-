@@ -118,6 +118,29 @@ input:checked + .toggle-thumb:before { transform: translateX(20px); }
 
 /* ===== HEADER ===== */
 .header { background: var(--card); box-shadow: var(--shadow); position: sticky; top: 0; z-index: 200; }
+
+#flash-combo-bar {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    flex-wrap: wrap; text-align: center;
+    padding: 9px 16px;
+    background: linear-gradient(90deg, #FF6B1A, #ff8a3d, #FF6B1A);
+    background-size: 200% 100%;
+    animation: flashComboGradient 3s ease-in-out infinite, flashComboPulse 1.8s ease-in-out infinite;
+    color: white; font-weight: 800; font-size: 0.82rem; letter-spacing: 0.2px;
+    cursor: pointer; font-family: var(--font-title);
+    box-shadow: 0 2px 10px rgba(255,107,26,0.35);
+}
+#flash-combo-bar:hover { filter: brightness(1.06); }
+#flash-combo-timer {
+    background: rgba(0,0,0,0.22); padding: 2px 10px; border-radius: 999px;
+    font-variant-numeric: tabular-nums; font-size: 0.8rem;
+}
+@keyframes flashComboGradient { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@keyframes flashComboPulse { 0%,100% { box-shadow: 0 2px 10px rgba(255,107,26,0.35); } 50% { box-shadow: 0 2px 18px rgba(255,107,26,0.7); } }
+@media (max-width: 720px) {
+    #flash-combo-bar { font-size: 0.72rem; padding: 7px 10px; gap: 6px; }
+    #flash-combo-timer { font-size: 0.72rem; padding: 2px 8px; }
+}
 .header-main { display: flex; align-items: center; gap: 12px; padding: 12px 20px; max-width: 1400px; margin: 0 auto; }
 .header-left { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .hamburger { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text); padding: 4px 8px; border-radius: 6px; transition: background 0.2s; line-height: 1; }
