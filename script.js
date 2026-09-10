@@ -1037,6 +1037,9 @@ function ouvrirCompositionFlashCombo() {
                 <div style="font-size:0.8rem;opacity:0.95;margin-top:2px">Choisis ${o.nb_choix_requis} accessoire(s) pour compléter ton kit</div>
             </div>
             <div style="padding:20px">
+                <p style="font-size:0.76rem;color:var(--text3);background:#fff8f2;border:1px solid #ffe4cc;border-radius:10px;padding:9px 12px;margin-bottom:14px">
+                    💡 <strong>Comment ça marche :</strong> le produit principal est déjà inclus. Choisis ${o.nb_choix_requis} accessoire(s) dans la liste ci-dessous, et le kit complet te revient à ${fmt(o.prix_ensemble)} FCFA au lieu du prix normal de chaque article séparément.
+                </p>
                 <div style="display:flex;gap:12px;align-items:center;background:#f8f8f8;border-radius:12px;padding:12px;margin-bottom:16px">
                     ${o.produit_principal.image_url ? `<img src="${o.produit_principal.image_url}" style="width:56px;height:56px;object-fit:cover;border-radius:8px">` : ''}
                     <div>
@@ -1805,6 +1808,7 @@ function htmlFeedbackProduit(produitId, categorie) {
         <div class="feedback-produit-choix">
             ${FEEDBACK_OPTIONS.map(o => `<button onclick="choisirFeedbackProduit('${o.id}','${produitId}','${(categorie||'').replace(/'/g,"\\'")}')">${o.label}</button>`).join('')}
         </div>
+        <p style="font-size:0.68rem;color:var(--text3);margin-top:6px">Ton choix nous aide à t'afficher des produits qui te correspondent mieux.</p>
     </div>`;
 }
 
