@@ -989,9 +989,17 @@ function afficherBandeauFlashCombo() {
     const o = flashComboActif;
     if (!o) return;
     const bar = $('flash-combo-bar');
-    $('flash-combo-texte').textContent = `⚡ FLASH COMBO — ${o.nom} : compose ton kit à ${fmt(o.prix_ensemble)} FCFA !`;
+    $('flash-combo-texte').textContent = `FLASH COMBO — ${o.nom} : compose ton kit à ${fmt(o.prix_ensemble)} FCFA !`;
     bar.style.display = 'flex';
     bar.onclick = ouvrirCompositionFlashCombo;
+
+    // Petites vignettes produits (principal + quelques accessoires) qui
+    // flottent en 3D de façon asynchrone — donne vie au bandeau sans texte
+    // supplémentaire à lire.
+    const visuels = [o.produit_principal, ...(o.choix||[])].filter(p => p && p.image_url).slice(0, 4);
+    $('flash-combo-mini-produits').innerHTML = visuels.map((p, i) =>
+        `<img src="${p.image_url}" alt="" style="animation-delay:${(i * 0.35).toFixed(2)}s;z-index:${visuels.length - i}">`
+    ).join('');
 
     clearInterval(flashComboMinuteur);
     const timerEl = $('flash-combo-timer');
