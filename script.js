@@ -2002,7 +2002,8 @@ async function reserverCommande() {
                 items: panier.map(p => ({ id: p.id, qty: p.qty, combo_id: p.combo_id })),
                 reservation: true,
                 code_promo: ($('promo-input').value || '').trim() || undefined,
-                invite
+                invite,
+                visiteur_session_id: visiteurId
             })
         });
         const result = await resp.json();
@@ -2255,7 +2256,8 @@ async function confirmerPaiement() {
                 frais_livraison: fraisLivraison,
                 note: $('note-cmd').value || null,
                 code_promo: ($('promo-input').value || '').trim() || undefined,
-                invite: inviteInfo
+                invite: inviteInfo,
+                visiteur_session_id: visiteurId
             })
         });
         const result = await resp.json();
@@ -3343,12 +3345,13 @@ window.ouvrirDetailsCmdAdmin = (code) => {
         <button class="modal-x" onclick="this.closest('.modal-overlay').remove()">✕</button>
         <h2 style="font-size:1.05rem;margin-bottom:14px">🧾 Commande ${r.code}</h2>
         <div style="font-size:0.85rem;line-height:1.9;color:#333">
-            <div><strong>Client :</strong> ${r.nom_client} — ${r.telephone}</div>
+            <div><strong>Client :</strong> ${r.nom_client} — ${r.telephone} ${!r.utilisateur_id ? '<span style="background:#f0f0f0;color:#888;padding:2px 8px;border-radius:6px;font-size:0.7rem;font-weight:700">🕶️ INVITÉ (sans compte)</span>' : ''}</div>
             <div><strong>Date :</strong> ${new Date(r.created_at).toLocaleDateString('fr-FR')} à ${new Date(r.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
             <div><strong>Zone :</strong> ${r.zone_livraison||'—'} ${r.frais_livraison?`(frais: ${fmt(r.frais_livraison)} F)`:''}</div>
             <div><strong>Statut :</strong> ${r.statut}${r.paye_le ? ` — payé le ${new Date(r.paye_le).toLocaleString('fr-FR')}` : ''}</div>
             ${r.transaction_id ? `<div><strong>Référence paiement :</strong> ${r.transaction_id}</div>` : ''}
         </div>
+        ${r.visiteur_session_id ? `<button onclick="voirTimelineVisiteur('${r.visiteur_session_id}','${r.nom_client.replace(/'/g,"\\'")} (commande ${r.code})')" style="width:100%;margin-top:10px;background:#eef6ff;color:#1a5c9c;border:1px solid #cfe4fb;padding:9px;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.82rem">📜 Voir son parcours sur le site avant l'achat</button>` : ''}
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee">
             <strong style="font-size:0.85rem">Articles :</strong>
             ${(r.items||[]).map(i=>`<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">

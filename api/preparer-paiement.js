@@ -116,7 +116,7 @@ module.exports = async (req, res) => {
     try {
         const uid = await verifierRequeteUtilisateur(req);
         const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-        const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview, invite } = body;
+        const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview, invite, visiteur_session_id } = body;
 
         let user; // forme commune { id, nom, telephone, email } — id est null pour un invité
         if (uid) {
@@ -252,7 +252,8 @@ module.exports = async (req, res) => {
                 zone_livraison: zone_livraison || null,
                 frais_livraison: frais,
                 note: note || null,
-                code_promo: promoResult.valide ? promoResult.code : null
+                code_promo: promoResult.valide ? promoResult.code : null,
+                visiteur_session_id: (typeof visiteur_session_id === 'string' && visiteur_session_id.length <= 100) ? visiteur_session_id : null
             }]).select('code, total, statut, utilisateur_id').single();
 
             if (errInsert || !nouvelle) {
