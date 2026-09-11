@@ -130,6 +130,10 @@ module.exports = async (req, res) => {
             if (!nom) return res.status(400).json({ error: 'Nom requis' });
             if (telephone.length < 8) return res.status(400).json({ error: 'Numéro de téléphone invalide' });
             user = { id: null, nom, telephone, email: null };
+        } else if (preview) {
+            // Un simple aperçu (avant même de renseigner nom/téléphone) ne
+            // crée rien en base — pas besoin d'identité pour ça.
+            user = { id: null, nom: null, telephone: null, email: null };
         } else {
             return res.status(401).json({ error: 'Connecte-toi ou renseigne tes informations pour continuer' });
         }

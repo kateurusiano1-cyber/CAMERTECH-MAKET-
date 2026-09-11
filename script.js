@@ -1084,7 +1084,6 @@ function ouvrirCompositionFlashCombo() {
         const btn = el.querySelector('#flash-combo-btn-ajouter');
         if (btn && choisis.size >= o.nb_choix_requis) {
             btn.onclick = () => {
-                if (!currentUser) { el.remove(); openOverlay('auth-overlay'); return; }
                 panier.push({ id: o.produit_principal.id, name: o.produit_principal.name, prix: o.prix_ensemble, qty: 1, image_url: o.produit_principal.image_url, combo_id: o.id, combo_nom: o.nom });
                 logVisiteur('panier_ajout', o.produit_principal.id, { nom: o.produit_principal.name, combo: o.nom });
                 for (const id of choisis) {
@@ -1631,8 +1630,10 @@ async function openModal(productId) {
     } else img.style.display = 'none';
     const waMsg = encodeURIComponent(`Bonjour CAMERTECH MARKET, intéressé par : ${p.name} (${fmt(prix)} FCFA)`);
     $('prod-wa').href = `https://wa.me/${CONFIG.WA1}?text=${waMsg}`;
-    if (currentUser) { $('prod-actions').style.display='flex'; $('prod-login-hint').style.display='none'; }
-    else { $('prod-actions').style.display='none'; $('prod-login-hint').style.display='block'; }
+    // "Ajouter au panier" est maintenant disponible à tout le monde — la
+    // connexion n'est demandée qu'au moment de payer (achat invité possible).
+    $('prod-actions').style.display='flex';
+    $('prod-login-hint').style.display='none';
     $('feedback-produit-zone').innerHTML = htmlFeedbackProduit(p.id, p.category);
     openOverlay('prod-overlay');
     chargerCrossSell(p);
@@ -1678,7 +1679,6 @@ async function chargerCrossSell(p) {
 }
 
 window.addQuick = (id, evt) => {
-    if (!currentUser) return;
     const p = allProducts.find(x=>x.id===id);
     if (!p) return;
     const ex = panier.find(x=>x.id===id);
@@ -2104,16 +2104,18 @@ async function appliquerCodePromo() {
     const saisi = ($('promo-input').value || '').trim();
     const msg = $('promo-message');
     if (!saisi) { codePromoApplique = null; msg.textContent = ''; renderPanier(); return; }
-    if (!currentUser) { msg.style.color = 'var(--danger)'; msg.textContent = 'Connecte-toi pour utiliser un code promo.'; return; }
 
     const sousTotal = panier.reduce((s,p)=>s+p.prix*p.qty,0);
     msg.style.color = 'var(--text3)'; msg.textContent = 'Vérification du code...';
     try {
-        const fbUser = await attendreFirebaseUser();
-        const idToken = await fbUser.getIdToken();
+        const headers = { 'Content-Type': 'application/json' };
+        if (currentUser) {
+            const fbUser = await attendreFirebaseUser();
+            headers['Authorization'] = 'Bearer ' + await fbUser.getIdToken();
+        }
         const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+            headers,
             body: JSON.stringify({ items: panier.map(p => ({ id: p.id, qty: p.qty, combo_id: p.combo_id })), code_promo: saisi, preview: true })
         });
         const result = await resp.json();
