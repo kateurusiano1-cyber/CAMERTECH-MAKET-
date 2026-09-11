@@ -19,7 +19,11 @@
 //       { items: [{id, qty}], reservation: true }
 //   - Payer une commande déjà existante ("Payer maintenant" / Mes Commandes) :
 //       { reference: "CMT-..." }
-// Toujours accompagné d'un en-tête Authorization: Bearer <jeton Firebase>.
+// Accompagné soit d'un en-tête Authorization: Bearer <jeton Firebase> (client
+// avec compte), soit d'un champ { invite: { nom, telephone } } dans le body
+// (achat sans compte — pas de jeton). Sans l'un ou l'autre, la requête est
+// refusée. Un achat "invité" n'a pas d'historique de commandes ni de points
+// de fidélité — uniquement le code généré, à conserver pour le suivi.
 
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
@@ -111,22 +115,33 @@ module.exports = async (req, res) => {
 
     try {
         const uid = await verifierRequeteUtilisateur(req);
-        if (!uid) return res.status(401).json({ error: 'Session invalide, reconnecte-toi' });
+        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+        const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview, invite } = body;
 
-        // Limite par utilisateur (et non par IP) — empêche un script de
-        // deviner des codes de commande en boucle, ou de spammer la création
-        // de commandes.
-        const cle = 'preparer-paiement:' + uid;
+        let user; // forme commune { id, nom, telephone, email } — id est null pour un invité
+        if (uid) {
+            const { data: u, error: errUser } = await supabase
+                .from('utilisateurs').select('id,nom,telephone,email').eq('firebase_uid', uid).single();
+            if (errUser || !u) return res.status(404).json({ error: 'Profil introuvable' });
+            user = u;
+        } else if (invite && typeof invite === 'object') {
+            const nom = String(invite.nom || '').trim().slice(0, 80);
+            const telephone = String(invite.telephone || '').trim().slice(0, 20);
+            if (!nom) return res.status(400).json({ error: 'Nom requis' });
+            if (telephone.length < 8) return res.status(400).json({ error: 'Numéro de téléphone invalide' });
+            user = { id: null, nom, telephone, email: null };
+        } else {
+            return res.status(401).json({ error: 'Connecte-toi ou renseigne tes informations pour continuer' });
+        }
+
+        // Limite par compte (jeton Firebase) si connecté, sinon par IP pour
+        // un invité — empêche un script de deviner des codes de commande en
+        // boucle, ou de spammer la création de commandes.
+        const ip = (req.headers['x-forwarded-for'] || 'ip-inconnue').split(',')[0].trim();
+        const cle = 'preparer-paiement:' + (uid || ('invite:' + ip));
         const check = await tropDeTentatives(supabase, cle, 20, 10); // 20 essais / 10 min
         if (check.bloque) return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${Math.ceil(check.retryAfterSeconds / 60)} min.` });
         await signalerEchecTentative(supabase, cle, 20, 10);
-
-        const { data: user, error: errUser } = await supabase
-            .from('utilisateurs').select('id,nom,telephone,email').eq('firebase_uid', uid).single();
-        if (errUser || !user) return res.status(404).json({ error: 'Profil introuvable' });
-
-        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-        const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview } = body;
 
         let resa;
 
@@ -138,6 +153,8 @@ module.exports = async (req, res) => {
             if (error || !data) return res.status(404).json({ error: 'Commande introuvable' });
             // Empêche de payer/consulter la commande de quelqu'un d'autre en
             // devinant simplement son code (aucune vérification n'existait avant).
+            // Pour un invité (user.id === null), ça ne passe que si la
+            // commande a elle-même été créée sans compte (utilisateur_id null).
             if (data.utilisateur_id !== user.id) return res.status(403).json({ error: "Cette commande ne t'appartient pas" });
             resa = data;
         } else {

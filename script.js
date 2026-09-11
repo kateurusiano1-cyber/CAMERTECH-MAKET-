@@ -1979,22 +1979,30 @@ function setupPanier() {
 // Réserve les articles du panier avec un code, AVANT tout choix de zone de
 // livraison ou ajout de frais — aucun paiement effectué à ce stade.
 async function reserverCommande() {
-    if (!currentUser) { alert('Connecte-toi pour réserver ta commande.'); return; }
     if (!panier.length) { alert('Ton panier est vide.'); return; }
+    let invite = null;
+    if (!currentUser) {
+        invite = await demanderInfosInvite();
+        if (!invite) return; // annulé
+    }
     const btn = $('btn-reserver');
     btn.disabled = true; btn.textContent = 'Réservation en cours...';
     try {
         // Le serveur relit les vrais prix produits et calcule lui-même le
         // total — le navigateur n'envoie que les id + quantités.
-        const fbUser = await attendreFirebaseUser();
-        const idToken = await fbUser.getIdToken();
+        const headers = { 'Content-Type': 'application/json' };
+        if (currentUser) {
+            const fbUser = await attendreFirebaseUser();
+            headers['Authorization'] = 'Bearer ' + await fbUser.getIdToken();
+        }
         const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+            headers,
             body: JSON.stringify({
                 items: panier.map(p => ({ id: p.id, qty: p.qty, combo_id: p.combo_id })),
                 reservation: true,
-                code_promo: ($('promo-input').value || '').trim() || undefined
+                code_promo: ($('promo-input').value || '').trim() || undefined,
+                invite
             })
         });
         const result = await resp.json();
@@ -2025,6 +2033,35 @@ function openPanier() {
 }
 
 let codePromoApplique = null; // { code, reduction, sousTotal } — remis à zéro dès que le panier change
+
+// Demande nom + téléphone à un visiteur non connecté qui veut payer ou
+// réserver sans créer de compte. Retourne { nom, telephone } ou null si annulé.
+function demanderInfosInvite() {
+    return new Promise((resolve) => {
+        const el = document.createElement('div');
+        el.className = 'modal-overlay';
+        el.style.cssText = 'display:flex;z-index:6000;position:fixed;inset:0;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;padding:16px';
+        el.innerHTML = `<div style="background:white;border-radius:16px;max-width:360px;width:100%;padding:24px">
+            <h3 style="font-size:1rem;margin-bottom:6px">👋 Presque fini !</h3>
+            <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Pas besoin de créer un compte — juste ton nom et ton numéro pour organiser la livraison.</p>
+            <input id="invite-nom" placeholder="Ton nom" style="width:100%;padding:11px;border-radius:8px;border:1.5px solid #ddd;margin-bottom:8px;box-sizing:border-box;font-family:var(--font-body)">
+            <input id="invite-tel" type="tel" placeholder="6XXXXXXXX" style="width:100%;padding:11px;border-radius:8px;border:1.5px solid #ddd;margin-bottom:6px;box-sizing:border-box;font-family:var(--font-body)">
+            <p id="invite-err" style="color:var(--danger);font-size:0.75rem;min-height:16px;margin-bottom:6px"></p>
+            <button id="invite-ok" style="width:100%;background:var(--green);color:white;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;font-family:var(--font-title)">Continuer</button>
+            <button id="invite-annuler" style="width:100%;background:none;border:none;color:#999;padding:8px;cursor:pointer;font-size:0.8rem">Annuler — j'ai déjà un compte / je préfère en créer un</button>
+        </div>`;
+        document.body.appendChild(el);
+        el.querySelector('#invite-annuler').onclick = () => { el.remove(); resolve(null); };
+        el.querySelector('#invite-ok').onclick = () => {
+            const nom = el.querySelector('#invite-nom').value.trim();
+            const telephone = el.querySelector('#invite-tel').value.trim();
+            const err = el.querySelector('#invite-err');
+            if (!nom) { err.textContent = 'Indique ton nom.'; return; }
+            if (telephone.length < 8) { err.textContent = 'Numéro de téléphone invalide.'; return; }
+            el.remove(); resolve({ nom, telephone });
+        };
+    });
+}
 
 function renderPanier() {
     const items = $('panier-items');
@@ -2155,9 +2192,16 @@ function fermerWidgetIkeepay() {
     $('ikeepay-iframe').src = '';
 }
 
-function initierPaiement() {
-    if (!currentUser) { alert('Connectez-vous pour payer.'); return; }
+let inviteInfo = null; // rempli si achat sans compte (invité), sinon null
+
+async function initierPaiement() {
     if (!userZone) { alert('Choisissez votre zone de livraison.'); return; }
+    if (!currentUser) {
+        inviteInfo = await demanderInfosInvite();
+        if (!inviteInfo) return; // annulé
+    } else {
+        inviteInfo = null;
+    }
     const total = panier.reduce((s,p)=>s+p.prix*p.qty,0) + fraisLivraison;
     $('pay-amount').textContent = fmt(total) + ' FCFA';
     $('pay-status').textContent='';
@@ -2168,7 +2212,7 @@ function initierPaiement() {
     const modeH2H = CONFIG.PAIEMENT_MODE === 'h2h';
     $('pay-methods-h2h').style.display = modeH2H ? 'flex' : 'none';
     $('pay-tel-wrap').style.display = modeH2H ? 'block' : 'none';
-    if (modeH2H) $('pay-tel').value = currentUser.telephone || '';
+    if (modeH2H) $('pay-tel').value = (currentUser ? currentUser.telephone : inviteInfo.telephone) || '';
     closeOverlay('panier-overlay');
     openOverlay('pay-overlay');
 }
@@ -2195,17 +2239,21 @@ async function confirmerPaiement() {
         // Mode widget : le serveur recalcule lui-même le total à partir des
         // vrais prix produits, crée la commande, et génère le code — le
         // navigateur n'envoie que les id + quantités du panier.
-        const fbUser = await attendreFirebaseUser();
-        const idToken = await fbUser.getIdToken();
+        const headers = { 'Content-Type':'application/json' };
+        if (currentUser) {
+            const fbUser = await attendreFirebaseUser();
+            headers['Authorization'] = 'Bearer ' + await fbUser.getIdToken();
+        }
         const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
             method:'POST',
-            headers:{ 'Content-Type':'application/json', 'Authorization': 'Bearer ' + idToken },
+            headers,
             body:JSON.stringify({
                 items: panier.map(p => ({ id: p.id, qty: p.qty, combo_id: p.combo_id })),
                 zone_livraison: userZone,
                 frais_livraison: fraisLivraison,
                 note: $('note-cmd').value || null,
-                code_promo: ($('promo-input').value || '').trim() || undefined
+                code_promo: ($('promo-input').value || '').trim() || undefined,
+                invite: inviteInfo
             })
         });
         const result = await resp.json();
