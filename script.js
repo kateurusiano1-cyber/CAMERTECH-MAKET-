@@ -921,8 +921,20 @@ function showUserUI() {
     chargerFavoris();
     abonnerPushSiConnecte();
     if ('setAppBadge' in navigator) {
-        db.from('reservations').select('id',{count:'exact',head:true}).eq('utilisateur_id',currentUser.id).in('statut',['reservee','paiement_en_cours'])
-            .then(({count}) => { if (count>0) navigator.setAppBadge(count); else navigator.clearAppBadge(); }).catch(()=>{});
+        (async () => {
+            try {
+                const fbUser = await attendreFirebaseUser();
+                const idToken = await fbUser.getIdToken();
+                const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+                    body: JSON.stringify({ mescommandes: true })
+                });
+                const result = await resp.json();
+                const count = result.success ? (result.commandes || []).filter(r => ['reservee','paiement_en_cours'].includes(r.statut)).length : 0;
+                if (count > 0) navigator.setAppBadge(count); else navigator.clearAppBadge();
+            } catch (e) {}
+        })();
     }
 }
 
@@ -1589,7 +1601,7 @@ function chargerFlash(prods) {
 }
 
 async function afficherMeilleuresVentes() {
-    const { data } = await db.from('reservations').select('items');
+    const { data } = await db.from('meilleures_ventes').select('items');
     const counts = {};
     (data||[]).forEach(r => (r.items||[]).forEach(i => { counts[i.name]=(counts[i.name]||0)+i.qty; }));
     const sorted = [...allProducts].sort((a,b) => (counts[b.name]||0)-(counts[a.name]||0));
@@ -1980,10 +1992,11 @@ function setupPanier() {
 // livraison ou ajout de frais — aucun paiement effectué à ce stade.
 async function reserverCommande() {
     if (!panier.length) { alert('Ton panier est vide.'); return; }
-    let invite = null;
     if (!currentUser) {
-        invite = await demanderInfosInvite();
-        if (!invite) return; // annulé
+        inviteInfo = await demanderInfosInvite();
+        if (!inviteInfo) return; // annulé
+    } else {
+        inviteInfo = null;
     }
     const btn = $('btn-reserver');
     btn.disabled = true; btn.textContent = 'Réservation en cours...';
@@ -2002,13 +2015,14 @@ async function reserverCommande() {
                 items: panier.map(p => ({ id: p.id, qty: p.qty, combo_id: p.combo_id })),
                 reservation: true,
                 code_promo: ($('promo-input').value || '').trim() || undefined,
-                invite,
+                invite: inviteInfo,
                 visiteur_session_id: visiteurId
             })
         });
         const result = await resp.json();
         if (!result.success) throw new Error(result.error || 'Impossible de réserver.');
         $('reservation-code-display').textContent = result.code;
+        $('invite-nudge-reservation').style.display = (inviteInfo && !currentUser) ? 'block' : 'none';
         closeOverlay('panier-overlay');
         openOverlay('reservation-overlay');
     } catch (e) {
@@ -2034,6 +2048,17 @@ function openPanier() {
 }
 
 let codePromoApplique = null; // { code, reduction, sousTotal } — remis à zéro dès que le panier change
+
+// Ouvre le formulaire d'inscription avec nom/téléphone déjà remplis, à
+// partir des infos données lors d'un achat invité juste avant.
+window.ouvrirSignupApresInvite = () => {
+    if (!inviteInfo) return;
+    closeOverlay('success-overlay'); closeOverlay('reservation-overlay');
+    openOverlay('auth-overlay');
+    $('atab-reg').click();
+    $('reg-nom').value = inviteInfo.nom;
+    $('reg-tel').value = inviteInfo.telephone.replace(/^237/,'').replace(/^\+237/,'').slice(-9);
+};
 
 // Demande nom + téléphone à un visiteur non connecté qui veut payer ou
 // réserver sans créer de compte. Retourne { nom, telephone } ou null si annulé.
@@ -2323,7 +2348,15 @@ function ouvrirWidgetIkeepay(paiement, code) {
 // webhook côté serveur (jamais fait confiance au seul message de l'iframe,
 // qui ne prouve rien côté serveur) avant d'afficher la page de succès.
 async function attendreConfirmationCommande(code, tentative = 0) {
-    const { data: resa } = await db.from('reservations').select('*').eq('code', code).single();
+    let resa = null;
+    try {
+        const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ suivi: { code } })
+        });
+        const result = await resp.json();
+        if (result.success) resa = result.commande;
+    } catch (e) {}
     if (resa?.statut === 'valide') {
         afficherSuccesDepuisResa(resa);
         return;
@@ -2378,6 +2411,7 @@ function afficherSucces(code, total) {
     $('success-recap').innerHTML = html;
     $('success-agence-msg').textContent = `Veuillez vous présenter à notre agence (${CONFIG.AGENCE_ADRESSE}) pour le retrait, ou contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')} pour organiser une expédition par agence de voyage si nécessaire.`;
     $('success-wa').href = `https://wa.me/${CONFIG.AGENCE_TEL}?text=${encodeURIComponent('Bonjour, je viens de payer ma commande '+code+' sur CAMERTECH MARKET.')}`;
+    $('invite-nudge-success').style.display = (inviteInfo && !currentUser) ? 'block' : 'none';
     closeOverlay('panier-overlay');
     openOverlay('success-overlay');
 }
@@ -2397,22 +2431,43 @@ function setupModals() {
 async function suivreCommande() {
     const code=$('suivi-input').value.trim().toUpperCase();
     const res=$('suivi-result'); if(!code)return;
-    const {data}=await db.from('reservations').select('*').eq('code',code).single();
-    if(!data){res.innerHTML='<p style="color:var(--danger)">❌ Code introuvable : '+code+'</p>';return;}
-    const statuts={'en attente':'⏳ En attente','valide':'✅ Validée','livre':'🚚 Livrée','annule':'❌ Annulée','paiement_en_cours':'💳 Paiement en cours'};
-    res.innerHTML=`<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border)">
-        <div style="font-family:monospace;color:var(--green);font-weight:700;margin-bottom:6px">${data.code}</div>
-        <div style="font-size:1.05rem;margin-bottom:6px">${statuts[data.statut]||data.statut}</div>
-        <div style="color:var(--text3);font-size:0.82rem">📅 ${new Date(data.created_at).toLocaleString('fr-FR')}</div>
-        <div style="color:var(--text3);font-size:0.82rem">📍 ${data.zone_livraison||'Non précisé'}</div>
-        <div style="color:var(--green);font-weight:700;margin-top:8px">${fmt(data.total)} FCFA</div>
-    </div>`;
+    res.innerHTML = '<p style="color:var(--text3)">Recherche...</p>';
+    try {
+        const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ suivi: { code } })
+        });
+        const result = await resp.json();
+        if (!result.success) { res.innerHTML = '<p style="color:var(--danger)">❌ ' + (result.error || 'Code introuvable') + '</p>'; return; }
+        const data = result.commande;
+        const statuts={'en attente':'⏳ En attente','valide':'✅ Validée','livre':'🚚 Livrée','annule':'❌ Annulée','paiement_en_cours':'💳 Paiement en cours','reservee':'📌 Réservée'};
+        res.innerHTML=`<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border)">
+            <div style="font-family:monospace;color:var(--green);font-weight:700;margin-bottom:6px">${data.code}</div>
+            <div style="font-size:1.05rem;margin-bottom:6px">${statuts[data.statut]||data.statut}</div>
+            <div style="color:var(--text3);font-size:0.82rem">📅 ${new Date(data.created_at).toLocaleString('fr-FR')}</div>
+            <div style="color:var(--text3);font-size:0.82rem">📍 ${data.zone_livraison||'Non précisé'}</div>
+            <div style="color:var(--green);font-weight:700;margin-top:8px">${fmt(data.total)} FCFA</div>
+        </div>`;
+    } catch (e) {
+        res.innerHTML = '<p style="color:var(--danger)">❌ Erreur, réessaie.</p>';
+    }
 }
 
 async function chargerCommandes() {
     if(!currentUser)return;
-    const {data}=await db.from('reservations').select('*').eq('utilisateur_id',currentUser.id).order('created_at',{ascending:false});
-    window._mesCommandes = (data||[]).filter(r => !r.masquee_client);
+    try {
+        const fbUser = await attendreFirebaseUser();
+        const idToken = await fbUser.getIdToken();
+        const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+            body: JSON.stringify({ mescommandes: true })
+        });
+        const result = await resp.json();
+        window._mesCommandes = result.success ? (result.commandes || []) : [];
+    } catch (e) {
+        window._mesCommandes = [];
+    }
     afficherMesCommandes(window._mesCommandes);
     openOverlay('cmds-overlay');
     syncBadgeCommandes(window._mesCommandes);
@@ -2666,10 +2721,10 @@ async function afficherPanneauAdmin() {
     page.style.display='block';
     page.innerHTML='<div style="text-align:center;padding:60px;color:#888;font-family:Inter,sans-serif">Chargement du panneau...</div>';
 
-    const [{data:prods},usersResult,{data:reservations},{data:avisListe},{data:bannieres},{data:params},retoursResult,feedbackStats,codesPromoResult,visiteursResult,offresResult]=await Promise.all([
+    const [{data:prods},usersResult,reservationsResult,{data:avisListe},{data:bannieres},{data:params},retoursResult,feedbackStats,codesPromoResult,visiteursResult,offresResult]=await Promise.all([
         db.from('products').select('*').order('created_at',{ascending:false}),
         adminAction('utilisateurs','list').catch(()=>({data:[]})),
-        db.from('reservations').select('*').order('created_at',{ascending:false}),
+        adminAction('reservations','list').catch(()=>({data:[]})),
         db.from('avis').select('*').eq('valide',false),
         db.from('bannières').select('*').eq('actif',true),
         db.from('parametres').select('*'),
@@ -2680,6 +2735,7 @@ async function afficherPanneauAdmin() {
         adminAction('offres_groupees','list').catch(()=>({data:[]}))
     ]);
     const users = usersResult.data;
+    const reservations = reservationsResult.data || [];
     const retours = retoursResult.data || [];
     const codesPromo = codesPromoResult.data || [];
     const visiteurs = visiteursResult.data || [];

@@ -264,6 +264,12 @@ module.exports = async (req, res) => {
             return res.status(200).json({ ok: true });
         }
 
+        if (ressource === 'reservations' && action === 'list') {
+            const { data, error } = await supabase.from('reservations').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            return res.status(200).json({ data });
+        }
+
         if (ressource === 'retours' && action === 'list') {
             const { data, error } = await supabase.from('retours').select('*').order('created_at', { ascending: false });
             if (error) throw error;

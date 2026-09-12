@@ -19,6 +19,8 @@
 //       { items: [{id, qty}], reservation: true }
 //   - Payer une commande déjà existante ("Payer maintenant" / Mes Commandes) :
 //       { reference: "CMT-..." }
+//   - Suivre une commande sans compte (juste le code, comme un numéro de colis) :
+//       { suivi: { code: "CMT-..." } }
 // Accompagné soit d'un en-tête Authorization: Bearer <jeton Firebase> (client
 // avec compte), soit d'un champ { invite: { nom, telephone } } dans le body
 // (achat sans compte — pas de jeton). Sans l'un ou l'autre, la requête est
@@ -116,7 +118,26 @@ module.exports = async (req, res) => {
     try {
         const uid = await verifierRequeteUtilisateur(req);
         const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-        const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview, invite, visiteur_session_id } = body;
+        const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview, invite, visiteur_session_id, suivi } = body;
+
+        if (suivi && suivi.code) {
+            // Suivre une commande sans compte, juste avec le code — comme un
+            // numéro de colis. Le code est un aléatoire cryptographique
+            // (~10^12 combinaisons), donc suffisamment sûr pour servir de
+            // seul "mot de passe" ; rate-limité par IP en plus, par prudence.
+            const ipSuivi = (req.headers['x-forwarded-for'] || 'ip-inconnue').split(',')[0].trim();
+            const cleSuivi = 'suivi-commande:' + ipSuivi;
+            const checkSuivi = await tropDeTentatives(supabase, cleSuivi, 15, 10);
+            if (checkSuivi.bloque) return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${Math.ceil(checkSuivi.retryAfterSeconds / 60)} min.` });
+            await signalerEchecTentative(supabase, cleSuivi, 15, 10);
+
+            const codeNorm = String(suivi.code).trim().toUpperCase();
+            const { data: r } = await supabase
+                .from('reservations').select('code,statut,total,items,zone_livraison,frais_livraison,created_at,paye_le')
+                .eq('code', codeNorm).single();
+            if (!r) return res.status(404).json({ error: 'Commande introuvable. Vérifie le code saisi.' });
+            return res.status(200).json({ success: true, commande: r });
+        }
 
         let user; // forme commune { id, nom, telephone, email } — id est null pour un invité
         if (uid) {
@@ -146,6 +167,17 @@ module.exports = async (req, res) => {
         const check = await tropDeTentatives(supabase, cle, 20, 10); // 20 essais / 10 min
         if (check.bloque) return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${Math.ceil(check.retryAfterSeconds / 60)} min.` });
         await signalerEchecTentative(supabase, cle, 20, 10);
+
+        if (body.mescommandes) {
+            // Liste des commandes du compte connecté — remplace l'ancienne
+            // requête directe depuis le navigateur (qui exigeait que
+            // n'importe qui puisse lire toute la table `reservations`).
+            if (!uid) return res.status(401).json({ error: 'Connecte-toi pour voir tes commandes' });
+            const { data, error } = await supabase
+                .from('reservations').select('*').eq('utilisateur_id', user.id).order('created_at', { ascending: false });
+            if (error) throw error;
+            return res.status(200).json({ success: true, commandes: (data || []).filter(r => !r.masquee_client) });
+        }
 
         let resa;
 
