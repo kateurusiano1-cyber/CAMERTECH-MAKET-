@@ -1,6 +1,39 @@
 // ===== INIT SUPABASE =====
 const db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
+// Remplace les fenêtres natives du navigateur ("le site indique...")
+// par une notification stylisée cohérente avec le design du site.
+// type: 'succes' | 'erreur' | 'info'
+function notifier(message, type = 'info') {
+    let conteneur = document.getElementById('toast-conteneur');
+    if (!conteneur) {
+        conteneur = document.createElement('div');
+        conteneur.id = 'toast-conteneur';
+        document.body.appendChild(conteneur);
+    }
+    const icones = { succes: '✅', erreur: '❌', info: 'ℹ️' };
+    // Le message contient parfois déjà son propre emoji (❌/✅/😕/⏳/🔍) — on
+    // évite de le doubler avec l'icône de la pastille.
+    const dejaIcone = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(message.trim());
+    const duree = Math.min(9000, Math.max(3500, message.length * 65));
+
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    toast.innerHTML = `${dejaIcone ? '' : `<span class="toast-icone">${icones[type] || icones.info}</span>`}
+        <span class="toast-msg"></span>
+        <button class="toast-fermer" aria-label="Fermer">✕</button>
+        <span class="toast-barre" style="animation-duration:${duree}ms"></span>`;
+    toast.querySelector('.toast-msg').textContent = message; // textContent : jamais d'injection HTML
+    conteneur.appendChild(toast);
+
+    const retirer = () => {
+        toast.style.animation = 'toastSortie 0.22s ease forwards';
+        setTimeout(() => toast.remove(), 220);
+    };
+    toast.querySelector('.toast-fermer').onclick = retirer;
+    setTimeout(retirer, duree);
+}
+
 // ===== TRACKING VISITEURS (anonyme, sans identité forcée) =====
 // Identifiant aléatoire (pas de nom, pas d'email tant que le visiteur ne
 // s'identifie pas lui-même en créant un compte). Écriture seule côté
@@ -197,7 +230,7 @@ function setupPwa() {
         } else {
             // iOS Safari ne déclenche jamais beforeinstallprompt — on
             // guide manuellement (seul moyen possible sur iPhone/iPad).
-            alert("Pour installer l'app sur iPhone/iPad :\n\n1. Appuie sur le bouton Partager (carré avec une flèche) en bas de Safari\n2. Choisis \"Sur l'écran d'accueil\"\n3. Confirme");
+            notifier("Pour installer l'app sur iPhone/iPad :\n\n1. Appuie sur le bouton Partager (carré avec une flèche) en bas de Safari\n2. Choisis \"Sur l'écran d'accueil\"\n3. Confirme", 'info');
         }
     };
 
@@ -302,9 +335,9 @@ function ouvrirPresentationTelechargement() {
                 if (outcome === 'accepted') { el.remove(); }
                 evenementInstallPwa = null;
             } else if (estIOS) {
-                alert("Pour installer l'app sur iPhone/iPad :\n\n1. Appuie sur le bouton Partager (carré avec une flèche) en bas de Safari\n2. Choisis \"Sur l'écran d'accueil\"\n3. Confirme");
+                notifier("Pour installer l'app sur iPhone/iPad :\n\n1. Appuie sur le bouton Partager (carré avec une flèche) en bas de Safari\n2. Choisis \"Sur l'écran d'accueil\"\n3. Confirme", 'info');
             } else {
-                alert("Ton navigateur ne propose pas encore l'installation automatique ici.\n\nSur Android/Chrome, essaie depuis le menu du navigateur (⋮) → \"Installer l'application\".");
+                notifier("Ton navigateur ne propose pas encore l'installation automatique ici.\n\nSur Android/Chrome, essaie depuis le menu du navigateur (⋮) → \"Installer l'application\".", 'info');
             }
         };
     }
@@ -333,8 +366,8 @@ function attendreFirebaseUser() {
 async function abonnerPushSiConnecte() {
     if (!currentUser) return;
     if (Notification.permission !== 'granted') { console.log('Push: permission =', Notification.permission); return; }
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { alert('🔍 Diagnostic push : ce navigateur ne supporte pas les notifications push.'); return; }
-    if (!CONFIG.VAPID_PUBLIC_KEY) { alert('🔍 Diagnostic push : clé VAPID manquante côté site.'); return; }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { notifier('🔍 Diagnostic push : ce navigateur ne supporte pas les notifications push.', 'info'); return; }
+    if (!CONFIG.VAPID_PUBLIC_KEY) { notifier('🔍 Diagnostic push : clé VAPID manquante côté site.', 'erreur'); return; }
     try {
         const fbUser = await attendreFirebaseUser();
         if (!fbUser) return; // vraiment déconnecté, rien à faire
@@ -355,11 +388,11 @@ async function abonnerPushSiConnecte() {
         });
         if (!resp.ok) {
             const j = await resp.json().catch(()=>({}));
-            alert('🔍 Diagnostic push : le serveur a refusé l\'abonnement — ' + (j.error || resp.status));
+            notifier('🔍 Diagnostic push : le serveur a refusé l\'abonnement — ' + (j.error || resp.status), 'erreur');
         }
     } catch (e) {
         console.error('Erreur abonnement push:', e);
-        alert('🔍 Diagnostic push : ' + (e.message || e));
+        notifier('🔍 Diagnostic push : ' + (e.message || e), 'erreur');
     }
 }
 
@@ -1187,7 +1220,7 @@ async function verifierLienResetDansURL() {
         await window.fbVerifyPasswordResetCode(window.firebaseAuth, resetOobCode);
         openOverlay('confirm-reset-overlay');
     } catch (e) {
-        alert('❌ Ce lien de réinitialisation est invalide ou expiré. Redemandez-en un.');
+        notifier('❌ Ce lien de réinitialisation est invalide ou expiré. Redemandez-en un.', 'erreur');
     }
     // Nettoie l'URL pour ne pas garder le code affiché
     window.history.replaceState({}, '', window.location.pathname);
@@ -1204,7 +1237,7 @@ async function confirmerNouveauMdpDepuisEmail() {
     try {
         await window.fbConfirmPasswordReset(window.firebaseAuth, resetOobCode, mdp1);
         closeOverlay('confirm-reset-overlay');
-        alert('✅ Mot de passe changé ! Tu peux te connecter.');
+        notifier('✅ Mot de passe changé ! Tu peux te connecter.', 'succes');
         openOverlay('auth-overlay');
     } catch (e) {
         err.textContent = '❌ ' + traduireErreurFirebase(e.code);
@@ -1405,7 +1438,7 @@ function setupSearch() {
                 body: JSON.stringify({ image: base64, media_type: fichier.type })
             });
             const result = await resp.json();
-            if (!resp.ok) { alert('❌ ' + (result.error || 'Recherche impossible, réessaie.')); return; }
+            if (!resp.ok) { notifier('❌ ' + (result.error || 'Recherche impossible, réessaie.'), 'erreur'); return; }
 
             const motscles = (result.motscles || []).map(norm);
             let resultats = allProducts.filter(p => {
@@ -1415,13 +1448,13 @@ function setupSearch() {
             if (!resultats.length && result.category) {
                 resultats = allProducts.filter(p => p.category === result.category);
             }
-            if (!resultats.length) { alert('😕 Aucun produit similaire trouvé dans le catalogue.'); return; }
+            if (!resultats.length) { notifier('😕 Aucun produit similaire trouvé dans le catalogue.', 'info'); return; }
 
             $('search-bar').value = '';
             renderProducts(resultats);
             $('produits').scrollIntoView({behavior:'smooth'});
         } catch (err) {
-            alert('❌ Erreur lors de la recherche par photo.');
+            notifier('❌ Erreur lors de la recherche par photo.', 'erreur');
         } finally {
             btn.textContent = '📷'; btn.disabled = false;
         }
@@ -1991,7 +2024,7 @@ function setupPanier() {
 // Réserve les articles du panier avec un code, AVANT tout choix de zone de
 // livraison ou ajout de frais — aucun paiement effectué à ce stade.
 async function reserverCommande() {
-    if (!panier.length) { alert('Ton panier est vide.'); return; }
+    if (!panier.length) { notifier('Ton panier est vide.', 'info'); return; }
     if (!currentUser) {
         inviteInfo = await demanderInfosInvite();
         if (!inviteInfo) return; // annulé
@@ -2026,7 +2059,7 @@ async function reserverCommande() {
         closeOverlay('panier-overlay');
         openOverlay('reservation-overlay');
     } catch (e) {
-        alert('❌ ' + (e.message || 'Erreur lors de la réservation. Réessaie.'));
+        notifier('❌ ' + (e.message || 'Erreur lors de la réservation. Réessaie.'), 'erreur');
     } finally {
         btn.disabled = false; btn.textContent = '📌 Réserver ma commande (sans payer maintenant)';
     }
@@ -2223,7 +2256,7 @@ function fermerWidgetIkeepay() {
 let inviteInfo = null; // rempli si achat sans compte (invité), sinon null
 
 async function initierPaiement() {
-    if (!userZone) { alert('Choisissez votre zone de livraison.'); return; }
+    if (!userZone) { notifier('Choisissez votre zone de livraison.', 'info'); return; }
     if (!currentUser) {
         inviteInfo = await demanderInfosInvite();
         if (!inviteInfo) return; // annulé
@@ -2312,10 +2345,10 @@ window.payerCommandeExistante = async (code) => {
             body: JSON.stringify({ reference: code })
         });
         const result = await resp.json();
-        if (!result.success) { alert('❌ ' + (result.error || 'Impossible de préparer le paiement.')); return; }
+        if (!result.success) { notifier('❌ ' + (result.error || 'Impossible de préparer le paiement.'), 'erreur'); return; }
         ouvrirWidgetIkeepay(result, code);
     } catch (e) {
-        alert('❌ Erreur, réessaie.');
+        notifier('❌ Erreur, réessaie.', 'erreur');
     }
 };
 
@@ -2362,11 +2395,11 @@ async function attendreConfirmationCommande(code, tentative = 0) {
         return;
     }
     if (resa?.statut === 'paiement_echoue') {
-        alert('❌ Le paiement a échoué ou a été annulé. Tu peux réessayer depuis ton panier.');
+        notifier('❌ Le paiement a échoué ou a été annulé. Tu peux réessayer depuis ton panier.', 'erreur');
         return;
     }
     if (tentative >= 8) {
-        alert('⏳ Paiement en cours de confirmation. Ta commande sera validée automatiquement dans un instant — vérifie dans "Mes commandes".');
+        notifier('⏳ Paiement en cours de confirmation. Ta commande sera validée automatiquement dans un instant — vérifie dans "Mes commandes".', 'info');
         return;
     }
     setTimeout(() => attendreConfirmationCommande(code, tentative + 1), 2000);
@@ -2516,7 +2549,7 @@ window.supprimerCommandeClient = async (code) => {
     if (!confirm(`Retirer la commande ${code} de ton historique ?\n\nElle reste consultable par le support si besoin, mais tu ne la verras plus ici.`)) return;
     try {
         const fbUser = await attendreFirebaseUser();
-        if (!fbUser) { alert('❌ Session expirée, reconnecte-toi puis réessaie.'); return; }
+        if (!fbUser) { notifier('❌ Session expirée, reconnecte-toi puis réessaie.', 'erreur'); return; }
         const idToken = await fbUser.getIdToken();
         await fetch('/api/facture', {
             method: 'POST',
@@ -2525,19 +2558,19 @@ window.supprimerCommandeClient = async (code) => {
         });
         chargerCommandes();
     } catch (e) {
-        alert('❌ Erreur');
+        notifier('❌ Erreur', 'erreur');
     }
 };
 
 window.telechargerFacture = async (code) => {
     try {
         const fbUser = await attendreFirebaseUser();
-        if (!fbUser) { alert('❌ Session expirée, reconnecte-toi puis réessaie.'); return; }
+        if (!fbUser) { notifier('❌ Session expirée, reconnecte-toi puis réessaie.', 'erreur'); return; }
         const idToken = await fbUser.getIdToken();
         const resp = await fetch(`/api/facture?code=${encodeURIComponent(code)}`, {
             headers: { 'Authorization': 'Bearer ' + idToken }
         });
-        if (!resp.ok) { const j = await resp.json().catch(()=>({})); alert('❌ ' + (j.error || 'Impossible de télécharger la facture')); return; }
+        if (!resp.ok) { const j = await resp.json().catch(()=>({})); notifier('❌ ' + (j.error || 'Impossible de télécharger la facture'), 'erreur'); return; }
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         try {
@@ -2553,7 +2586,7 @@ window.telechargerFacture = async (code) => {
         setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (e) {
         console.error('Erreur téléchargement facture:', e);
-        alert('❌ Erreur lors du téléchargement : ' + (e.message || 'inconnue'));
+        notifier('❌ Erreur lors du téléchargement : ' + (e.message || 'inconnue'), 'erreur');
     }
 };
 
@@ -3427,7 +3460,7 @@ window.telechargerFactureAdmin = async (code) => {
         const resp = await fetch(`/api/facture?code=${encodeURIComponent(code)}`, {
             headers: { 'Authorization': 'Bearer ' + (sessionStorage.getItem('cmkt_admin_token') || '') }
         });
-        if (!resp.ok) { const j = await resp.json().catch(()=>({})); alert('❌ ' + (j.error || 'Impossible de télécharger le reçu')); return; }
+        if (!resp.ok) { const j = await resp.json().catch(()=>({})); notifier('❌ ' + (j.error || 'Impossible de télécharger le reçu'), 'erreur'); return; }
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         try {
@@ -3440,7 +3473,7 @@ window.telechargerFactureAdmin = async (code) => {
         setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (e) {
         console.error('Erreur téléchargement facture (admin):', e);
-        alert('❌ Erreur lors du téléchargement : ' + (e.message || 'inconnue'));
+        notifier('❌ Erreur lors du téléchargement : ' + (e.message || 'inconnue'), 'erreur');
     }
 };
 
@@ -3470,13 +3503,13 @@ window.validerAvisAdmin = async id => { await adminAction('avis','update',{id,pa
 window.supprimerAvisAdmin = async id => { if(!confirm('Supprimer ?'))return; await adminAction('avis','delete',{id}); afficherPanneauAdmin(); };
 
 window.adminResetMdp = async (userId, nom, email) => {
-    if (!email) { alert(`❌ ${nom} n'a pas d'email enregistré, impossible d'envoyer un lien de réinitialisation.`); return; }
+    if (!email) { notifier(`❌ ${nom} n'a pas d'email enregistré, impossible d'envoyer un lien de réinitialisation.`, 'erreur'); return; }
     if (!confirm(`Envoyer un lien de réinitialisation de mot de passe à ${nom} (${email}) ?`)) return;
     try {
         await window.fbSendPasswordResetEmail(window.firebaseAuth, email);
-        alert(`✅ Email de réinitialisation envoyé à ${email}.`);
+        notifier(`✅ Email de réinitialisation envoyé à ${email}.`, 'succes');
     } catch (e) {
-        alert('❌ ' + traduireErreurFirebase(e.code));
+        notifier('❌ ' + traduireErreurFirebase(e.code), 'erreur');
     }
 };
 window.adminSupprimerUtilisateur = async (userId, nom) => {
@@ -3485,9 +3518,9 @@ window.adminSupprimerUtilisateur = async (userId, nom) => {
         const r = await adminAction('utilisateurs', 'delete', { id: userId });
         afficherPanneauAdmin();
         const identifiant = r.email || r.firebase_uid || '(voir Firebase)';
-        alert(`✅ Profil de ${nom} supprimé.\n\nPour finir, supprime aussi son compte de connexion dans la console Firebase :\nAuthentication → Users → cherche "${identifiant}" → icône poubelle.`);
+        notifier(`✅ Profil de ${nom} supprimé.\n\nPour finir, supprime aussi son compte de connexion dans la console Firebase :\nAuthentication → Users → cherche "${identifiant}" → icône poubelle.`, 'succes');
     } catch (e) {
-        alert('❌ ' + e.message);
+        notifier('❌ ' + e.message, 'erreur');
     }
 };
 window.desactiverBanniere = async id => { await adminAction('bannieres','update',{id,payload:{actif:false}}); afficherPanneauAdmin(); };
