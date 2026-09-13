@@ -501,6 +501,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch(e) { localStorage.removeItem('cmkt_user'); }
 
     initTrackingVisiteur();
+    setupChatWidget();
 
     // Thème
     const theme = localStorage.getItem('cmkt_theme') || 'light';
@@ -1145,6 +1146,130 @@ function ouvrirCompositionFlashCombo() {
 
     rendreContenu();
     document.body.appendChild(el);
+}
+
+
+// ===== WIDGET D'AIDE (FAQ automatique, 100% côté client, aucun appel serveur) =====
+const FAQ_DATA = [
+    { motsCles: ['commander','commande','acheter','passer commande'],
+      question: 'Comment passer une commande ?',
+      reponse: "Ajoute les produits qui t'intéressent au panier (icône 🛒), choisis ta zone de livraison, puis clique sur \"Payer maintenant\". Pas besoin de compte : tu peux commander directement avec juste ton nom et ton téléphone." },
+    { motsCles: ['payer','paiement','mobile money','momo','carte','virement','usdt','crypto'],
+      question: 'Quels sont les moyens de paiement ?',
+      reponse: "Tu peux payer par Mobile Money (MTN/Orange), carte bancaire (Visa/Mastercard), virement bancaire, ou en cryptomonnaie (USDT) — le paiement est géré par iKeePay, sécurisé." },
+    { motsCles: ['compte','inscription','invité','sans compte'],
+      question: 'Puis-je commander sans créer de compte ?',
+      reponse: "Oui ! Au moment de payer, indique juste ton nom et ton téléphone si tu ne veux pas créer de compte. Tu recevras un code pour suivre ta commande. Créer un compte permet en plus de garder un historique et des points de fidélité." },
+    { motsCles: ['livraison','livrer','zone','quartier','délai'],
+      question: 'Comment fonctionne la livraison ?',
+      reponse: "Livraison à domicile (1000 FCFA) dans les quartiers couverts de Douala. Pour les autres quartiers, le retrait en agence est gratuit. La zone se choisit au moment de valider ton panier." },
+    { motsCles: ['flash combo','kit','combo','pack'],
+      question: "C'est quoi le Flash Combo ?",
+      reponse: "Le Flash Combo (bandeau ⚡ en haut du site) te permet de composer un kit — un produit principal + des accessoires au choix — à un prix forfaitaire très réduit par rapport à l'achat séparé. Clique sur le bandeau pour composer le tien." },
+    { motsCles: ['code promo','réduction','promo','coupon'],
+      question: 'Comment utiliser un code promo ?',
+      reponse: "Dans ton panier, il y a un champ \"Code promo\" — tape ton code et clique sur \"Appliquer\" pour voir la réduction avant de payer. Un code promo ne se cumule pas avec un Flash Combo." },
+    { motsCles: ['réserver','réservation','sans payer','plus tard'],
+      question: 'Comment réserver sans payer tout de suite ?',
+      reponse: "Dans ton panier, choisis \"📌 Réserver ma commande\" au lieu de payer. Tes articles sont mis de côté avec un code — tu les retrouveras dans \"Mes Commandes\" (ou en gardant le code si tu n'as pas de compte) pour payer quand tu veux." },
+    { motsCles: ['suivre','suivi','statut','où est ma commande'],
+      question: 'Comment suivre ma commande ?',
+      reponse: "Menu ☰ → \"Suivi de commande\", puis entre ton code de commande (format CMT-XXXXXXXXXX). Ça marche avec ou sans compte." },
+    { motsCles: ['original','copie','authentique','qualité','faux'],
+      question: 'Les produits sont-ils originaux ou des copies ?',
+      reponse: "Ça dépend du produit — certains sont des copies, des copies certifiées, ou des originaux, et c'est indiqué sur chaque fiche produit (le prix varie en conséquence). Plus de détails dans notre Politique de confidentialité, en bas de page." },
+    { motsCles: ['retour','rembourser','remboursement','échange','défectueux'],
+      question: 'Comment faire un retour ou une réclamation ?',
+      reponse: "Depuis \"Mes Commandes\", ouvre la commande concernée et utilise le bouton de demande de retour en expliquant le motif — l'équipe te recontacte rapidement. Un compte est nécessaire pour cette fonctionnalité." },
+    { motsCles: ['application','app','installer','pwa'],
+      question: "Comment installer l'application ?",
+      reponse: "Menu ☰ → \"📲 Télécharger l'app\" (ou le bouton dans l'en-tête). Ça installe un raccourci sur ton téléphone, sans passer par un store — gratuit et léger." },
+    { motsCles: ['contact','whatsapp','joindre','téléphone','appeler'],
+      question: 'Comment vous contacter ?',
+      reponse: "Par WhatsApp au 699 781 160 ou 653 756 167 — les liens sont en bas de chaque page et sur chaque fiche produit." },
+];
+
+const chatWidgetNorm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+function chatWidgetTrouverReponse(texte) {
+    const t = chatWidgetNorm(texte);
+    let meilleur = null, meilleurScore = 0;
+    for (const item of FAQ_DATA) {
+        const score = item.motsCles.reduce((s, mc) => s + (t.includes(chatWidgetNorm(mc)) ? mc.length : 0), 0);
+        if (score > meilleurScore) { meilleurScore = score; meilleur = item; }
+    }
+    return meilleurScore > 0 ? meilleur : null;
+}
+
+function chatWidgetAjouterBulle(texte, type) {
+    const zone = $('chat-widget-messages');
+    const bulle = document.createElement('div');
+    bulle.className = 'cw-bulle ' + (type === 'user' ? 'cw-user' : 'cw-bot');
+    bulle.textContent = texte;
+    zone.appendChild(bulle);
+    zone.scrollTop = zone.scrollHeight;
+}
+
+function chatWidgetAfficherSuggestions() {
+    const zone = $('chat-widget-messages');
+    const bloc = document.createElement('div');
+    bloc.className = 'cw-suggestions';
+    FAQ_DATA.forEach(item => {
+        const btn = document.createElement('button');
+        btn.className = 'cw-suggestion-btn';
+        btn.textContent = item.question;
+        btn.onclick = () => chatWidgetPoserQuestion(item.question, item);
+        bloc.appendChild(btn);
+    });
+    zone.appendChild(bloc);
+    zone.scrollTop = zone.scrollHeight;
+}
+
+function chatWidgetPoserQuestion(texteAffiche, itemTrouve) {
+    chatWidgetAjouterBulle(texteAffiche, 'user');
+    setTimeout(() => {
+        if (itemTrouve) {
+            chatWidgetAjouterBulle(itemTrouve.reponse, 'bot');
+        } else {
+            chatWidgetAjouterBulle("Je n'ai pas de réponse toute prête pour ça — le plus simple, c'est de nous écrire directement 👇", 'bot');
+            const zone = $('chat-widget-messages');
+            const lien = document.createElement('a');
+            lien.href = `https://wa.me/${CONFIG.WA1}?text=${encodeURIComponent(texteAffiche)}`;
+            lien.target = '_blank';
+            lien.className = 'cw-suggestion-btn';
+            lien.style.display = 'block';
+            lien.style.textAlign = 'center';
+            lien.style.textDecoration = 'none';
+            lien.textContent = '📱 Continuer sur WhatsApp';
+            zone.appendChild(lien);
+            zone.scrollTop = zone.scrollHeight;
+        }
+    }, 350);
+}
+
+function setupChatWidget() {
+    let dejaOuvert = false;
+    $('chat-widget-btn').onclick = () => {
+        const panel = $('chat-widget-panel');
+        const ouvert = panel.style.display === 'flex';
+        panel.style.display = ouvert ? 'none' : 'flex';
+        if (!ouvert && !dejaOuvert) {
+            dejaOuvert = true;
+            chatWidgetAjouterBulle("👋 Salut ! Je suis l'assistant CamerTech. Choisis une question ci-dessous, ou tape la tienne :", 'bot');
+            chatWidgetAfficherSuggestions();
+        }
+    };
+    $('chat-widget-close').onclick = () => { $('chat-widget-panel').style.display = 'none'; };
+
+    const envoyer = () => {
+        const input = $('chat-widget-input');
+        const texte = input.value.trim();
+        if (!texte) return;
+        input.value = '';
+        chatWidgetPoserQuestion(texte, chatWidgetTrouverReponse(texte));
+    };
+    $('chat-widget-send').onclick = envoyer;
+    $('chat-widget-input').onkeydown = e => { if (e.key === 'Enter') envoyer(); };
 }
 
 

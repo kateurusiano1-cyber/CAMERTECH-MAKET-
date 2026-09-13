@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /admin-cmr2025
+Disallow: /api/
 
-Sitemap: https://camertechmarket.com/sitemap.xml
+Sitemap: https://camertech-maket.vercel.app/sitemap.xml

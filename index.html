@@ -349,10 +349,28 @@
         <div class="footer-links">
             <a href="https://wa.me/237699781160" target="_blank">📱 699 781 160</a>
             <a href="https://wa.me/237653756167" target="_blank">📱 653 756 167</a>
+            <a href="#" onclick="event.preventDefault(); openOverlay('politique-overlay')" style="text-decoration:underline">Politique de confidentialité</a>
         </div>
     </div>
     <div class="footer-copy" data-i18n="footer_copy">© 2025 CAMERTECH MARKET — Douala, Cameroun</div>
 </footer>
+
+<!-- WIDGET D'AIDE (FAQ automatique) -->
+<button id="chat-widget-btn" title="Besoin d'aide ?">💬</button>
+<div id="chat-widget-panel" style="display:none">
+    <div id="chat-widget-header">
+        <div>
+            <div style="font-weight:700">💬 Assistant CamerTech</div>
+            <div style="font-size:0.72rem;opacity:0.9">Réponses instantanées</div>
+        </div>
+        <button id="chat-widget-close" aria-label="Fermer">✕</button>
+    </div>
+    <div id="chat-widget-messages"></div>
+    <div id="chat-widget-input-row">
+        <input type="text" id="chat-widget-input" placeholder="Pose ta question...">
+        <button id="chat-widget-send" aria-label="Envoyer">➤</button>
+    </div>
+</div>
 
 <!-- MODAL AUTH -->
 <div class="modal-overlay" id="auth-overlay" style="display:none">
