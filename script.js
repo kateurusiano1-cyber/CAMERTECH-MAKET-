@@ -84,7 +84,11 @@ async function initTrackingVisiteur() {
             }).eq('session_id', visiteurId);
         } else {
             const params = new URLSearchParams(location.search);
-            await db.from('visiteurs_sessions').insert([{
+            // upsert plutôt qu'un simple insert : si un second appel arrive
+            // presque en même temps (plusieurs onglets ouverts, rechargement
+            // très rapide), on évite un conflit de clé primaire sur
+            // session_id — la ligne est juste mise à jour au lieu d'échouer.
+            await db.from('visiteurs_sessions').upsert([{
                 session_id: visiteurId,
                 utilisateur_id: currentUser ? currentUser.id : null,
                 user_agent: navigator.userAgent,
@@ -92,7 +96,7 @@ async function initTrackingVisiteur() {
                 utm_source: params.get('utm_source'),
                 utm_medium: params.get('utm_medium'),
                 utm_campaign: params.get('utm_campaign')
-            }]);
+            }], { onConflict: 'session_id', ignoreDuplicates: false });
         }
     } catch (e) {}
     logPageVue(location.pathname);
@@ -107,13 +111,22 @@ async function initTrackingVisiteur() {
 }
 
 function _envoyerDureeBeacon() {
-    if (!_pageActuelle || !navigator.sendBeacon) return;
+    if (!_pageActuelle) return;
     const duree = Math.round((Date.now() - _pageDebut) / 1000);
     if (duree < 2) return;
     const url = `${CONFIG.SUPABASE_URL}/rest/v1/visiteurs_evenements`;
-    const blob = new Blob([JSON.stringify({ session_id: visiteurId, type: 'page_view', cible: _pageActuelle, duree_secondes: duree })], { type: 'application/json' });
     try {
-        navigator.sendBeacon(url + `?apikey=${CONFIG.SUPABASE_ANON_KEY}`, blob);
+        // fetch(..., {keepalive:true}) plutôt que navigator.sendBeacon() :
+        // sendBeacon envoie parfois les cookies même en cross-origin, ce qui
+        // entre en conflit avec l'en-tête CORS "Access-Control-Allow-Origin: *"
+        // de Supabase (un navigateur bloque cette combinaison) — la requête
+        // échouait silencieusement (net::ERR_FAILED). keepalive:true garantit
+        // le même comportement utile (la requête part même si la page se ferme).
+        fetch(url, {
+            method: 'POST', keepalive: true, credentials: 'omit',
+            headers: { 'Content-Type': 'application/json', 'apikey': CONFIG.SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + CONFIG.SUPABASE_ANON_KEY },
+            body: JSON.stringify({ session_id: visiteurId, type: 'page_view', cible: _pageActuelle, duree_secondes: duree })
+        }).catch(() => {});
     } catch (e) {}
 }
 
