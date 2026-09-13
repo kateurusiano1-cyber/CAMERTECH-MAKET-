@@ -126,10 +126,16 @@ module.exports = async (req, res) => {
             // (~10^12 combinaisons), donc suffisamment sûr pour servir de
             // seul "mot de passe" ; rate-limité par IP en plus, par prudence.
             const ipSuivi = (req.headers['x-forwarded-for'] || 'ip-inconnue').split(',')[0].trim();
+            // Limite plus généreuse qu'un simple lookup manuel : cet
+            // endpoint sert aussi à la vérification automatique après un
+            // paiement Mobile Money, qui interroge le serveur toutes les
+            // quelques secondes pendant plusieurs minutes (voir
+            // attendreConfirmationCommande côté client). Reste largement
+            // insuffisant pour énumérer l'espace de codes (~10^12 valeurs).
             const cleSuivi = 'suivi-commande:' + ipSuivi;
-            const checkSuivi = await tropDeTentatives(supabase, cleSuivi, 15, 10);
+            const checkSuivi = await tropDeTentatives(supabase, cleSuivi, 100, 10);
             if (checkSuivi.bloque) return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${Math.ceil(checkSuivi.retryAfterSeconds / 60)} min.` });
-            await signalerEchecTentative(supabase, cleSuivi, 15, 10);
+            await signalerEchecTentative(supabase, cleSuivi, 100, 10);
 
             const codeNorm = String(suivi.code).trim().toUpperCase();
             const { data: r } = await supabase

@@ -495,8 +495,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const saved = localStorage.getItem('cmkt_user');
         if (saved) {
             currentUser = JSON.parse(saved); showUserUI();
+            // Restaure d'abord depuis le navigateur : un ajout au panier tout
+            // juste avant un rafraîchissement peut ne pas avoir encore eu le
+            // temps d'être envoyé au serveur (délai de 600ms) — sans ça, ce
+            // dernier article ajouté disparaîtrait. chargerPanierServeur()
+            // fusionne ensuite avec le serveur plutôt que d'écraser.
+            restaurerPanierInvite();
             await chargerPanierServeur();
             ecouterPanierEnDirect();
+        } else {
+            // Pas de compte : le panier n'est jamais envoyé au serveur, donc
+            // on le retrouve depuis le navigateur (localStorage) — sans ça,
+            // tout redémarre à zéro à chaque fermeture d'onglet.
+            restaurerPanierInvite();
         }
     } catch(e) { localStorage.removeItem('cmkt_user'); }
 
@@ -2054,6 +2065,16 @@ let dernierPanierEnvoye = null; // évite de se re-synchroniser soi-même via l'
 // Sauvegarde le panier courant côté serveur (anti-rebond : regroupe les appels rapprochés
 // pour ne pas spammer Supabase à chaque clic +/-).
 function syncPanierServeur() {
+    // Sauvegarde locale immédiate, pour tout le monde (connecté ou invité) —
+    // survit à un rechargement de page ou une fermeture d'onglet, même sans
+    // compte. Un compte connecté bénéficie EN PLUS de la synchro serveur
+    // multi-appareils ci-dessous (source de vérité dans ce cas).
+    try {
+        localStorage.setItem('cmkt_panier_invite', JSON.stringify({
+            items: panier, zone: userZone || null, frais: fraisLivraison || 0, horodatage: Date.now()
+        }));
+    } catch (e) {}
+
     if (!currentUser) return;
     clearTimeout(syncPanierTimeout);
     syncPanierTimeout = setTimeout(async () => {
@@ -2089,6 +2110,28 @@ async function chargerPanierServeur() {
         updatePanierBtn();
         if ($('zone-select') && userZone) { $('zone-select').value = userZone; updateLivraison(); }
     } catch (e) { /* pas encore de panier serveur pour ce compte : normal */ }
+}
+
+// Restaure le panier d'un visiteur SANS compte depuis le navigateur — c'est
+// la seule "mémoire" possible pour lui, vu qu'il n'y a pas de compte pour
+// synchroniser côté serveur. Expire au bout de 14 jours pour ne pas proposer
+// un panier avec des prix ou un stock trop anciens.
+function restaurerPanierInvite() {
+    try {
+        const brut = localStorage.getItem('cmkt_panier_invite');
+        if (!brut) return;
+        const sauvegarde = JSON.parse(brut);
+        if (!sauvegarde || !Array.isArray(sauvegarde.items) || !sauvegarde.items.length) return;
+        if (sauvegarde.horodatage && (Date.now() - sauvegarde.horodatage) > 14 * 24 * 3600 * 1000) {
+            localStorage.removeItem('cmkt_panier_invite');
+            return;
+        }
+        panier = sauvegarde.items;
+        if (sauvegarde.zone) userZone = sauvegarde.zone;
+        if (sauvegarde.frais) fraisLivraison = sauvegarde.frais;
+        updatePanierBtn();
+        if ($('zone-select') && userZone) { $('zone-select').value = userZone; updateLivraison(); }
+    } catch (e) {}
 }
 
 // Écoute en direct les changements faits depuis un AUTRE appareil connecté au même compte
@@ -2495,14 +2538,23 @@ function ouvrirWidgetIkeepay(paiement, code) {
     $('ikeepay-iframe').src = `https://ikeepay.com/checkout/v1/inline?${params.toString()}`;
     $('ikeepay-overlay').style.display = 'flex';
 
-    const onMessage = async (event) => {
+    // On ne fait plus reposer TOUTE la confirmation sur le signal
+    // "ikeepay-success" de la fenêtre — avec le Mobile Money, la validation
+    // passe souvent par un code USSD sur le téléphone du client, et ce
+    // signal n'arrive pas toujours de façon fiable. La vérification démarre
+    // donc dès l'ouverture, en parallèle, directement contre notre serveur
+    // (qui lui reçoit le vrai webhook de paiement d'iKeePay).
+    attendreConfirmationCommande(code);
+
+    const onMessage = (event) => {
         if (event.data === 'ikeepay-close') {
             fermerWidgetIkeepay();
         }
         if (event.data === 'ikeepay-success') {
             window.removeEventListener('message', onMessage);
             fermerWidgetIkeepay();
-            await attendreConfirmationCommande(code);
+            // La vérification en arrière-plan est déjà en cours — on ne la
+            // relance pas, elle affichera le succès dès que confirmé.
         }
     };
     window.addEventListener('message', onMessage);
@@ -2522,18 +2574,27 @@ async function attendreConfirmationCommande(code, tentative = 0) {
         if (result.success) resa = result.commande;
     } catch (e) {}
     if (resa?.statut === 'valide') {
+        fermerWidgetIkeepay();
         afficherSuccesDepuisResa(resa);
         return;
     }
     if (resa?.statut === 'paiement_echoue') {
+        fermerWidgetIkeepay();
         notifier('❌ Le paiement a échoué ou a été annulé. Tu peux réessayer depuis ton panier.', 'erreur');
         return;
     }
-    if (tentative >= 8) {
-        notifier('⏳ Paiement en cours de confirmation. Ta commande sera validée automatiquement dans un instant — vérifie dans "Mes commandes".', 'info');
+    // Le Mobile Money demande souvent une confirmation par code USSD sur le
+    // téléphone du client — ça peut prendre un moment. On vérifie toutes les
+    // 3 secondes pendant les 2 premières minutes, puis toutes les 8 secondes
+    // pendant encore ~4 minutes (au cas où le client met du temps à
+    // confirmer), avant d'abandonner et de proposer "Mes commandes".
+    const dureeRapide = 40, dureeLente = 30;
+    if (tentative >= dureeRapide + dureeLente) {
+        notifier('⏳ Paiement toujours en attente de confirmation. Vérifie le statut dans "Mes commandes" dans quelques instants — ta commande sera validée automatiquement dès la confirmation reçue.', 'info');
         return;
     }
-    setTimeout(() => attendreConfirmationCommande(code, tentative + 1), 2000);
+    const delai = tentative < dureeRapide ? 3000 : 8000;
+    setTimeout(() => attendreConfirmationCommande(code, tentative + 1), delai);
 }
 
 // (ancienne gestion du retour de redirection GeniusPay supprimée — le widget
