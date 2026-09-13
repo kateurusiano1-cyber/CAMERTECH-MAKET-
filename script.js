@@ -2155,7 +2155,12 @@ function ecouterPanierEnDirect() {
                 panier.length ? renderPanier() : openPanier();
             }
         })
-        .subscribe();
+        .subscribe((status, err) => {
+            // Diagnostic temporaire — à retirer une fois le problème de
+            // synchro confirmé résolu. Regarder la console (F12) après avoir
+            // ouvert le site connecté : SUBSCRIBED = ok, CHANNEL_ERROR/TIMED_OUT = problème.
+            console.log('[Synchro panier] statut canal :', status, err || '');
+        });
 }
 
 // Coupe l'écoute en direct (à la déconnexion, pour ne pas laisser un canal ouvert inutilement).
