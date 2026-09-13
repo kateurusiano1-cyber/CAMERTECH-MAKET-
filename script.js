@@ -579,14 +579,14 @@ async function chargerParametres() {
 // ===== TRADUCTION (FR/EN) =====
 const I18N = {
     fr: {
-        nav_accueil: '🏠 Accueil', nav_flash: '⚡ Ventes Flash', nav_promo: '🏷️ Promotions',
+        nav_accueil: '🏠 Accueil', nav_flash: '⚡ Ventes Flash', nav_combo: '🎁 Flash Combo', nav_promo: '🏷️ Promotions',
         nav_nouveautes: '🆕 Nouveautés', nav_meilleures: '⭐ Meilleures ventes',
         sep_categories: 'Catégories', sep_services: 'Services', sep_preferences: 'Préférences',
         cat_telephonie_ic: '📱 Téléphonie', cat_accessoires_ic: '🎧 Accessoires', cat_electronique_ic: '💻 Électronique',
         cat_reseau_ic: '📡 Réseau', cat_gaming_ic: '🎮 Gaming', cat_autre_ic: '📦 Autre',
         cat_telephonie: 'Téléphonie', cat_accessoires: 'Accessoires', cat_electronique: 'Électronique',
         cat_reseau: 'Réseau', cat_gaming: 'Gaming', cat_flash: 'Flash', cat_tous: 'Tous', cat_autre: 'Autre',
-        nav_suivi: '🚚 Suivi de commande', nav_loc: '🏪 Localisation boutique', nav_contact: '📞 Nous contacter', nav_retour: '🔄 Politique de retour',
+        nav_suivi: '🚚 Suivi de commande', nav_loc: '🏪 Localisation boutique', nav_contact: '📞 Nous contacter', nav_retour: '🔄 Politique de retour', nav_politique: '🔒 Politique de confidentialité',
         pref_langue: '🌍 Langue', pref_sombre: '🌙 Mode sombre', pref_zone: '📍 Ma zone', pref_prixmax: '💰 Prix max (FCFA)',
         choisir: 'Choisir...', retrait_gratuit: '🏪 Retrait gratuit',
         rechercher_ph: '🔎 Rechercher un produit...', btn_connexion: '👤 Connexion',
@@ -608,14 +608,14 @@ const I18N = {
         err_politique_requise: '❌ Tu dois accepter la politique de confidentialité pour continuer'
     },
     en: {
-        nav_accueil: '🏠 Home', nav_flash: '⚡ Flash Sales', nav_promo: '🏷️ Promotions',
+        nav_accueil: '🏠 Home', nav_flash: '⚡ Flash Sales', nav_combo: '🎁 Flash Combo', nav_promo: '🏷️ Promotions',
         nav_nouveautes: '🆕 New Arrivals', nav_meilleures: '⭐ Best Sellers',
         sep_categories: 'Categories', sep_services: 'Services', sep_preferences: 'Preferences',
         cat_telephonie_ic: '📱 Phones', cat_accessoires_ic: '🎧 Accessories', cat_electronique_ic: '💻 Electronics',
         cat_reseau_ic: '📡 Network', cat_gaming_ic: '🎮 Gaming', cat_autre_ic: '📦 Other',
         cat_telephonie: 'Phones', cat_accessoires: 'Accessories', cat_electronique: 'Electronics',
         cat_reseau: 'Network', cat_gaming: 'Gaming', cat_flash: 'Flash', cat_tous: 'All', cat_autre: 'Other',
-        nav_suivi: '🚚 Track Order', nav_loc: '🏪 Store Location', nav_contact: '📞 Contact Us', nav_retour: '🔄 Return Policy',
+        nav_suivi: '🚚 Track Order', nav_loc: '🏪 Store Location', nav_contact: '📞 Contact Us', nav_retour: '🔄 Return Policy', nav_politique: '🔒 Privacy Policy',
         pref_langue: '🌍 Language', pref_sombre: '🌙 Dark Mode', pref_zone: '📍 My Area', pref_prixmax: '💰 Max Price (FCFA)',
         choisir: 'Choose...', retrait_gratuit: '🏪 Free pickup',
         rechercher_ph: '🔎 Search a product...', btn_connexion: '👤 Login',
@@ -710,6 +710,12 @@ function setupSidebar() {
 
     $('sl-accueil').onclick = () => { closeSidebar(); window.scrollTo({top:0,behavior:'smooth'}); };
     $('sl-flash').onclick = () => { closeSidebar(); filtrerFlash(); };
+    $('sl-combo').onclick = () => {
+        closeSidebar();
+        if (flashComboActif) { ouvrirCompositionFlashCombo(); }
+        else { notifier("Aucun Flash Combo actif pour le moment — reviens bientôt !", 'info'); }
+    };
+    $('sl-politique').onclick = () => { closeSidebar(); openOverlay('politique-overlay'); };
     $('sl-promo').onclick = () => { closeSidebar(); renderProducts(allProducts.filter(p=>p.promo_active)); };
     $('sl-nouveautes').onclick = () => { closeSidebar(); renderProducts(allProducts.filter(p=>isNew(p.created_at))); };
     $('sl-meilleures').onclick = () => { closeSidebar(); afficherMeilleuresVentes(); };
