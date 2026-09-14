@@ -2193,14 +2193,14 @@ function setupPanier() {
             setTimeout(()=>$('btn-copier').textContent='📋 Copier le code',2000);
         });
     };
-    $('btn-fermer-code').onclick = () => { closeOverlay('code-overlay'); panier=[]; updatePanierBtn(); syncPanierServeur(); };
+    $('btn-fermer-code').onclick = () => { closeOverlay('code-overlay'); fermerWidgetIkeepay(); panier=[]; updatePanierBtn(); syncPanierServeur(); };
     $('btn-copier-success').onclick = () => {
         navigator.clipboard.writeText($('success-code-display').textContent).then(() => {
             $('btn-copier-success').textContent='✅ Copié !';
             setTimeout(()=>$('btn-copier-success').textContent='📋 Copier le code',2000);
         });
     };
-    $('btn-fermer-success').onclick = () => { closeOverlay('success-overlay'); panier=[]; updatePanierBtn(); syncPanierServeur(); };
+    $('btn-fermer-success').onclick = () => { closeOverlay('success-overlay'); fermerWidgetIkeepay(); panier=[]; updatePanierBtn(); syncPanierServeur(); };
 
     $('btn-reserver').onclick = reserverCommande;
     $('btn-copier-reservation').onclick = () => {
@@ -2627,7 +2627,7 @@ function afficherSuccesDepuisResa(resa) {
         panier = d.items; userZone = d.zone; fraisLivraison = d.frais;
         sessionStorage.removeItem('cmkt_panier_'+resa.code);
     } else {
-        panier = (resa.items||[]).map(i => ({ name:i.name, qty:i.qty, prix:i.prix }));
+        panier = (resa.items||[]).map(i => ({ id:i.id, name:i.name, qty:i.qty, prix:i.prix }));
         userZone = resa.zone_livraison; fraisLivraison = resa.frais_livraison || 0;
     }
     afficherSucces(resa.code, resa.total);
@@ -2645,13 +2645,36 @@ function afficherCode(code, total) {
 }
 
 // Page de succès affichée après confirmation d'un paiement (mobile money via iKeePay)
+// Construit l'animation "ce qui a été acheté" affichée sur l'écran de succès :
+// miniatures des produits + un petit camion (livraison) ou un carton qui se
+// ferme (retrait en agence), pour que le client visualise concrètement son achat.
+function construireAnimationSucces(items, estLivraisonDomicile) {
+    const vignettes = items.filter(i => i.image_url).slice(0, 4)
+        .map((i, idx) => `<div class="success-anim-item" style="animation-delay:${(0.15 + idx * 0.15).toFixed(2)}s"><img src="${i.image_url}" alt="${i.name}"></div>`).join('');
+    if (!vignettes) return ''; // pas d'image dispo pour ces articles : pas d'animation forcée
+    if (estLivraisonDomicile) {
+        return `<div class="success-anim"><div class="success-anim-items">${vignettes}</div><div class="success-anim-road"><span class="success-anim-truck">🚚</span></div></div>`;
+    }
+    return `<div class="success-anim"><div class="success-anim-items">${vignettes}</div><div class="success-anim-box">📦</div></div>`;
+}
+
 function afficherSucces(code, total) {
+    fermerWidgetIkeepay();
     $('success-code-display').textContent = code;
-    let html=panier.map(p=>`<div class="recap-ligne"><span>${p.name} ×${p.qty}</span><span>${fmt(p.prix*p.qty)} F</span></div>`).join('');
+    // Certains points d'ajout au panier (achat rapide sur la carte produit) ne
+    // conservent pas l'image — on la retrouve ici via le catalogue si besoin.
+    const itemsAffiches = panier.map(p => ({ ...p, image_url: p.image_url || allProducts.find(x => x.id === p.id)?.image_url }));
+    const estLivraisonDomicile = CONFIG.ZONES_COUVERTES.includes(userZone);
+    $('success-anim').innerHTML = construireAnimationSucces(itemsAffiches, estLivraisonDomicile);
+    let html=itemsAffiches.map(p=>`<div class="recap-ligne"><span class="recap-ligne-label">${p.image_url?`<img src="${p.image_url}" class="recap-img" alt="">`:''}${p.name} ×${p.qty}</span><span>${fmt(p.prix*p.qty)} F</span></div>`).join('');
     if(fraisLivraison>0) html+=`<div class="recap-ligne"><span>🚚 Livraison (${userZone})</span><span>${fmt(fraisLivraison)} F</span></div>`;
     html+=`<div class="recap-total"><span>Total</span><span>${fmt(total)} FCFA</span></div>`;
     $('success-recap').innerHTML = html;
-    $('success-agence-msg').textContent = `Veuillez vous présenter à notre agence (${CONFIG.AGENCE_ADRESSE}) pour le retrait, ou contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')} pour organiser une expédition par agence de voyage si nécessaire.`;
+    if (estLivraisonDomicile) {
+        $('success-agence-msg').textContent = `🚚 Livraison à domicile prévue à ${userZone}. Nous vous contacterons pour organiser la remise. Besoin d'aide ? Contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')}.`;
+    } else {
+        $('success-agence-msg').textContent = `Veuillez vous présenter à notre agence (${CONFIG.AGENCE_ADRESSE}) pour le retrait, ou contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')} pour organiser une expédition par agence de voyage si nécessaire.`;
+    }
     $('success-wa').href = `https://wa.me/${CONFIG.AGENCE_TEL}?text=${encodeURIComponent('Bonjour, je viens de payer ma commande '+code+' sur CAMERTECH MARKET.')}`;
     $('invite-nudge-success').style.display = (inviteInfo && !currentUser) ? 'block' : 'none';
     closeOverlay('panier-overlay');
