@@ -28,14 +28,18 @@ module.exports = async (req, res) => {
 
         const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
 
-        // Deux formats possibles selon le mode utilisé (widget ou H2H) — on
-        // les ramène tous les deux à la même forme avant de continuer.
-        const estH2H = !!payload?.data;
-        const orderId = estH2H ? payload.data.external_reference : payload?.order_id;
-        const statutRecu = estH2H ? payload.data.status : payload?.status;
-        const montantRecu = Number(estH2H ? payload.data.amount : payload?.amount);
-        const refFournisseur = estH2H ? payload.data.provider_reference : payload?.ikeepay_ref;
-        console.log(`Webhook iKeePay reçu (${estH2H ? 'H2H' : 'widget'}): event=${payload?.event} order_id=${orderId} statut=${statutRecu} amount=${montantRecu}`);
+        // Le format réel observé (confirmé via un test webhook.site) montre
+        // que le mode widget imbrique AUSSI les champs sous "data", avec des
+        // noms différents du mode H2H supposé au départ (order_id/reference
+        // au lieu de external_reference/provider_reference). On ne peut donc
+        // pas se fier à la simple présence de "data" pour deviner le format :
+        // on cherche chaque champ dans les deux emplacements possibles.
+        const d = payload?.data || {};
+        const orderId = d.order_id || d.external_reference || payload?.order_id;
+        const statutRecu = d.status ?? payload?.status;
+        const montantRecu = Number(d.amount ?? payload?.amount);
+        const refFournisseur = d.reference || d.provider_reference || payload?.ikeepay_ref;
+        console.log(`Webhook iKeePay reçu: event=${payload?.event} order_id=${orderId} statut=${statutRecu} amount=${montantRecu}`);
 
         if (!orderId) return res.status(200).json({ received: true }); // rien à traiter
 

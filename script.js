@@ -2094,23 +2094,18 @@ function syncPanierServeur() {
         const items = panier;
         dernierPanierEnvoye = JSON.stringify(items);
         try {
-            const { data, error, status, statusText } = await db.from('paniers').upsert({
+            // Note : supabase-js ne lève pas d'exception JS pour une écriture refusée
+            // côté serveur (RLS, contrainte...) — l'erreur arrive dans `error`, pas
+            // dans un catch. On la vérifie donc explicitement ici.
+            const { error } = await db.from('paniers').upsert({
                 utilisateur_id: currentUser.id,
                 items,
                 zone: userZone || null,
                 frais_livraison: fraisLivraison || 0,
                 updated_at: new Date().toISOString()
-            }, { onConflict: 'utilisateur_id' }).select();
-            // Diagnostic temporaire : supabase-js ne lève PAS d'exception JS pour
-            // une écriture refusée côté serveur (RLS, contrainte, etc.) — l'erreur
-            // arrive ici dans `error`, jamais dans un catch. À retirer une fois
-            // le bug de synchro confirmé résolu.
-            if (error) {
-                console.error('[Synchro panier] ÉCHEC écriture serveur :', error.message, '| code:', error.code, '| détails:', error.details, '| hint:', error.hint, '| status HTTP:', status, statusText);
-            } else {
-                console.log('[Synchro panier] écriture OK, ligne renvoyée :', data);
-            }
-        } catch (e) { console.error('[Synchro panier] exception JS (réseau/autre) :', e); }
+            }, { onConflict: 'utilisateur_id' });
+            if (error) console.error('Erreur synchro panier :', error.message);
+        } catch (e) { console.error('Erreur synchro panier :', e); }
     }, 600);
 }
 
@@ -2177,12 +2172,7 @@ function ecouterPanierEnDirect() {
                 panier.length ? renderPanier() : openPanier();
             }
         })
-        .subscribe((status, err) => {
-            // Diagnostic temporaire — à retirer une fois le problème de
-            // synchro confirmé résolu. Regarder la console (F12) après avoir
-            // ouvert le site connecté : SUBSCRIBED = ok, CHANNEL_ERROR/TIMED_OUT = problème.
-            console.log('[Synchro panier] statut canal :', status, err || '');
-        });
+        .subscribe();
 }
 
 // Coupe l'écoute en direct (à la déconnexion, pour ne pas laisser un canal ouvert inutilement).

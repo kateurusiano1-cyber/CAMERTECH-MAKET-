@@ -36,17 +36,34 @@ module.exports = async (req, res) => {
         if (error) throw error;
         if (!paniers?.length) return res.status(200).json({ traitees: 0 });
 
-        for (const p of paniers) {
-            try {
-                await envoyerPushUtilisateur(supabase, p.utilisateur_id, {
-                    titre: '👀 Tu as oublié quelque chose',
-                    corps: `Ta commande ${p.code} (${Math.round(p.total)} FCFA) t'attend dans ton panier !`,
-                    url: '/'
-                });
-            } catch (e) {
-                console.error(`Erreur push relance ${p.code}:`, e.message);
+        // Envoi des notifications en parallèle (au lieu de séquentiel) — plus
+        // rapide et une notification lente/en échec ne bloque pas les autres.
+        const idsTraites = [];
+        const resultats = await Promise.allSettled(paniers.map(async (p) => {
+            await envoyerPushUtilisateur(supabase, p.utilisateur_id, {
+                titre: '👀 Tu as oublié quelque chose',
+                corps: `Ta commande ${p.code} (${Math.round(p.total)} FCFA) t'attend dans ton panier !`,
+                url: '/'
+            });
+            return p.id;
+        }));
+        resultats.forEach((r, i) => {
+            if (r.status === 'rejected') {
+                console.error(`Erreur push relance ${paniers[i].code}:`, r.reason?.message || r.reason);
             }
-            await supabase.from('reservations').update({ relance_envoyee: true }).eq('id', p.id);
+            // On marque la relance comme envoyée même si le push a échoué
+            // (abonnement mort, etc.) — on ne veut pas re-tenter à l'infini
+            // pour un client dont le push ne marche plus de toute façon.
+            idsTraites.push(paniers[i].id);
+        });
+
+        // Une seule écriture groupée au lieu de N écritures séquentielles —
+        // c'est ce qui provoquait les "Gateway Timeout" (un seul appel réseau
+        // en trop qui timait suffisait à faire planter toute la fonction).
+        if (idsTraites.length) {
+            const { error: errUpdate } = await supabase
+                .from('reservations').update({ relance_envoyee: true }).in('id', idsTraites);
+            if (errUpdate) console.error('Erreur marquage relance_envoyee:', errUpdate.message);
         }
 
         return res.status(200).json({ traitees: paniers.length });
