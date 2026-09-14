@@ -2670,15 +2670,18 @@ function afficherSucces(code, total) {
     if(fraisLivraison>0) html+=`<div class="recap-ligne"><span>🚚 Livraison (${userZone})</span><span>${fmt(fraisLivraison)} F</span></div>`;
     html+=`<div class="recap-total"><span>Total</span><span>${fmt(total)} FCFA</span></div>`;
     $('success-recap').innerHTML = html;
-    if (estLivraisonDomicile) {
-        $('success-agence-msg').textContent = `🚚 Livraison à domicile prévue à ${userZone}. Nous vous contacterons pour organiser la remise. Besoin d'aide ? Contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')}.`;
-    } else {
-        $('success-agence-msg').textContent = `Veuillez vous présenter à notre agence (${CONFIG.AGENCE_ADRESSE}) pour le retrait, ou contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')} pour organiser une expédition par agence de voyage si nécessaire.`;
-    }
+    $('success-agence-msg').textContent = estLivraisonDomicile
+        ? `🚚 Livraison à domicile prévue à ${userZone}. Nous vous contacterons pour organiser la remise. Besoin d'aide ? Contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')}.`
+        : `Veuillez vous présenter à notre agence (${CONFIG.AGENCE_ADRESSE}) pour le retrait, ou contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')} pour organiser une expédition par agence de voyage si nécessaire.`;
     $('success-wa').href = `https://wa.me/${CONFIG.AGENCE_TEL}?text=${encodeURIComponent('Bonjour, je viens de payer ma commande '+code+' sur CAMERTECH MARKET.')}`;
     $('invite-nudge-success').style.display = (inviteInfo && !currentUser) ? 'block' : 'none';
     closeOverlay('panier-overlay');
     openOverlay('success-overlay');
+    // Téléchargement automatique du reçu (avec photos des articles) dès que
+    // le paiement est confirmé — fonctionne aussi pour un achat invité (voir
+    // api/facture.js). Léger délai pour laisser l'écran de succès s'afficher
+    // avant que le navigateur ne déclenche le téléchargement.
+    setTimeout(() => telechargerFacture(code), 600);
 }
 
 // ===== AUTRES MODALS =====
@@ -2797,11 +2800,11 @@ window.supprimerCommandeClient = async (code) => {
 window.telechargerFacture = async (code) => {
     try {
         const fbUser = await attendreFirebaseUser();
-        if (!fbUser) { notifier('❌ Session expirée, reconnecte-toi puis réessaie.', 'erreur'); return; }
-        const idToken = await fbUser.getIdToken();
-        const resp = await fetch(`/api/facture?code=${encodeURIComponent(code)}`, {
-            headers: { 'Authorization': 'Bearer ' + idToken }
-        });
+        const headers = {};
+        if (fbUser) headers['Authorization'] = 'Bearer ' + await fbUser.getIdToken();
+        // Sans compte (achat invité), pas de jeton — l'endpoint autorise
+        // alors l'accès via le code de commande lui-même (rate-limité par IP).
+        const resp = await fetch(`/api/facture?code=${encodeURIComponent(code)}`, { headers });
         if (!resp.ok) { const j = await resp.json().catch(()=>({})); notifier('❌ ' + (j.error || 'Impossible de télécharger la facture'), 'erreur'); return; }
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);

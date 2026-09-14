@@ -19,6 +19,25 @@ async function recupererLogo() {
     }
 }
 
+// Récupère une image d'article depuis son URL pour l'intégrer au PDF.
+// Ne bloque jamais la génération de la facture si une image est absente,
+// invalide, ou trop lente à charger — dans ce cas, la ligne s'affiche
+// simplement sans photo plutôt que de faire échouer tout le document.
+async function recupererImageArticle(url) {
+    if (!url) return null;
+    try {
+        const controleur = new AbortController();
+        const delai = setTimeout(() => controleur.abort(), 4000);
+        const resp = await fetch(url, { signal: controleur.signal });
+        clearTimeout(delai);
+        if (!resp.ok) return null;
+        const arr = await resp.arrayBuffer();
+        return Buffer.from(arr);
+    } catch (e) {
+        return null;
+    }
+}
+
 function genererFacturePdf(reservation) {
     const estPaye = reservation.statut === 'valide' || reservation.statut === 'livre';
     return new Promise(async (resolve, reject) => {
@@ -74,23 +93,34 @@ function genererFacturePdf(reservation) {
             // Tableau articles
             let y = 225;
             doc.font('Helvetica-Bold').fontSize(10);
-            doc.text('Article', 50, y).text('Qté', 350, y, { width: 50, align: 'right' }).text('Total', 450, y, { width: 95, align: 'right' });
+            doc.text('Article', 85, y).text('Qté', 350, y, { width: 50, align: 'right' }).text('Total', 450, y, { width: 95, align: 'right' });
             y += 16;
             doc.moveTo(50, y).lineTo(545, y).strokeColor('#E7E9EC').stroke();
-            y += 10;
+            y += 8;
 
             doc.font('Helvetica').fontSize(10);
             const items = Array.isArray(reservation.items) ? reservation.items : [];
-            for (const item of items) {
+            // Préchargement en parallèle : plus rapide qu'un fetch par article
+            // l'un après l'autre, et une image qui échoue n'affecte pas les autres.
+            const imagesArticles = await Promise.all(items.map(it => recupererImageArticle(it.image_url)));
+            const TAILLE_IMG = 30;
+            for (let idx = 0; idx < items.length; idx++) {
+                const item = items[idx];
+                const img = imagesArticles[idx];
                 const ligneTotal = (item.prix || 0) * (item.qty || 1);
-                doc.text(item.name || 'Article', 50, y, { width: 280 });
+                if (img) {
+                    try {
+                        doc.image(img, 50, y - 4, { width: TAILLE_IMG, height: TAILLE_IMG, fit: [TAILLE_IMG, TAILLE_IMG] });
+                    } catch (e) { /* image corrompue/format non supporté : on continue sans elle */ }
+                }
+                doc.fillColor('#000').text(item.name || 'Article', 85, y, { width: 245 });
                 doc.text(String(item.qty || 1), 350, y, { width: 50, align: 'right' });
                 doc.text(fmt(ligneTotal) + ' FCFA', 450, y, { width: 95, align: 'right' });
-                y += 20;
+                y += Math.max(24, TAILLE_IMG - 2);
             }
 
             if (reservation.frais_livraison) {
-                doc.fillColor(gris).text('Frais de livraison', 50, y, { width: 280 });
+                doc.fillColor(gris).text('Frais de livraison', 85, y, { width: 245 });
                 doc.text(fmt(reservation.frais_livraison) + ' FCFA', 450, y, { width: 95, align: 'right' });
                 y += 20;
             }

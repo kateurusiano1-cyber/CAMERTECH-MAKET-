@@ -13,6 +13,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { verifierRequeteUtilisateur } = require('./_lib/verifierFirebaseToken');
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
 const { genererFacturePdf } = require('./_lib/genererFacture');
+const { tropDeTentatives, signalerEchecTentative } = require('./_lib/rateLimit');
 
 module.exports = async (req, res) => {
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -56,16 +57,42 @@ module.exports = async (req, res) => {
 
         if (!autorise) {
             const uid = await verifierRequeteUtilisateur(req);
-            if (!uid) return res.status(401).json({ error: 'Session invalide, reconnecte-toi' });
-            const { data: user } = await supabase.from('utilisateurs').select('id').eq('firebase_uid', uid).single();
-            if (!user) return res.status(404).json({ error: 'Profil introuvable' });
-            const { data: resaCheck } = await supabase.from('reservations').select('utilisateur_id').eq('code', code).single();
-            if (!resaCheck || resaCheck.utilisateur_id !== user.id) return res.status(403).json({ error: 'Cette commande ne vous appartient pas' });
-            autorise = true;
+            if (uid) {
+                const { data: user } = await supabase.from('utilisateurs').select('id').eq('firebase_uid', uid).single();
+                if (!user) return res.status(404).json({ error: 'Profil introuvable' });
+                const { data: resaCheck } = await supabase.from('reservations').select('utilisateur_id').eq('code', code).single();
+                if (!resaCheck || resaCheck.utilisateur_id !== user.id) return res.status(403).json({ error: 'Cette commande ne vous appartient pas' });
+                autorise = true;
+            } else {
+                // Achat invité (sans compte) : le code de commande fait office
+                // de secret (généré via crypto.randomBytes, ~10^12 combinaisons,
+                // cf. audit sécurité) — accès autorisé uniquement si la commande
+                // est bien une commande invité (aucun compte associé), avec un
+                // rate-limit par IP contre le bruteforce, comme pour le suivi public.
+                const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'inconnu';
+                const cleLimite = 'telecharger-facture-invite:' + ip;
+                const { bloque, retryAfterSeconds } = await tropDeTentatives(supabase, cleLimite, 20, 15);
+                if (bloque) return res.status(429).json({ error: `Trop de tentatives, réessaie dans ${Math.ceil(retryAfterSeconds/60)} min` });
+                const { data: resaCheck } = await supabase.from('reservations').select('utilisateur_id').eq('code', code).single();
+                if (!resaCheck) { await signalerEchecTentative(supabase, cleLimite, 20, 15); return res.status(404).json({ error: 'Commande introuvable' }); }
+                if (resaCheck.utilisateur_id) return res.status(401).json({ error: 'Session invalide, reconnecte-toi' });
+                autorise = true;
+            }
         }
 
         const { data: resa } = await supabase.from('reservations').select('*').eq('code', code).single();
         if (!resa) return res.status(404).json({ error: 'Commande introuvable' });
+
+        // On récupère les photos des articles depuis le catalogue (elles ne
+        // sont pas stockées dans la commande elle-même) pour les afficher
+        // sur le PDF — le client doit reconnaître visuellement ce qu'il a
+        // acheté, même après téléchargement, longtemps après l'achat.
+        const idsArticles = [...new Set((resa.items || []).map(i => i.id).filter(Boolean))];
+        if (idsArticles.length) {
+            const { data: produits } = await supabase.from('products').select('id, image_url').in('id', idsArticles);
+            const imageParId = Object.fromEntries((produits || []).map(p => [p.id, p.image_url]));
+            resa.items = (resa.items || []).map(i => ({ ...i, image_url: imageParId[i.id] || null }));
+        }
 
         // Téléchargeable dans tous les cas désormais — le document précise
         // lui-même s'il s'agit d'une facture payée ou d'un simple suivi de
