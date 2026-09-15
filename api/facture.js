@@ -97,6 +97,15 @@ module.exports = async (req, res) => {
             resa.items = (resa.items || []).map(i => ({ ...i, image_url: imageParId[i.id] || null }));
         }
 
+        // L'email n'est pas stocké sur la commande elle-même — on le
+        // retrouve via le profil pour les clients avec compte. Un achat
+        // invité n'a jamais d'email (seuls nom + téléphone sont demandés),
+        // la facture s'affiche alors simplement sans cette ligne.
+        if (resa.utilisateur_id) {
+            const { data: profil } = await supabase.from('utilisateurs').select('email').eq('id', resa.utilisateur_id).single();
+            resa.email_client = profil?.email || null;
+        }
+
         // Téléchargeable dans tous les cas désormais — le document précise
         // lui-même s'il s'agit d'une facture payée ou d'un simple suivi de
         // commande non payée.

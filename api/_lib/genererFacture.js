@@ -103,14 +103,17 @@ function genererFacturePdf(reservation) {
             doc.fillColor('#000').fontSize(10).font('Helvetica-Bold').text(estPaye ? 'Facturé à :' : 'Commande de :', 50, 135);
             doc.font('Helvetica').fontSize(10)
                 .text(reservation.nom_client || '—', 50, 150)
-                .text(reservation.telephone || '', 50, 164)
-                .text(`Livraison : ${reservation.zone_livraison || '—'}`, 50, 178)
-                .text(`Statut : ${reservation.statut}`, 50, 192);
+                .text(reservation.telephone || '', 50, 164);
+            let yClient = 178;
+            if (reservation.email_client) { doc.text(reservation.email_client, 50, yClient); yClient += 14; }
+            doc.text(`Livraison : ${reservation.zone_livraison || '—'}`, 50, yClient); yClient += 14;
+            doc.text(`Statut : ${reservation.statut}`, 50, yClient); yClient += 14;
+            if (estPaye) doc.text('Moyen de paiement : Payé via iKeePay', 50, yClient);
 
             // Tableau articles
-            let y = 225;
+            let y = yClient + 26;
             doc.font('Helvetica-Bold').fontSize(10);
-            doc.text('Article', 85, y).text('Qté', 350, y, { width: 50, align: 'right' }).text('Total', 450, y, { width: 95, align: 'right' });
+            doc.text('Article', 85, y).text('P.U.', 285, y, { width: 65, align: 'right' }).text('Qté', 355, y, { width: 40, align: 'right' }).text('Total', 450, y, { width: 95, align: 'right' });
             y += 16;
             doc.moveTo(50, y).lineTo(545, y).strokeColor('#E7E9EC').stroke();
             y += 8;
@@ -134,8 +137,9 @@ function genererFacturePdf(reservation) {
                 } else {
                     console.log('Facture image : aucune image disponible pour', item.name, '(id:', item.id, ')');
                 }
-                doc.fillColor('#000').text((item.name || 'Article') + (item.combo ? `  (Flash Combo : ${item.combo})` : ''), 85, y, { width: 245 });
-                doc.text(String(item.qty || 1), 350, y, { width: 50, align: 'right' });
+                doc.fillColor('#000').text((item.name || 'Article') + (item.combo ? `  (Flash Combo : ${item.combo})` : ''), 85, y, { width: 195 });
+                doc.text(fmt(item.prix || 0) + ' F', 285, y, { width: 65, align: 'right' });
+                doc.text(String(item.qty || 1), 355, y, { width: 40, align: 'right' });
                 doc.text(fmt(ligneTotal) + ' FCFA', 450, y, { width: 95, align: 'right' });
                 y += Math.max(24, TAILLE_IMG - 2);
             }
@@ -168,7 +172,8 @@ function genererFacturePdf(reservation) {
             }
 
             doc.fillColor(gris).font('Helvetica').fontSize(8)
-                .text('Merci pour votre confiance — CAMERTECH MARKET', 50, 760, { align: 'center', width: 495 });
+                .text('Politique de retour : 7 jours après réception pour demander un retour (rubrique "Politique de retour" du site ou "Mes commandes").', 50, 745, { align: 'center', width: 495 });
+            doc.text('Merci pour votre confiance — CAMERTECH MARKET', 50, 760, { align: 'center', width: 495 });
 
             doc.end();
         } catch (e) {
