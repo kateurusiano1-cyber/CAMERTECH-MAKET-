@@ -88,8 +88,11 @@ module.exports = async (req, res) => {
         // sur le PDF — le client doit reconnaître visuellement ce qu'il a
         // acheté, même après téléchargement, longtemps après l'achat.
         const idsArticles = [...new Set((resa.items || []).map(i => i.id).filter(Boolean))];
+        console.log('Facture', resa.code, '- ids articles à chercher :', idsArticles);
         if (idsArticles.length) {
-            const { data: produits } = await supabase.from('products').select('id, image_url').in('id', idsArticles);
+            const { data: produits, error: errProduits } = await supabase.from('products').select('id, image_url').in('id', idsArticles);
+            if (errProduits) console.error('Facture', resa.code, '- erreur recherche produits :', errProduits.message);
+            console.log('Facture', resa.code, '- produits trouvés :', (produits || []).map(p => ({ id: p.id, image_url: p.image_url })));
             const imageParId = Object.fromEntries((produits || []).map(p => [p.id, p.image_url]));
             resa.items = (resa.items || []).map(i => ({ ...i, image_url: imageParId[i.id] || null }));
         }

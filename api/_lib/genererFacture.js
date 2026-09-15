@@ -24,16 +24,19 @@ async function recupererLogo() {
 // invalide, ou trop lente à charger — dans ce cas, la ligne s'affiche
 // simplement sans photo plutôt que de faire échouer tout le document.
 async function recupererImageArticle(url) {
-    if (!url) return null;
+    if (!url) { console.log('Facture image : URL vide, article ignoré'); return null; }
     try {
         const controleur = new AbortController();
         const delai = setTimeout(() => controleur.abort(), 4000);
         const resp = await fetch(url, { signal: controleur.signal });
         clearTimeout(delai);
-        if (!resp.ok) return null;
+        if (!resp.ok) { console.error('Facture image : HTTP', resp.status, 'pour', url); return null; }
+        const contentType = resp.headers.get('content-type') || '';
+        console.log('Facture image : reçue,', contentType, '-', url);
         const arr = await resp.arrayBuffer();
         return Buffer.from(arr);
     } catch (e) {
+        console.error('Facture image : échec fetch pour', url, '-', e.message);
         return null;
     }
 }
@@ -111,7 +114,11 @@ function genererFacturePdf(reservation) {
                 if (img) {
                     try {
                         doc.image(img, 50, y - 4, { width: TAILLE_IMG, height: TAILLE_IMG, fit: [TAILLE_IMG, TAILLE_IMG] });
-                    } catch (e) { /* image corrompue/format non supporté : on continue sans elle */ }
+                    } catch (e) {
+                        console.error('Facture image : pdfkit n\'a pas pu intégrer l\'image de', item.name, '-', e.message);
+                    }
+                } else {
+                    console.log('Facture image : aucune image disponible pour', item.name, '(id:', item.id, ')');
                 }
                 doc.fillColor('#000').text(item.name || 'Article', 85, y, { width: 245 });
                 doc.text(String(item.qty || 1), 350, y, { width: 50, align: 'right' });
