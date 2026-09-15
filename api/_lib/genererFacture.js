@@ -23,6 +23,14 @@ async function recupererLogo() {
 // Ne bloque jamais la génération de la facture si une image est absente,
 // invalide, ou trop lente à charger — dans ce cas, la ligne s'affiche
 // simplement sans photo plutôt que de faire échouer tout le document.
+const sharp = require('sharp');
+
+// Récupère une image d'article depuis son URL pour l'intégrer au PDF.
+// pdfkit ne sait afficher nativement que du JPEG/PNG — on convertit donc
+// systématiquement en PNG via sharp, ce qui couvre aussi le WebP, l'AVIF,
+// etc. Ne bloque jamais la génération de la facture si une image est
+// absente, invalide, ou trop lente à charger — dans ce cas, la ligne
+// s'affiche simplement sans photo plutôt que de faire échouer tout le document.
 async function recupererImageArticle(url) {
     if (!url) { console.log('Facture image : URL vide, article ignoré'); return null; }
     try {
@@ -32,9 +40,15 @@ async function recupererImageArticle(url) {
         clearTimeout(delai);
         if (!resp.ok) { console.error('Facture image : HTTP', resp.status, 'pour', url); return null; }
         const contentType = resp.headers.get('content-type') || '';
-        console.log('Facture image : reçue,', contentType, '-', url);
         const arr = await resp.arrayBuffer();
-        return Buffer.from(arr);
+        try {
+            const png = await sharp(Buffer.from(arr)).resize(120, 120, { fit: 'cover' }).png().toBuffer();
+            console.log('Facture image : convertie en PNG (', contentType, '->image/png) -', url);
+            return png;
+        } catch (eConv) {
+            console.error('Facture image : échec conversion sharp (', contentType, ') pour', url, '-', eConv.message);
+            return null;
+        }
     } catch (e) {
         console.error('Facture image : échec fetch pour', url, '-', e.message);
         return null;
