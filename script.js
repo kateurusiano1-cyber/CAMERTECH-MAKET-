@@ -156,6 +156,14 @@ const _observateurImpressions = new IntersectionObserver((entrees) => {
 let currentUser = null, isAdmin = false, currentAdmin = null;
 let favorisIds = new Set();
 let allProducts = [], panier = [], modalProduct = null;
+
+// Échappe le HTML avant d'injecter du texte fourni par un utilisateur (avis
+// clients, nom d'invité, etc.) dans un innerHTML — sans ça, un commentaire
+// piégé s'exécute comme du vrai code dans le navigateur de quiconque le lit,
+// y compris l'admin (faille XSS stockée corrigée en session).
+function echapperHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
 let selectedFile = null, selectedFilesAll = [], editingId = null, currentCat = "tous";
 let userZone = "", fraisLivraison = 0;
 let slideIndex = 0, slideTimer = null, totalSlides = 1;
@@ -1919,12 +1927,12 @@ async function chargerAvis(productId) {
         </div>
         ${data?.length?data.map(a=>`<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid var(--border)">
             <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                <strong style="font-size:0.88rem">${a.nom_client}</strong>
+                <strong style="font-size:0.88rem">${echapperHtml(a.nom_client)}</strong>
                 <span style="color:var(--text3);font-size:0.75rem">${new Date(a.created_at).toLocaleDateString('fr-FR')}</span>
             </div>
             <div style="color:#f4c430;font-size:0.9rem">${stars(a.note)}</div>
-            ${a.commentaire?`<p style="color:var(--text2);font-size:0.85rem;margin-top:6px">${a.commentaire}</p>`:''}
-            ${a.photo_url?`<img src="${a.photo_url}" alt="Photo jointe par ${a.nom_client}" style="width:75px;height:75px;object-fit:cover;border-radius:7px;margin-top:8px;cursor:pointer" onclick="window.open('${a.photo_url}','_blank')">`:''}
+            ${a.commentaire?`<p style="color:var(--text2);font-size:0.85rem;margin-top:6px">${echapperHtml(a.commentaire)}</p>`:''}
+            ${a.photo_url?`<img src="${a.photo_url}" alt="Photo jointe par ${echapperHtml(a.nom_client)}" style="width:75px;height:75px;object-fit:cover;border-radius:7px;margin-top:8px;cursor:pointer" onclick="window.open('${a.photo_url}','_blank')">`:''}
         </div>`).join(''):'<p style="color:var(--text3);font-size:0.85rem">Aucun avis pour le moment.</p>'}
     </div>`;
 }
@@ -3138,9 +3146,9 @@ async function afficherPanneauAdmin() {
                 <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.82rem">
                     <thead><tr>${['Nom','Téléphone','Email','Inscrit le','Action'].map(h=>`<th style="color:#888;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0f0;font-size:0.75rem">${h}</th>`).join('')}</tr></thead>
                     <tbody>${(users||[]).map(u=>`<tr style="border-bottom:1px solid #f8f8f8">
-                        <td style="padding:10px"><strong>${u.nom}</strong></td>
-                        <td style="padding:10px">📞 ${u.telephone}</td>
-                        <td style="padding:10px;color:#888">${u.email||'—'}</td>
+                        <td style="padding:10px"><strong>${echapperHtml(u.nom)}</strong></td>
+                        <td style="padding:10px">📞 ${echapperHtml(u.telephone)}</td>
+                        <td style="padding:10px;color:#888">${echapperHtml(u.email)||'—'}</td>
                         <td style="padding:10px;color:#888;font-size:0.78rem">${new Date(u.created_at).toLocaleDateString('fr-FR')}</td>
                         <td style="padding:10px"><button onclick="adminResetMdp('${u.id}','${u.nom.replace(/'/g,"\\'")}','${u.email||''}')" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;margin-right:6px">🔑 Réinitialiser mdp</button><button onclick="adminSupprimerUtilisateur('${u.id}','${u.nom.replace(/'/g,"\\'")}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer">🗑️ Supprimer</button></td>
                     </tr>`).join('')}</tbody>
@@ -3155,13 +3163,13 @@ async function afficherPanneauAdmin() {
                 ${!(avisListe||[]).length?'<p style="color:#888">Aucun avis en attente.</p>'
                 :(avisListe||[]).map(a=>`<div style="background:#f8f8f8;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee">
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-                        <div><strong>${a.nom_client}</strong> — <span style="color:#f4c430">${'★'.repeat(a.note)}</span></div>
+                        <div><strong>${echapperHtml(a.nom_client)}</strong> — <span style="color:#f4c430">${'★'.repeat(a.note)}</span></div>
                         <div style="display:flex;gap:6px">
                             <button onclick="validerAvisAdmin('${a.id}')" style="background:#f0fff4;color:#2dc653;border:1px solid #b7f5c8;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">✅ Valider</button>
                             <button onclick="supprimerAvisAdmin('${a.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">🗑️</button>
                         </div>
                     </div>
-                    ${a.commentaire?`<p style="color:#555;font-size:0.85rem;margin-top:6px">${a.commentaire}</p>`:''}
+                    ${a.commentaire?`<p style="color:#555;font-size:0.85rem;margin-top:6px">${echapperHtml(a.commentaire)}</p>`:''}
                     ${a.photo_url?`<img src="${a.photo_url}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;margin-top:8px">`:''}
                 </div>`).join('')}
             </div>
@@ -3300,9 +3308,9 @@ async function afficherPanneauAdmin() {
                 (retours||[]).map(r=>`<div style="background:#f8f8f8;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
                         <div>
-                            <div style="font-family:monospace;font-weight:700;color:#1a5c2a">${r.code_commande||'—'}</div>
+                            <div style="font-family:monospace;font-weight:700;color:#1a5c2a">${echapperHtml(r.code_commande)||'—'}</div>
                             <div style="font-size:0.78rem;color:#888;margin:4px 0">${new Date(r.created_at).toLocaleString('fr-FR')}</div>
-                            <div style="font-size:0.85rem;margin-top:4px">${r.motif||''}</div>
+                            <div style="font-size:0.85rem;margin-top:4px">${echapperHtml(r.motif)}</div>
                             <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${r.statut==='en_attente'?'#fff8f0':r.statut==='traite'?'#f0fff4':'#fff0f0'};color:${r.statut==='en_attente'?'#ff6600':r.statut==='traite'?'#2dc653':'#e63946'}">${r.statut}</span>
                         </div>
                         <div style="display:flex;gap:6px">
@@ -3537,7 +3545,7 @@ window.voirTimelineVisiteur = async (sessionId, label) => {
     el.style.cssText = 'display:flex;z-index:6000;position:fixed;inset:0;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;padding:16px';
     el.innerHTML = `<div style="background:white;border-radius:14px;max-width:520px;width:100%;max-height:80vh;overflow-y:auto;padding:22px;position:relative">
         <button onclick="this.closest('.modal-overlay').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:1.2rem;cursor:pointer">✕</button>
-        <h2 style="font-size:1rem;margin-bottom:14px">📜 Chronologie — ${label}</h2>
+        <h2 style="font-size:1rem;margin-bottom:14px">📜 Chronologie — ${echapperHtml(label)}</h2>
         <div id="timeline-contenu" style="color:#888;font-size:0.85rem">Chargement...</div>
     </div>`;
     document.body.appendChild(el);
@@ -3558,7 +3566,7 @@ window.voirTimelineVisiteur = async (sessionId, label) => {
             return `<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #f0f0f0">
                 <span style="font-size:1.1rem">${_iconesEvenements[e.type]||'•'}</span>
                 <div>
-                    <div style="font-size:0.82rem;font-weight:600">${_libellesEvenements[e.type]||e.type}${detail ? ' — '+detail : ''}</div>
+                    <div style="font-size:0.82rem;font-weight:600">${_libellesEvenements[e.type]||e.type}${detail ? ' — '+echapperHtml(detail) : ''}</div>
                     <div style="font-size:0.72rem;color:#999">${heure}</div>
                 </div>
             </div>`;
@@ -3640,7 +3648,7 @@ function renderCmdsAdmin(data) {
         <thead><tr>${['Code','Client','Zone','Total','Date & heure','Statut','Action',''].map(h=>`<th style="color:#888;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0f0;font-size:0.72rem;text-transform:uppercase">${h}</th>`).join('')}</tr></thead>
         <tbody>${data.map(r=>`<tr style="border-bottom:1px solid #f8f8f8">
             <td style="padding:10px;font-family:monospace;color:#1a5c2a;font-weight:700">${r.code}</td>
-            <td style="padding:10px">${r.nom_client}<br><span style="color:#888;font-size:0.72rem">${r.telephone}</span></td>
+            <td style="padding:10px">${echapperHtml(r.nom_client)}<br><span style="color:#888;font-size:0.72rem">${echapperHtml(r.telephone)}</span></td>
             <td style="padding:10px;color:#888;font-size:0.78rem">📍${r.zone_livraison||'—'}</td>
             <td style="padding:10px;font-weight:600">${fmt(r.total)} F</td>
             <td style="padding:10px;color:#888;font-size:0.75rem">${new Date(r.created_at).toLocaleDateString('fr-FR')} à ${new Date(r.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</td>
@@ -3669,7 +3677,7 @@ window.ouvrirDetailsCmdAdmin = (code) => {
         <button class="modal-x" onclick="this.closest('.modal-overlay').remove()">✕</button>
         <h2 style="font-size:1.05rem;margin-bottom:14px">🧾 Commande ${r.code}</h2>
         <div style="font-size:0.85rem;line-height:1.9;color:#333">
-            <div><strong>Client :</strong> ${r.nom_client} — ${r.telephone} ${!r.utilisateur_id ? '<span style="background:#f0f0f0;color:#888;padding:2px 8px;border-radius:6px;font-size:0.7rem;font-weight:700">🕶️ INVITÉ (sans compte)</span>' : ''}</div>
+            <div><strong>Client :</strong> ${echapperHtml(r.nom_client)} — ${echapperHtml(r.telephone)} ${!r.utilisateur_id ? '<span style="background:#f0f0f0;color:#888;padding:2px 8px;border-radius:6px;font-size:0.7rem;font-weight:700">🕶️ INVITÉ (sans compte)</span>' : ''}</div>
             <div><strong>Date :</strong> ${new Date(r.created_at).toLocaleDateString('fr-FR')} à ${new Date(r.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
             <div><strong>Zone :</strong> ${r.zone_livraison||'—'} ${r.frais_livraison?`(frais: ${fmt(r.frais_livraison)} F)`:''}</div>
             <div><strong>Statut :</strong> ${r.statut}${r.paye_le ? ` — payé le ${new Date(r.paye_le).toLocaleString('fr-FR')}` : ''}</div>
