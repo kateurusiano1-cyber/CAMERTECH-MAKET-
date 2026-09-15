@@ -134,10 +134,19 @@ function genererFacturePdf(reservation) {
                 } else {
                     console.log('Facture image : aucune image disponible pour', item.name, '(id:', item.id, ')');
                 }
-                doc.fillColor('#000').text(item.name || 'Article', 85, y, { width: 245 });
+                doc.fillColor('#000').text((item.name || 'Article') + (item.combo ? `  (Flash Combo : ${item.combo})` : ''), 85, y, { width: 245 });
                 doc.text(String(item.qty || 1), 350, y, { width: 50, align: 'right' });
                 doc.text(fmt(ligneTotal) + ' FCFA', 450, y, { width: 95, align: 'right' });
                 y += Math.max(24, TAILLE_IMG - 2);
+            }
+
+            // Toujours affiché, même sans code promo (0 FCFA dans ce cas) —
+            // pour que ce soit sans ambiguïté sur la facture.
+            {
+                const reduction = reservation.reduction || 0;
+                doc.fillColor(gris).text(reservation.code_promo ? `Réduction (code ${reservation.code_promo})` : 'Réduction (aucun code promo)', 85, y, { width: 245 });
+                doc.text((reduction > 0 ? '-' : '') + fmt(reduction) + ' FCFA', 450, y, { width: 95, align: 'right' });
+                y += 20;
             }
 
             if (reservation.frais_livraison) {

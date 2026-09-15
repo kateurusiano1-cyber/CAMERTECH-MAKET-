@@ -291,6 +291,7 @@ module.exports = async (req, res) => {
                 frais_livraison: frais,
                 note: note || null,
                 code_promo: promoResult.valide ? promoResult.code : null,
+                reduction: promoResult.reduction || 0,
                 visiteur_session_id: (typeof visiteur_session_id === 'string' && visiteur_session_id.length <= 100) ? visiteur_session_id : null
             }]).select('code, total, statut, utilisateur_id').single();
 
