@@ -635,7 +635,7 @@ const I18N = {
         choisir: 'Choisir...', retrait_gratuit: '🏪 Retrait gratuit',
         rechercher_ph: '🔎 Rechercher un produit...', btn_connexion: '👤 Connexion',
         titre_flash: '⚡ Ventes Flash', titre_produits: '🛒 Nos Produits', chargement: 'Chargement...',
-        footer_sub: 'Votre boutique tech à Douala', footer_copy: '© 2025 CAMERTECH MARKET — Douala, Cameroun',
+        footer_sub: 'Votre boutique tech à Douala', footer_copy: '© {annee} CAMERTECH MARKET — Douala, Cameroun',
         tab_connexion: 'Connexion', tab_inscription: 'Inscription', titre_connexion: '👤 Connexion',
         ph_email: 'Adresse email', ph_mdp: 'Mot de passe', btn_se_connecter: 'Se connecter',
         btn_mdp_oublie: 'Mot de passe oublié ?', ou: 'ou', btn_google: 'Continuer avec Google',
@@ -664,7 +664,7 @@ const I18N = {
         choisir: 'Choose...', retrait_gratuit: '🏪 Free pickup',
         rechercher_ph: '🔎 Search a product...', btn_connexion: '👤 Login',
         titre_flash: '⚡ Flash Sales', titre_produits: '🛒 Our Products', chargement: 'Loading...',
-        footer_sub: 'Your tech shop in Douala', footer_copy: '© 2025 CAMERTECH MARKET — Douala, Cameroon',
+        footer_sub: 'Your tech shop in Douala', footer_copy: '© {annee} CAMERTECH MARKET — Douala, Cameroon',
         tab_connexion: 'Login', tab_inscription: 'Sign up', titre_connexion: '👤 Login',
         ph_email: 'Email address', ph_mdp: 'Password', btn_se_connecter: 'Log in',
         btn_mdp_oublie: 'Forgot password?', ou: 'or', btn_google: 'Continue with Google',
@@ -689,7 +689,7 @@ function appliquerTraductionUI(lang) {
     const dict = I18N[lang];
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.dataset.i18n;
-        if (dict[key] !== undefined) el.textContent = dict[key];
+        if (dict[key] !== undefined) el.textContent = dict[key].replace('{annee}', new Date().getFullYear());
     });
     document.querySelectorAll('[data-i18n-ph]').forEach(el => {
         const key = el.dataset.i18nPh;
