@@ -1044,10 +1044,44 @@ function afficherPanneauFideliteFavoris() {
         <div style="font-family:var(--font-title);font-weight:700;font-size:1.3rem;color:var(--green)">${pts} pts</div>
         <div style="color:var(--text2);font-size:0.85rem;margin-top:4px">Palier ${palier.nom}${prochain ? ` — encore ${prochain-pts} pts avant le palier suivant` : ' — palier maximum atteint 🎉'}</div>
         <p style="color:var(--text3);font-size:0.75rem;margin-top:10px">1 point gagné tous les 1 000 FCFA dépensés, dès qu'une commande est validée.</p>
-        <button onclick="this.closest('.modal-overlay').remove();afficherFavoris()" style="width:100%;margin-top:18px;background:var(--card);border:1.5px solid var(--border);color:var(--text);padding:12px;border-radius:var(--radius-pill);font-weight:600;cursor:pointer;font-family:var(--font-body)">🤍 Voir mes favoris</button>
+        ${pts >= 100 ? `
+        <div style="background:var(--bg);border-radius:12px;padding:14px;margin-top:16px;text-align:left">
+            <div style="font-weight:700;font-size:0.85rem;margin-bottom:8px">🎟️ Convertir en bon de réduction</div>
+            <div style="font-size:0.75rem;color:var(--text3);margin-bottom:10px">100 points = 500 FCFA de réduction, valable 90 jours sur ta prochaine commande.</div>
+            <div style="display:flex;gap:8px;align-items:center">
+                <input type="number" id="fid-points-input" value="100" min="100" max="${Math.floor(pts/100)*100}" step="100" oninput="document.getElementById('fid-montant-preview').textContent = fmt((this.value/100)*500)" style="width:90px;background:var(--card);border:1.5px solid var(--border);padding:8px 10px;border-radius:8px;font-size:0.85rem;color:var(--text)">
+                <span style="font-size:0.8rem;color:var(--text2)">pts = <strong id="fid-montant-preview">${fmt(500)}</strong> FCFA</span>
+            </div>
+            <button onclick="convertirPointsFidelite()" style="width:100%;margin-top:10px;background:var(--green);color:#fff;border:none;padding:10px;border-radius:var(--radius-pill);font-weight:600;cursor:pointer;font-size:0.82rem">Convertir</button>
+        </div>` : `<p style="font-size:0.75rem;color:var(--text3);margin-top:14px">Encore ${100-pts} points avant de pouvoir créer ton premier bon de réduction.</p>`}
+        <button onclick="this.closest('.modal-overlay').remove();afficherFavoris()" style="width:100%;margin-top:14px;background:var(--card);border:1.5px solid var(--border);color:var(--text);padding:12px;border-radius:var(--radius-pill);font-weight:600;cursor:pointer;font-family:var(--font-body)">🤍 Voir mes favoris</button>
     </div>`;
     document.body.appendChild(el);
 }
+
+window.convertirPointsFidelite = async () => {
+    const input = $('fid-points-input');
+    const points = parseInt(input.value, 10);
+    if (!points || points < 100 || points % 100 !== 0) { notifier('❌ Entre un multiple de 100 points.', 'erreur'); return; }
+    try {
+        const fbUser = await attendreFirebaseUser();
+        if (!fbUser) { notifier('❌ Session expirée, reconnecte-toi.', 'erreur'); return; }
+        const idToken = await fbUser.getIdToken();
+        const resp = await fetch('/api/mon-profil', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+            body: JSON.stringify({ action: 'convertir_points', points })
+        });
+        const data = await resp.json();
+        if (!resp.ok) { notifier('❌ ' + (data.error || 'Erreur lors de la conversion.'), 'erreur'); return; }
+        currentUser.points = data.points_restants;
+        document.querySelector('.modal-overlay')?.remove();
+        notifier(`🎉 Bon créé : ${data.code} (-${fmt(data.montant)} FCFA), valable 90 jours. Code copié !`, 'succes');
+        navigator.clipboard?.writeText(data.code).catch(()=>{});
+    } catch (e) {
+        notifier('❌ Erreur réseau lors de la conversion.', 'erreur');
+    }
+};
 
 // ===== FLASH COMBO (kit sur-mesure à prix forfaitaire) =====
 let flashComboActif = null; // { id, nom, prix_ensemble, nb_choix_requis, produit_principal, choix:[...], date_fin }

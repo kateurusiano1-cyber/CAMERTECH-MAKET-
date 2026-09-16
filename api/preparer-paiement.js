@@ -57,7 +57,7 @@ function genererCodeCommande() {
 // pourcentage envoyé par le navigateur). Ne modifie rien — l'incrémentation
 // du compteur d'usage se fait séparément, uniquement quand la commande est
 // réellement créée (jamais au moment d'un simple aperçu).
-async function validerCodePromo(supabase, codeSaisi, sousTotal) {
+async function validerCodePromo(supabase, codeSaisi, sousTotal, userId) {
     if (!codeSaisi) return { valide: false, reduction: 0 };
     const code = String(codeSaisi).trim().toUpperCase();
     if (!code) return { valide: false, reduction: 0 };
@@ -65,6 +65,9 @@ async function validerCodePromo(supabase, codeSaisi, sousTotal) {
     const { data: promo } = await supabase.from('codes_promo').select('*').eq('code', code).single();
     if (!promo) return { valide: false, reduction: 0, message: 'Code promo introuvable.' };
     if (!promo.actif) return { valide: false, reduction: 0, message: "Ce code promo n'est plus actif." };
+    if (promo.utilisateur_id && promo.utilisateur_id !== userId) {
+        return { valide: false, reduction: 0, message: 'Ce code promo est personnel et ne peut pas être utilisé sur ce compte.' };
+    }
     if (promo.date_expiration && new Date(promo.date_expiration) < new Date()) {
         return { valide: false, reduction: 0, message: 'Ce code promo a expiré.' };
     }
@@ -274,7 +277,7 @@ module.exports = async (req, res) => {
             const sousTotalRemisable = Math.max(0, sousTotal - montantCombos);
             const promoResult = (sousTotalRemisable === 0 && montantCombos > 0 && code_promo)
                 ? { valide: false, reduction: 0, message: "Ce code ne s'applique pas : ton panier ne contient qu'un Flash Combo, déjà à prix réduit." }
-                : await validerCodePromo(supabase, code_promo, sousTotalRemisable);
+                : await validerCodePromo(supabase, code_promo, sousTotalRemisable, user.id);
             const total = Math.max(0, sousTotal - promoResult.reduction) + frais;
 
             if (preview) {

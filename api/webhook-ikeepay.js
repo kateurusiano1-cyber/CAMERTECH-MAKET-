@@ -78,6 +78,19 @@ module.exports = async (req, res) => {
                     url: '/'
                 });
             } catch (e) { console.error('Erreur push validation:', e.message); }
+            // Crédit des points de fidélité (1 point / 1000 FCFA), jamais
+            // pour un achat invité (pas de compte = pas d'historique de
+            // points, comme déjà documenté). Ne bloque jamais la validation
+            // de la commande si ça échoue.
+            if (resa.utilisateur_id) {
+                const pointsGagnes = Math.floor(resa.total / 1000);
+                if (pointsGagnes > 0) {
+                    try {
+                        const { data: u } = await supabase.from('utilisateurs').select('points').eq('id', resa.utilisateur_id).single();
+                        await supabase.from('utilisateurs').update({ points: (u?.points || 0) + pointsGagnes }).eq('id', resa.utilisateur_id);
+                    } catch (e) { console.error('Erreur crédit points fidélité:', e.message); }
+                }
+            }
         } else if (statutRecu === 'failed' || statutRecu === 'expired' || payload?.event === 'payment.failed') {
             await supabase.from('reservations').update({ statut: 'paiement_echoue' }).eq('code', orderId);
         }
