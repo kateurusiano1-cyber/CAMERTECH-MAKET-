@@ -203,7 +203,19 @@ async function uploadImage(file) {
 
 // ===== UTILITAIRES =====
 const isNew = d => (new Date() - new Date(d)) < 7*24*60*60*1000;
-const getPrix = p => (p.promo_active || p.flash_active) && p.promo_prix ? p.promo_prix : p.resale_price;
+const getPrix = p => prixCharme((p.promo_active || p.flash_active) && p.promo_prix ? p.promo_prix : p.resale_price);
+
+// Prix psychologique / "charm pricing" : un prix qui tombe pile sur une
+// centaine (5000, 12000, 800...) est affiché et facturé 1 FCFA en dessous
+// (4999, 11999, 799...). Ne touche jamais aux prix déjà "cassés" par
+// l'admin (ex: 4750 reste 4750) — uniquement les comptes ronds.
+// ⚠️ Cette fonction existe AUSSI côté serveur (api/preparer-paiement.js,
+// prixReel) et DOIT rester identique des deux côtés : le serveur revérifie
+// et encaisse exactement ce montant, jamais celui affiché au navigateur.
+function prixCharme(prix) {
+    const p = Math.round(prix || 0);
+    return (p > 0 && p % 100 === 0) ? p - 1 : p;
+}
 const fmt = n => parseInt(n).toLocaleString('fr-FR');
 const $ = id => document.getElementById(id);
 
@@ -1063,6 +1075,7 @@ async function chargerFlashCombo() {
         const { data: choixRows } = await db.from('offres_groupees_choix')
             .select('produit_id, products(*)').eq('offre_id', offre.id);
         offre.choix = (choixRows || []).map(c => c.products).filter(Boolean);
+        offre.prix_ensemble = prixCharme(offre.prix_ensemble);
 
         flashComboActif = offre;
         afficherBandeauFlashCombo();
@@ -3134,7 +3147,10 @@ async function afficherPanneauAdmin() {
         <div id="tab-cmds" style="display:none">
             <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
                 <h2 style="font-size:1rem;margin-bottom:14px">🧾 Commandes</h2>
-                <input type="text" id="cmd-search" placeholder="🔎 Rechercher code ou client..." oninput="filtrerCmdsAdmin(this.value)" style="width:100%;background:#f4f6f4;border:1.5px solid #e8e8e8;padding:10px 14px;color:#1a1a1a;border-radius:9px;font-size:0.88rem;margin-bottom:14px;font-family:Inter,sans-serif">
+                <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+                    <input type="text" id="cmd-search" placeholder="🔎 Rechercher code ou client..." oninput="filtrerCmdsAdmin(this.value)" style="flex:1;min-width:200px;background:#f4f6f4;border:1.5px solid #e8e8e8;padding:10px 14px;color:#1a1a1a;border-radius:9px;font-size:0.88rem;font-family:Inter,sans-serif">
+                    <button onclick="exporterCommandesCsv()" style="background:#f0fff4;color:#2dc653;border:1px solid #b7f5c8;padding:10px 16px;border-radius:9px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap">📊 Exporter en CSV</button>
+                </div>
                 <div id="cmds-admin-table">${renderCmdsAdmin(commandesPayees)}</div>
             </div>
         </div>
@@ -3734,6 +3750,52 @@ window.showTab = id => {
 window.filtrerCmdsAdmin = q => {
     const data = window._res.filter(r=>r.code.toLowerCase().includes(q.toLowerCase())||r.nom_client.toLowerCase().includes(q.toLowerCase()));
     document.getElementById('cmds-admin-table').innerHTML = renderCmdsAdmin(data);
+};
+
+// Échappe une valeur pour un champ CSV : entourée de guillemets dès qu'elle
+// contient une virgule, un guillemet ou un retour à la ligne (sinon Excel
+// découperait la ligne au mauvais endroit).
+function champCsv(v) {
+    const s = String(v ?? '');
+    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+window.exporterCommandesCsv = () => {
+    const q = document.getElementById('cmd-search')?.value || '';
+    const data = q ? window._res.filter(r=>r.code.toLowerCase().includes(q.toLowerCase())||r.nom_client.toLowerCase().includes(q.toLowerCase())) : window._res;
+    if (!data.length) { notifier('😕 Aucune commande à exporter.', 'info'); return; }
+
+    const entetes = ['Code','Date','Client','Téléphone','Compte/Invité','Zone de livraison','Statut','Articles','Sous-total (F)','Réduction (F)','Code promo','Frais livraison (F)','Total (F)'];
+    const lignes = data.map(r => {
+        const sousTotal = (r.items||[]).reduce((s,i)=>s+(i.prix||0)*(i.qty||1), 0);
+        const articles = (r.items||[]).map(i => `${i.name} x${i.qty}`).join(' | ');
+        return [
+            r.code,
+            new Date(r.created_at).toLocaleString('fr-FR'),
+            r.nom_client || '',
+            r.telephone || '',
+            r.utilisateur_id ? 'Compte' : 'Invité',
+            r.zone_livraison || '',
+            r.statut,
+            articles,
+            sousTotal,
+            r.reduction || 0,
+            r.code_promo || '',
+            r.frais_livraison || 0,
+            r.total
+        ].map(champCsv).join(',');
+    });
+    // Le BOM UTF-8 (\uFEFF) est indispensable : sans lui, Excel affiche les
+    // accents français comme des caractères corrompus à l'ouverture du CSV.
+    const csv = '\uFEFF' + entetes.join(',') + '\n' + lignes.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `commandes_camertech_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notifier(`✅ ${data.length} commande(s) exportée(s).`, 'succes');
 };
 
 window.changerStatutAdmin = async (id, statut) => {
