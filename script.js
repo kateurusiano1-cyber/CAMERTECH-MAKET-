@@ -1008,6 +1008,7 @@ function showUserUI() {
         (async () => {
             try {
                 const fbUser = await attendreFirebaseUser();
+                if (!fbUser) return;
                 const idToken = await fbUser.getIdToken();
                 const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
                     method: 'POST',
@@ -2285,6 +2286,7 @@ async function reserverCommande() {
         const headers = { 'Content-Type': 'application/json' };
         if (currentUser) {
             const fbUser = await attendreFirebaseUser();
+            if (!fbUser) throw new Error('Ta session a expiré, reconnecte-toi puis réessaie.');
             headers['Authorization'] = 'Bearer ' + await fbUser.getIdToken();
         }
         const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
@@ -2416,6 +2418,7 @@ async function appliquerCodePromo() {
         const headers = { 'Content-Type': 'application/json' };
         if (currentUser) {
             const fbUser = await attendreFirebaseUser();
+            if (!fbUser) throw new Error('Ta session a expiré, reconnecte-toi puis réessaie.');
             headers['Authorization'] = 'Bearer ' + await fbUser.getIdToken();
         }
         const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
@@ -2549,6 +2552,7 @@ async function confirmerPaiement() {
         const headers = { 'Content-Type':'application/json' };
         if (currentUser) {
             const fbUser = await attendreFirebaseUser();
+            if (!fbUser) throw new Error('Ta session a expiré, reconnecte-toi puis réessaie.');
             headers['Authorization'] = 'Bearer ' + await fbUser.getIdToken();
         }
         const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
@@ -2585,6 +2589,7 @@ window.payerCommandeExistante = async (code) => {
     closeOverlay('cmds-overlay');
     try {
         const fbUser = await attendreFirebaseUser();
+        if (!fbUser) { notifier('❌ Ta session a expiré, reconnecte-toi puis réessaie.', 'erreur'); return; }
         const idToken = await fbUser.getIdToken();
         const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
@@ -2594,7 +2599,7 @@ window.payerCommandeExistante = async (code) => {
         if (!result.success) { notifier('❌ ' + (result.error || 'Impossible de préparer le paiement.'), 'erreur'); return; }
         ouvrirWidgetIkeepay(result, code);
     } catch (e) {
-        notifier('❌ Erreur, réessaie.', 'erreur');
+        notifier('❌ ' + (e.message || 'Erreur, réessaie.'), 'erreur');
     }
 };
 
@@ -2780,6 +2785,7 @@ async function chargerCommandes() {
     if(!currentUser)return;
     try {
         const fbUser = await attendreFirebaseUser();
+        if (!fbUser) { window._mesCommandes = []; return; }
         const idToken = await fbUser.getIdToken();
         const resp = await fetch(CONFIG.API.PREPARER_PAIEMENT, {
             method: 'POST',
@@ -2896,6 +2902,7 @@ async function envoyerDemandeRetour() {
     if (!motif) { err.style.color='var(--danger)'; err.textContent = '❌ Explique brièvement le motif'; return; }
     try {
         const fbUser = await attendreFirebaseUser();
+        if (!fbUser) throw new Error('Ta session a expiré, reconnecte-toi puis réessaie.');
         const idToken = await fbUser.getIdToken();
         const resp = await fetch('/api/facture', {
             method: 'POST',
