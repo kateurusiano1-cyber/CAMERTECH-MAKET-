@@ -544,6 +544,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch(e) { localStorage.removeItem('cmkt_user'); }
 
+    // Garde l'affichage "connecté" synchronisé avec l'état réel de Firebase
+    // en continu (pas seulement au moment de payer) : si la session Firebase
+    // disparaît pendant que l'app tourne (nettoyage du navigateur, extension
+    // de confidentialité, session révoquée...) alors que le cache local
+    // pensait encore être connecté, on corrige l'affichage immédiatement
+    // plutôt que de laisser le client découvrir le problème en pleine
+    // tentative de paiement.
+    window.fbOnAuthStateChanged(window.firebaseAuth, (fbUser) => {
+        if (!fbUser && currentUser) {
+            arreterEcoutePanier();
+            currentUser = null;
+            localStorage.removeItem('cmkt_user');
+            $('user-zone').style.display = 'none';
+            $('user-menu').style.display = 'none';
+            $('btn-auth-show').style.display = '';
+            notifier('🔒 Ta session a expiré, reconnecte-toi pour continuer.', 'info');
+        }
+    });
+
     initTrackingVisiteur();
     setupChatWidget();
 
