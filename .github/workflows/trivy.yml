@@ -1,1 +1,43 @@
-name: Scan de sécurité (Trivy) on: push: branches: [ main ] pull_request: branches: [ main ] schedule: - cron: '0 6 * * 1' permissions: contents: read security-events: write jobs: trivy-scan: runs-on: ubuntu-latest steps: - name: Checkout code uses: actions/checkout@v4 - name: Run Trivy vulnerability scanner uses: aquasecurity/trivy-action@0.28.0 with: scan-type: 'fs' scan-ref: '.' format: 'sarif' output: 'trivy-results.sarif' severity: 'CRITICAL,HIGH,MEDIUM' exit-code: '0' - name: Upload Trivy scan results to GitHub Security tab uses: github/codeql-action/upload-sarif@v3 if: always() with: sarif_file: 'trivy-results.sarif'
+name: Scan de sécurité (Trivy)
+
+# Se relance automatiquement à chaque modification du code — c'est ça le
+# "temps réel" : pas besoin de lancer quoi que ce soit à la main.
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    # Une passe de sécurité hebdomadaire même sans nouveau code, pour
+    # détecter une faille découverte entre-temps dans une dépendance
+    # existante (ex: pdfkit, sharp, web-push...).
+    - cron: '0 6 * * 1'
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Lancer Trivy (dépendances + code)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          # Ne fait pas échouer le workflow sur une alerte — les résultats
+          # sont visibles dans l'onglet "Security" du dépôt, à consulter
+          # tranquillement plutôt que de bloquer chaque déploiement.
+          exit-code: '0'
+
+      - name: Publier les résultats dans l'onglet Security de GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
