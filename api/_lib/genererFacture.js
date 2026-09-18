@@ -108,7 +108,12 @@ function genererFacturePdf(reservation) {
             if (reservation.email_client) { doc.text(reservation.email_client, 50, yClient); yClient += 14; }
             doc.text(`Livraison : ${reservation.zone_livraison || '—'}`, 50, yClient); yClient += 14;
             doc.text(`Statut : ${reservation.statut}`, 50, yClient); yClient += 14;
-            if (estPaye) doc.text('Moyen de paiement : Payé via iKeePay', 50, yClient);
+            if (estPaye) { doc.text('Moyen de paiement : Payé via iKeePay', 50, yClient); yClient += 14; }
+            if (reservation.date_limite_retrait) {
+                doc.fillColor('#c24c00').font('Helvetica-Bold')
+                    .text(`⏳ À retirer avant le ${new Date(reservation.date_limite_retrait).toLocaleDateString('fr-FR')} (au-delà, marchandise non garantie)`, 50, yClient, { width: 495 });
+                doc.fillColor('#000').font('Helvetica');
+            }
 
             // Tableau articles
             let y = yClient + 26;

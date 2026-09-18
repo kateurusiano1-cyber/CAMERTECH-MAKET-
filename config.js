@@ -36,3 +36,8 @@ const CONFIG = {
         "Flash": ""
     }
 };
+
+// Rend CONFIG accessible depuis les fonctions serverless (Node/CommonJS) sans
+// rien changer côté navigateur — évite de dupliquer ZONES_COUVERTES (et le
+// reste) à deux endroits qui pourraient un jour se désynchroniser.
+if (typeof module !== 'undefined' && module.exports) module.exports = CONFIG;

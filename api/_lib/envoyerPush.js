@@ -16,20 +16,7 @@ function configurerVapid() {
     );
 }
 
-async function envoyerPushUtilisateur(supabase, utilisateurId, { titre, corps, url }) {
-    if (!utilisateurId) return;
-    configurerVapid();
-
-    const { data: abonnements } = await supabase.from('push_subscriptions').select('*').eq('utilisateur_id', utilisateurId);
-    if (!abonnements || !abonnements.length) return;
-
-    // Nombre de commandes non payées de ce client — affiché en badge sur
-    // l'icône de l'app (Android/Chrome), en plus de la notification.
-    const { count } = await supabase.from('reservations').select('id', { count: 'exact', head: true })
-        .eq('utilisateur_id', utilisateurId).in('statut', ['reservee', 'paiement_en_cours']);
-
-    const payload = JSON.stringify({ titre, corps, url: url || '/', badge: count || 0 });
-
+async function envoyerNotificationsAbonnements(abonnements, payload, supabase) {
     await Promise.all(abonnements.map(async (abo) => {
         try {
             await webpush.sendNotification({
@@ -47,4 +34,31 @@ async function envoyerPushUtilisateur(supabase, utilisateurId, { titre, corps, u
     }));
 }
 
-module.exports = { envoyerPushUtilisateur };
+async function envoyerPushUtilisateur(supabase, utilisateurId, { titre, corps, url }) {
+    if (!utilisateurId) return;
+    configurerVapid();
+
+    const { data: abonnements } = await supabase.from('push_subscriptions').select('*').eq('utilisateur_id', utilisateurId);
+    if (!abonnements || !abonnements.length) return;
+
+    // Nombre de commandes non payées de ce client — affiché en badge sur
+    // l'icône de l'app (Android/Chrome), en plus de la notification.
+    const { count } = await supabase.from('reservations').select('id', { count: 'exact', head: true })
+        .eq('utilisateur_id', utilisateurId).in('statut', ['reservee', 'paiement_en_cours']);
+
+    const payload = JSON.stringify({ titre, corps, url: url || '/', badge: count || 0 });
+    await envoyerNotificationsAbonnements(abonnements, payload, supabase);
+}
+
+// Notifie tous les appareils de l'équipe boutique abonnés (admin uniquement)
+// — utilisé pour prévenir qu'une nouvelle commande payée est à préparer
+// (empaquetage / livraison), ce qui n'existait pas du tout jusqu'ici.
+async function envoyerPushAdmins(supabase, { titre, corps, url }) {
+    configurerVapid();
+    const { data: abonnements } = await supabase.from('push_subscriptions').select('*').eq('is_admin', true);
+    if (!abonnements || !abonnements.length) return;
+    const payload = JSON.stringify({ titre, corps, url: url || '/admin-cmr2025' });
+    await envoyerNotificationsAbonnements(abonnements, payload, supabase);
+}
+
+module.exports = { envoyerPushUtilisateur, envoyerPushAdmins };

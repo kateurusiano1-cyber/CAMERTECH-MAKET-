@@ -396,6 +396,35 @@ function attendreFirebaseUser() {
     });
 }
 
+window.activerNotifsAdmin = async () => {
+    const statut = $('admin-notif-statut');
+    statut.textContent = '...';
+    try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) { statut.textContent = "❌ Non supporté sur ce navigateur."; return; }
+        if (!CONFIG.VAPID_PUBLIC_KEY) { statut.textContent = '❌ Clé VAPID manquante côté site.'; return; }
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') { statut.textContent = '❌ Permission refusée.'; return; }
+
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(CONFIG.VAPID_PUBLIC_KEY)
+            });
+        }
+        const resp = await fetch('/api/push-subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (sessionStorage.getItem('cmkt_admin_token') || '') },
+            body: JSON.stringify({ subscription: sub.toJSON() })
+        });
+        if (!resp.ok) { const j = await resp.json().catch(()=>({})); statut.textContent = '❌ ' + (j.error || 'Erreur serveur'); return; }
+        statut.textContent = '✅ Activé sur cet appareil !';
+    } catch (e) {
+        statut.textContent = '❌ ' + (e.message || 'Erreur');
+    }
+};
+
 async function abonnerPushSiConnecte() {
     if (!currentUser) return;
     if (Notification.permission !== 'granted') { console.log('Push: permission =', Notification.permission); return; }
@@ -2709,7 +2738,7 @@ function afficherSuccesDepuisResa(resa) {
         panier = (resa.items||[]).map(i => ({ id:i.id, name:i.name, qty:i.qty, prix:i.prix }));
         userZone = resa.zone_livraison; fraisLivraison = resa.frais_livraison || 0;
     }
-    afficherSucces(resa.code, resa.total);
+    afficherSucces(resa.code, resa.total, resa.date_limite_retrait);
     panier = []; updatePanierBtn(); syncPanierServeur();
 }
 
@@ -2737,7 +2766,7 @@ function construireAnimationSucces(items, estLivraisonDomicile) {
     return `<div class="success-anim"><div class="success-anim-items">${vignettes}</div><div class="success-anim-box">📦</div></div>`;
 }
 
-function afficherSucces(code, total) {
+function afficherSucces(code, total, dateLimiteRetrait) {
     fermerWidgetIkeepay();
     $('success-code-display').textContent = code;
     // Certains points d'ajout au panier (achat rapide sur la carte produit) ne
@@ -2751,7 +2780,7 @@ function afficherSucces(code, total) {
     $('success-recap').innerHTML = html;
     $('success-agence-msg').textContent = estLivraisonDomicile
         ? `🚚 Livraison à domicile prévue à ${userZone}. Nous vous contacterons pour organiser la remise. Besoin d'aide ? Contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')}.`
-        : `Veuillez vous présenter à notre agence (${CONFIG.AGENCE_ADRESSE}) pour le retrait, ou contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')} pour organiser une expédition par agence de voyage si nécessaire.`;
+        : `Veuillez vous présenter à notre agence (${CONFIG.AGENCE_ADRESSE}) pour le retrait, ou contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')} pour organiser une expédition par agence de voyage si nécessaire.${dateLimiteRetrait ? ` ⏳ À retirer avant le ${new Date(dateLimiteRetrait).toLocaleDateString('fr-FR')} — passé ce délai, nous ne sommes plus garants de la marchandise.` : ''}`;
     $('success-wa').href = `https://wa.me/${CONFIG.AGENCE_TEL}?text=${encodeURIComponent('Bonjour, je viens de payer ma commande '+code+' sur CAMERTECH MARKET.')}`;
     $('invite-nudge-success').style.display = (inviteInfo && !currentUser) ? 'block' : 'none';
     closeOverlay('panier-overlay');
@@ -3350,6 +3379,12 @@ async function afficherPanneauAdmin() {
         <!-- PARAMETRES -->
         <div id="tab-param" style="display:none">
             <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+                <h2 style="font-size:1rem;margin-bottom:6px">🔔 Notifications nouvelles commandes</h2>
+                <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Reçois une alerte sur cet appareil dès qu'une commande est payée et prête à être préparée (empaquetage / livraison). À activer sur chaque appareil utilisé en boutique.</p>
+                <button onclick="activerNotifsAdmin()" style="background:#f0fff4;color:#2dc653;border:1px solid #b7f5c8;padding:10px 18px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer">🔔 Activer sur cet appareil</button>
+                <span id="admin-notif-statut" style="margin-left:10px;font-size:0.8rem;color:#888"></span>
+            </div>
+            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
                 <h2 style="font-size:1rem;margin-bottom:6px">⚙️ Coordonnées de l'agence</h2>
                 <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Utilisées dans le message de succès paiement et le mot de passe oublié.</p>
                 <div style="display:flex;flex-direction:column;gap:10px">
@@ -3758,6 +3793,7 @@ window.ouvrirDetailsCmdAdmin = (code) => {
             <div><strong>Zone :</strong> ${r.zone_livraison||'—'} ${r.frais_livraison?`(frais: ${fmt(r.frais_livraison)} F)`:''}</div>
             <div><strong>Statut :</strong> ${r.statut}${r.paye_le ? ` — payé le ${new Date(r.paye_le).toLocaleString('fr-FR')}` : ''}</div>
             ${r.transaction_id ? `<div><strong>Référence paiement :</strong> ${r.transaction_id}</div>` : ''}
+            ${r.date_limite_retrait ? `<div style="color:#c24c00;font-weight:700">⏳ À retirer avant le ${new Date(r.date_limite_retrait).toLocaleDateString('fr-FR')}</div>` : ''}
         </div>
         ${r.visiteur_session_id ? `<button onclick="voirTimelineVisiteur('${r.visiteur_session_id}','${r.nom_client.replace(/'/g,"\\'")} (commande ${r.code})')" style="width:100%;margin-top:10px;background:#eef6ff;color:#1a5c9c;border:1px solid #cfe4fb;padding:9px;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.82rem">📜 Voir son parcours sur le site avant l'achat</button>` : ''}
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee">

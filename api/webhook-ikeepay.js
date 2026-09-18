@@ -12,7 +12,8 @@
 //      vérification manuelle), et l'incident est journalisé.
 
 const { createClient } = require('@supabase/supabase-js');
-const { envoyerPushUtilisateur } = require('./_lib/envoyerPush');
+const { envoyerPushUtilisateur, envoyerPushAdmins } = require('./_lib/envoyerPush');
+const CONFIG = require('../config.js');
 
 module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
@@ -63,10 +64,16 @@ module.exports = async (req, res) => {
                 console.error(`⚠️ ALERTE écart de montant sur ${orderId} : reçu=${montantRecu} attendu=${resa.total} — commande NON validée automatiquement`);
                 return res.status(200).json({ received: true, warning: 'amount_mismatch' });
             }
+            // Date limite de retrait (7 jours), uniquement pour les commandes
+            // à retirer en agence — jamais pour une livraison à domicile.
+            const estRetraitAgence = !CONFIG.ZONES_COUVERTES.includes(resa.zone_livraison);
+            const dateLimiteRetrait = estRetraitAgence ? new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString() : null;
+
             await supabase.from('reservations').update({
                 statut: 'valide',
                 transaction_id: refFournisseur || null,
-                paye_le: new Date().toISOString()
+                paye_le: new Date().toISOString(),
+                date_limite_retrait: dateLimiteRetrait
             }).eq('code', orderId);
             // (Envoi automatique de la facture par email désactivé pour
             // l'instant — reste disponible via le bouton de téléchargement
@@ -78,6 +85,17 @@ module.exports = async (req, res) => {
                     url: '/'
                 });
             } catch (e) { console.error('Erreur push validation:', e.message); }
+            // Prévient l'équipe en boutique qu'une commande payée est à
+            // préparer (empaquetage / livraison) — n'existait pas du tout
+            // jusqu'ici, la validation d'une commande ne déclenchait aucune
+            // alerte côté boutique.
+            try {
+                await envoyerPushAdmins(supabase, {
+                    titre: '📦 Nouvelle commande à préparer',
+                    corps: `${resa.code} — ${resa.nom_client} — ${Math.round(resa.total)} FCFA — ${estRetraitAgence ? 'Retrait en agence' : 'Livraison à ' + resa.zone_livraison}`,
+                    url: '/admin-cmr2025'
+                });
+            } catch (e) { console.error('Erreur push admins:', e.message); }
             // Crédit des points de fidélité (1 point / 1000 FCFA), jamais
             // pour un achat invité (pas de compte = pas d'historique de
             // points, comme déjà documenté). Ne bloque jamais la validation
