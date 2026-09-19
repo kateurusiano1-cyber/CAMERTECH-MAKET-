@@ -60,7 +60,8 @@ module.exports = async (req, res) => {
         if (!response.ok) {
             await signalerEchec(supabase, 'gemini');
             await signalerEchecTentative(supabase, cle, 20, 10);
-            return res.status(500).json({ error: data.error?.message || 'Erreur du service de recherche' });
+            console.error('Erreur API Gemini (recherche-photo):', data.error?.message || JSON.stringify(data));
+            return res.status(500).json({ error: 'Erreur du service de recherche, réessaie.' });
         }
 
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';

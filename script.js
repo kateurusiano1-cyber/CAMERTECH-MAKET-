@@ -34,6 +34,24 @@ function notifier(message, type = 'info') {
     setTimeout(retirer, duree);
 }
 
+// Filet de sécurité global : si une erreur JavaScript imprévue survient
+// n'importe où sur le site (bug non anticipé, script tiers, etc.), le
+// visiteur ne doit JAMAIS voir le message technique brut (trace d'appel,
+// nom de fichier, détail interne) — seulement un message générique dans le
+// style du site. Le détail réel reste dans la console pour le diagnostic.
+// Un compteur limite à 1 toast affiché par minute pour ne pas spammer
+// l'écran si plusieurs erreurs surviennent en cascade.
+let _derniereAlerteErreurGlobale = 0;
+function _signalerErreurInattendue(source, detail) {
+    console.error('[Erreur inattendue]', source, detail);
+    const maintenant = Date.now();
+    if (maintenant - _derniereAlerteErreurGlobale < 60000) return;
+    _derniereAlerteErreurGlobale = maintenant;
+    notifier("😕 Une erreur inattendue s'est produite. Réessaie, ou contacte-nous si ça persiste.", 'erreur');
+}
+window.addEventListener('error', (e) => _signalerErreurInattendue('window.onerror', e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => _signalerErreurInattendue('promesse non gérée', e.reason));
+
 // ===== TRACKING VISITEURS (anonyme, sans identité forcée) =====
 // Identifiant aléatoire (pas de nom, pas d'email tant que le visiteur ne
 // s'identifie pas lui-même en créant un compte). Écriture seule côté
@@ -3134,9 +3152,9 @@ async function afficherPanneauAdmin() {
 
     page.innerHTML=`
     <div style="font-family:Inter,sans-serif">
-        <div style="background:#1a5c2a;color:white;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:10">
-            <h1 style="font-family:Poppins,sans-serif;font-size:1.1rem;margin:0">⚙️ CAMERTECH MARKET Admin</h1>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <div style="background:linear-gradient(135deg,#1F6B3A,#164F2B);color:white;padding:16px 26px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:10;box-shadow:0 2px 14px rgba(0,0,0,0.12)">
+            <h1 style="font-family:Poppins,sans-serif;font-size:1.1rem;margin:0;font-weight:600;letter-spacing:0.2px">⚙️ CAMERTECH MARKET Admin</h1>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button onclick="showTab('tab-dash')" class="adm-tab active" id="tb-dash">📊 Dashboard</button>
                 <button onclick="showTab('tab-prods')" class="adm-tab" id="tb-prods">📦 Produits</button>
                 <button onclick="showTab('tab-cmds')" class="adm-tab" id="tb-cmds">🧾 Commandes</button>
@@ -3158,22 +3176,22 @@ async function afficherPanneauAdmin() {
         <div id="tab-dash">
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">
                 ${[['💰','Total ventes',fmt(totalV)+' F'],['🧾','Commandes',commandesPayees.length],['⏳','En attente',enAtt],['📦','Produits',(prods||[]).length],['👥','Clients',(users||[]).length],['⚠️','Alertes stock',sfaible.length+szero.length]].map(([ico,lbl,val])=>`
-                <div style="background:white;border:1px solid #e8e8e8;border-radius:12px;padding:16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+                <div style="background:white;border:1px solid #eef0ee;border-radius:16px;padding:18px;text-align:center;box-shadow:0 2px 10px rgba(20,40,25,0.05);transition:transform 0.15s ease" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                     <div style="font-size:1.7rem;margin-bottom:6px">${ico}</div>
-                    <div style="font-size:1.2rem;font-weight:800;color:#1a5c2a;font-family:Poppins,sans-serif">${val}</div>
+                    <div style="font-size:1.2rem;font-weight:800;color:#1F6B3A;font-family:Poppins,sans-serif">${val}</div>
                     <div style="color:#888;font-size:0.75rem;margin-top:2px">${lbl}</div>
                 </div>`).join('')}
             </div>
-            ${(sfaible.length+szero.length)>0?`<div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:20px;margin-bottom:16px">
+            ${(sfaible.length+szero.length)>0?`<div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:22px;margin-bottom:16px">
                 <h2 style="font-size:1rem;margin-bottom:12px">⚠️ Alertes Stock</h2>
-                ${szero.map(p=>`<div style="display:flex;justify-content:space-between;background:#fff0f0;border:1px solid #fcc;border-radius:8px;padding:10px 14px;margin-bottom:8px"><span>🔴 <strong>${p.name}</strong></span><span style="color:#e63946">ÉPUISÉ</span></div>`).join('')}
-                ${sfaible.map(p=>`<div style="display:flex;justify-content:space-between;background:#fff8f0;border:1px solid #fdd;border-radius:8px;padding:10px 14px;margin-bottom:8px"><span>🟡 <strong>${p.name}</strong></span><span style="color:#ff6600">${p.quantity} restant(s)</span></div>`).join('')}
+                ${szero.map(p=>`<div style="display:flex;justify-content:space-between;background:#fff0f0;border:1px solid #fcc;border-radius:8px;padding:10px 14px;margin-bottom:8px"><span>🔴 <strong>${p.name}</strong></span><span style="color:#D9534F">ÉPUISÉ</span></div>`).join('')}
+                ${sfaible.map(p=>`<div style="display:flex;justify-content:space-between;background:#fff8f0;border:1px solid #fdd;border-radius:8px;padding:10px 14px;margin-bottom:8px"><span>🟡 <strong>${p.name}</strong></span><span style="color:#E8792E">${p.quantity} restant(s)</span></div>`).join('')}
             </div>`:''}
         </div>
 
         <!-- PRODUITS -->
         <div id="tab-prods" style="display:none">
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
                 <h2 id="prod-form-title" style="font-size:1rem;margin-bottom:16px">➕ Ajouter un Produit</h2>
                 <div style="display:flex;flex-direction:column;gap:10px">
                     <input type="text" id="p-name" placeholder="Nom du produit *" class="adm-input">
@@ -3209,19 +3227,19 @@ async function afficherPanneauAdmin() {
                         <p id="ia-res" style="font-size:0.78rem;margin-top:6px;min-height:16px"></p>
                         <div id="adm-img-preview" style="display:none;margin-top:10px;position:relative;display:inline-block">
                             <img id="adm-img" src="" style="max-height:140px;border-radius:8px;max-width:100%">
-                            <button onclick="resetAdminImg()" style="position:absolute;top:4px;right:4px;background:rgba(255,255,255,0.9);color:#e63946;border:none;border-radius:4px;padding:3px 7px;font-size:0.75rem;cursor:pointer">✕</button>
+                            <button onclick="resetAdminImg()" style="position:absolute;top:4px;right:4px;background:rgba(255,255,255,0.9);color:#D9534F;border:none;border-radius:4px;padding:3px 7px;font-size:0.75rem;cursor:pointer">✕</button>
                         </div>
                         <div id="adm-img-extra" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center"></div>
                     </div>
                     <div id="ia-lot-resultats" style="display:none;flex-direction:column;gap:10px"></div>
                     <div style="display:flex;gap:10px">
-                        <button onclick="sauvegarderProduit()" style="flex:1;background:#1a5c2a;color:white;border:none;padding:12px;border-radius:9px;font-weight:700;cursor:pointer;font-size:0.95rem">Enregistrer</button>
-                        <button id="btn-annuler-edit" onclick="annulerEdit()" style="display:none;background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:12px 16px;border-radius:9px;font-weight:600;cursor:pointer">Annuler</button>
+                        <button onclick="sauvegarderProduit()" style="flex:1;background:#1F6B3A;color:white;border:none;padding:12px;border-radius:9px;font-weight:700;cursor:pointer;font-size:0.95rem">Enregistrer</button>
+                        <button id="btn-annuler-edit" onclick="annulerEdit()" style="display:none;background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:12px 16px;border-radius:9px;font-weight:600;cursor:pointer">Annuler</button>
                     </div>
                     <p id="prod-msg" style="min-height:18px;font-size:0.82rem"></p>
                 </div>
             </div>
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:14px">📦 Produits (<span id="prods-count">${(prods||[]).length}</span>)</h2>
                 <div style="overflow-x:auto">
                     <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
@@ -3234,11 +3252,11 @@ async function afficherPanneauAdmin() {
 
         <!-- COMMANDES -->
         <div id="tab-cmds" style="display:none">
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:14px">🧾 Commandes</h2>
                 <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-                    <input type="text" id="cmd-search" placeholder="🔎 Rechercher code ou client..." oninput="filtrerCmdsAdmin(this.value)" style="flex:1;min-width:200px;background:#f4f6f4;border:1.5px solid #e8e8e8;padding:10px 14px;color:#1a1a1a;border-radius:9px;font-size:0.88rem;font-family:Inter,sans-serif">
-                    <button onclick="exporterCommandesCsv()" style="background:#f0fff4;color:#2dc653;border:1px solid #b7f5c8;padding:10px 16px;border-radius:9px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap">📊 Exporter en CSV</button>
+                    <input type="text" id="cmd-search" placeholder="🔎 Rechercher code ou client..." oninput="filtrerCmdsAdmin(this.value)" style="flex:1;min-width:200px;background:#f4f6f4;border:1.5px solid #eef0ee;padding:10px 14px;color:#1a1a1a;border-radius:9px;font-size:0.88rem;font-family:Inter,sans-serif">
+                    <button onclick="exporterCommandesCsv()" style="background:#f0fff4;color:#3FA66B;border:1px solid #b7f5c8;padding:10px 16px;border-radius:9px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap">📊 Exporter en CSV</button>
                 </div>
                 <div id="cmds-admin-table">${renderCmdsAdmin(commandesPayees)}</div>
             </div>
@@ -3246,7 +3264,7 @@ async function afficherPanneauAdmin() {
 
         <!-- CLIENTS -->
         <div id="tab-users" style="display:none">
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:14px">👥 Clients inscrits (${(users||[]).length})</h2>
                 <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.82rem">
                     <thead><tr>${['Nom','Téléphone','Email','Inscrit le','Action'].map(h=>`<th style="color:#888;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0f0;font-size:0.75rem">${h}</th>`).join('')}</tr></thead>
@@ -3255,7 +3273,7 @@ async function afficherPanneauAdmin() {
                         <td style="padding:10px">📞 ${echapperHtml(u.telephone)}</td>
                         <td style="padding:10px;color:#888">${echapperHtml(u.email)||'—'}</td>
                         <td style="padding:10px;color:#888;font-size:0.78rem">${new Date(u.created_at).toLocaleDateString('fr-FR')}</td>
-                        <td style="padding:10px"><button onclick="adminResetMdp('${u.id}','${u.nom.replace(/'/g,"\\'")}','${u.email||''}')" style="background:#fff8f0;color:#ff6600;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;margin-right:6px">🔑 Réinitialiser mdp</button><button onclick="adminSupprimerUtilisateur('${u.id}','${u.nom.replace(/'/g,"\\'")}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer">🗑️ Supprimer</button></td>
+                        <td style="padding:10px"><button onclick="adminResetMdp('${u.id}','${u.nom.replace(/'/g,"\\'")}','${u.email||''}')" style="background:#fff8f0;color:#E8792E;border:1px solid #fdd;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;margin-right:6px">🔑 Réinitialiser mdp</button><button onclick="adminSupprimerUtilisateur('${u.id}','${u.nom.replace(/'/g,"\\'")}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:5px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer">🗑️ Supprimer</button></td>
                     </tr>`).join('')}</tbody>
                 </table></div>
             </div>
@@ -3263,15 +3281,15 @@ async function afficherPanneauAdmin() {
 
         <!-- AVIS -->
         <div id="tab-avis" style="display:none">
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:14px">⭐ Avis en attente</h2>
                 ${!(avisListe||[]).length?'<p style="color:#888">Aucun avis en attente.</p>'
                 :(avisListe||[]).map(a=>`<div style="background:#f8f8f8;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee">
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
                         <div><strong>${echapperHtml(a.nom_client)}</strong> — <span style="color:#f4c430">${'★'.repeat(a.note)}</span></div>
                         <div style="display:flex;gap:6px">
-                            <button onclick="validerAvisAdmin('${a.id}')" style="background:#f0fff4;color:#2dc653;border:1px solid #b7f5c8;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">✅ Valider</button>
-                            <button onclick="supprimerAvisAdmin('${a.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">🗑️</button>
+                            <button onclick="validerAvisAdmin('${a.id}')" style="background:#f0fff4;color:#3FA66B;border:1px solid #b7f5c8;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">✅ Valider</button>
+                            <button onclick="supprimerAvisAdmin('${a.id}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">🗑️</button>
                         </div>
                     </div>
                     ${a.commentaire?`<p style="color:#555;font-size:0.85rem;margin-top:6px">${echapperHtml(a.commentaire)}</p>`:''}
@@ -3282,7 +3300,7 @@ async function afficherPanneauAdmin() {
 
         <!-- MARKETING -->
         <div id="tab-mktg" style="display:none">
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
                 <h2 style="font-size:1rem;margin-bottom:14px">📢 Publier un message</h2>
                 <div style="display:flex;flex-direction:column;gap:10px">
                     <input type="text" id="mktg-msg" placeholder="Message..." class="adm-input">
@@ -3325,7 +3343,7 @@ async function afficherPanneauAdmin() {
                             </div>
                         </div>
                         <input type="url" id="mktg-popup-lien" placeholder="Lien au clic sur le flyer (optionnel)" class="adm-input">
-                        <div style="background:#f4f6f4;border:1.5px solid #e8e8e8;border-radius:8px;padding:12px">
+                        <div style="background:#f4f6f4;border:1.5px solid #eef0ee;border-radius:8px;padding:12px">
                             <p style="font-size:0.82rem;color:#888;margin-bottom:8px">🛍️ Produits à mettre en avant dans le popup (max 4 — sinon les ventes flash s'affichent automatiquement)</p>
                             <input type="text" id="mktg-prod-search" placeholder="Rechercher un produit..." class="adm-input" style="margin-bottom:8px" oninput="filtrerProduitsPopup()">
                             <div id="mktg-prod-liste" style="max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
@@ -3335,32 +3353,32 @@ async function afficherPanneauAdmin() {
                             </div>
                         </div>
                     </div>
-                    <button onclick="publierMessage()" style="background:#1a5c2a;color:white;border:none;padding:12px;border-radius:9px;font-weight:700;cursor:pointer">Publier</button>
+                    <button onclick="publierMessage()" style="background:#1F6B3A;color:white;border:none;padding:12px;border-radius:9px;font-weight:700;cursor:pointer">Publier</button>
                     <p id="mktg-res" style="min-height:18px;font-size:0.82rem"></p>
                 </div>
             </div>
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:14px">Messages actifs</h2>
                 <div id="mktg-liste">${(bannieres||[]).length?
                     (bannieres||[]).map(b=>`<div style="background:#f8f8f8;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
                         <div style="display:flex;align-items:center;gap:10px">
                             ${b.image_url?`<img src="${b.image_url}" style="width:44px;height:44px;object-fit:cover;border-radius:6px">`:''}
-                            <div><span style="background:${b.type==='popup'?'#0088ff':b.type==='slider'?'#ff6600':'#1a5c2a'};color:white;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700">${b.type.toUpperCase()}</span><span style="margin-left:8px;font-size:0.88rem">${b.message}</span>${b.produits_ids?.length?`<span style="margin-left:8px;color:#888;font-size:0.72rem">🛍️ ${b.produits_ids.length} produit(s)</span>`:''}</div>
+                            <div><span style="background:${b.type==='popup'?'#0088ff':b.type==='slider'?'#E8792E':'#1F6B3A'};color:white;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700">${b.type.toUpperCase()}</span><span style="margin-left:8px;font-size:0.88rem">${b.message}</span>${b.produits_ids?.length?`<span style="margin-left:8px;color:#888;font-size:0.72rem">🛍️ ${b.produits_ids.length} produit(s)</span>`:''}</div>
                         </div>
-                        <button onclick="desactiverBanniere('${b.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">Désactiver</button>
+                        <button onclick="desactiverBanniere('${b.id}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">Désactiver</button>
                     </div>`).join(''):'<p style="color:#888">Aucun message actif.</p>'}
                 </div>
             </div>
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:4px">📊 Retours des clients (fiche produit)</h2>
                 <p style="font-size:0.8rem;color:#888;margin-bottom:14px">${feedbackStats.total || 0} retour(s) collecté(s) au total.</p>
                 ${feedbackStats.total ? `
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
                     ${[
                         {id:'plus',label:'👍 Veulent en voir plus',color:'#0088ff'},
-                        {id:'moins',label:'👎 Ne veulent plus voir',color:'#e63946'},
-                        {id:'cher',label:'💸 Trop cher',color:'#ff6600'},
-                        {id:'possede',label:'✅ Déjà acheté',color:'#2dc653'}
+                        {id:'moins',label:'👎 Ne veulent plus voir',color:'#D9534F'},
+                        {id:'cher',label:'💸 Trop cher',color:'#E8792E'},
+                        {id:'possede',label:'✅ Déjà acheté',color:'#3FA66B'}
                     ].map(o=>`<div style="background:#f8f8f8;border-radius:8px;padding:12px;text-align:center">
                         <div style="font-size:1.4rem;font-weight:800;color:${o.color}">${feedbackStats.parChoix?.[o.id]||0}</div>
                         <div style="font-size:0.72rem;color:#888;margin-top:2px">${o.label}</div>
@@ -3378,13 +3396,13 @@ async function afficherPanneauAdmin() {
 
         <!-- PARAMETRES -->
         <div id="tab-param" style="display:none">
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
                 <h2 style="font-size:1rem;margin-bottom:6px">🔔 Notifications nouvelles commandes</h2>
                 <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Reçois une alerte sur cet appareil dès qu'une commande est payée et prête à être préparée (empaquetage / livraison). À activer sur chaque appareil utilisé en boutique.</p>
-                <button onclick="activerNotifsAdmin()" style="background:#f0fff4;color:#2dc653;border:1px solid #b7f5c8;padding:10px 18px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer">🔔 Activer sur cet appareil</button>
+                <button onclick="activerNotifsAdmin()" style="background:#f0fff4;color:#3FA66B;border:1px solid #b7f5c8;padding:10px 18px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer">🔔 Activer sur cet appareil</button>
                 <span id="admin-notif-statut" style="margin-left:10px;font-size:0.8rem;color:#888"></span>
             </div>
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
                 <h2 style="font-size:1rem;margin-bottom:6px">⚙️ Coordonnées de l'agence</h2>
                 <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Utilisées dans le message de succès paiement et le mot de passe oublié.</p>
                 <div style="display:flex;flex-direction:column;gap:10px">
@@ -3392,12 +3410,12 @@ async function afficherPanneauAdmin() {
                     <input type="text" id="param-tel" class="adm-input" placeholder="Téléphone agence (format 2376XXXXXXXX)" value="${paramMap.agence_tel || CONFIG.AGENCE_TEL || ''}">
                 </div>
             </div>
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
                 <h2 style="font-size:1rem;margin-bottom:6px">🖼️ Photos des catégories (page d'accueil)</h2>
                 <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Une vraie photo par catégorie, affichée sur les tuiles de l'accueil.</p>
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px">
                     ${Object.keys(CAT_SLUGS).map(cat=>`<div style="text-align:center">
-                        <div style="width:100%;aspect-ratio:1;border-radius:50%;overflow:hidden;background:#f4f6f4;margin:0 auto 8px;border:1px solid #e8e8e8">
+                        <div style="width:100%;aspect-ratio:1;border-radius:50%;overflow:hidden;background:#f4f6f4;margin:0 auto 8px;border:1px solid #eef0ee">
                             <img id="param-cat-preview-${CAT_SLUGS[cat]}" src="${paramMap['cat_img_'+CAT_SLUGS[cat]] || CONFIG.CATEGORY_IMAGES[cat] || ''}" style="width:100%;height:100%;object-fit:cover;${(paramMap['cat_img_'+CAT_SLUGS[cat]] || CONFIG.CATEGORY_IMAGES[cat]) ? '' : 'display:none'}" onerror="this.style.display='none'">
                         </div>
                         <p style="font-size:0.78rem;font-weight:600;margin-bottom:6px">${cat}</p>
@@ -3407,26 +3425,26 @@ async function afficherPanneauAdmin() {
                     </div>`).join('')}
                 </div>
             </div>
-            <button onclick="sauvegarderParametres()" style="background:#1a5c2a;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">💾 Enregistrer les paramètres</button>
+            <button onclick="sauvegarderParametres()" style="background:#1F6B3A;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">💾 Enregistrer les paramètres</button>
             <p id="param-res" style="min-height:18px;font-size:0.82rem;margin-top:8px"></p>
         </div>
 
         <!-- RETOURS -->
         <div id="tab-retours" style="display:none">
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:14px">🔄 Demandes de retour (${(retours||[]).length})</h2>
                 ${!(retours||[]).length ? '<p style="color:#888">Aucune demande de retour.</p>' :
                 (retours||[]).map(r=>`<div style="background:#f8f8f8;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
                         <div>
-                            <div style="font-family:monospace;font-weight:700;color:#1a5c2a">${echapperHtml(r.code_commande)||'—'}</div>
+                            <div style="font-family:monospace;font-weight:700;color:#1F6B3A">${echapperHtml(r.code_commande)||'—'}</div>
                             <div style="font-size:0.78rem;color:#888;margin:4px 0">${new Date(r.created_at).toLocaleString('fr-FR')}</div>
                             <div style="font-size:0.85rem;margin-top:4px">${echapperHtml(r.motif)}</div>
-                            <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${r.statut==='en_attente'?'#fff8f0':r.statut==='traite'?'#f0fff4':'#fff0f0'};color:${r.statut==='en_attente'?'#ff6600':r.statut==='traite'?'#2dc653':'#e63946'}">${r.statut}</span>
+                            <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${r.statut==='en_attente'?'#fff8f0':r.statut==='traite'?'#f0fff4':'#fff0f0'};color:${r.statut==='en_attente'?'#E8792E':r.statut==='traite'?'#3FA66B':'#D9534F'}">${r.statut}</span>
                         </div>
                         <div style="display:flex;gap:6px">
-                            <button onclick="changerStatutRetour('${r.id}','traite')" style="background:#f0fff4;color:#2dc653;border:1px solid #b7f5c8;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">✅ Traité</button>
-                            <button onclick="changerStatutRetour('${r.id}','refuse')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">❌ Refuser</button>
+                            <button onclick="changerStatutRetour('${r.id}','traite')" style="background:#f0fff4;color:#3FA66B;border:1px solid #b7f5c8;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">✅ Traité</button>
+                            <button onclick="changerStatutRetour('${r.id}','refuse')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">❌ Refuser</button>
                         </div>
                     </div>
                 </div>`).join('')}
@@ -3435,7 +3453,7 @@ async function afficherPanneauAdmin() {
 
         <!-- CODES PROMO -->
         <div id="tab-promo" style="display:none">
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
                 <h2 style="font-size:1rem;margin-bottom:14px">🏷️ Créer un code promo</h2>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
                     <input id="promo-new-code" placeholder="CODE (ex: BIENVENUE10)" style="padding:10px;border-radius:8px;border:1px solid #ddd;text-transform:uppercase">
@@ -3448,10 +3466,10 @@ async function afficherPanneauAdmin() {
                     <input id="promo-new-max-usage" type="number" min="1" placeholder="Utilisations max (optionnel)" style="padding:10px;border-radius:8px;border:1px solid #ddd">
                     <input id="promo-new-expiration" type="date" style="padding:10px;border-radius:8px;border:1px solid #ddd">
                 </div>
-                <button onclick="creerCodePromo()" style="background:#1a5c2a;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">➕ Créer le code</button>
+                <button onclick="creerCodePromo()" style="background:#1F6B3A;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">➕ Créer le code</button>
                 <p id="promo-new-res" style="min-height:18px;font-size:0.82rem;margin-top:8px"></p>
             </div>
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:14px">📋 Codes existants (${(codesPromo||[]).length})</h2>
                 ${!(codesPromo||[]).length ? '<p style="color:#888">Aucun code promo créé.</p>' :
                 (codesPromo||[]).map(c=>{
@@ -3459,17 +3477,17 @@ async function afficherPanneauAdmin() {
                     const expiré = expire && expire < new Date();
                     return `<div style="background:#f8f8f8;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
                         <div>
-                            <div style="font-family:monospace;font-weight:700;color:#1a5c2a;font-size:0.95rem">${c.code}</div>
+                            <div style="font-family:monospace;font-weight:700;color:#1F6B3A;font-size:0.95rem">${c.code}</div>
                             <div style="font-size:0.8rem;color:#555;margin-top:2px">${c.type==='pourcentage' ? c.valeur+'%' : fmt(c.valeur)+' FCFA'} de réduction${c.montant_min ? ` · dès ${fmt(c.montant_min)} FCFA d'achat` : ''}</div>
                             <div style="font-size:0.75rem;color:#888;margin-top:2px">
                                 Utilisé ${c.usage_actuel||0}${c.usage_max ? ' / '+c.usage_max : ''} fois
                                 ${expire ? ` · ${expiré?'expiré le':'expire le'} ${expire.toLocaleDateString('fr-FR')}` : ''}
                             </div>
-                            <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${c.actif && !expiré?'#f0fff4':'#fff0f0'};color:${c.actif && !expiré?'#2dc653':'#e63946'}">${c.actif && !expiré ? 'Actif' : (expiré ? 'Expiré' : 'Désactivé')}</span>
+                            <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${c.actif && !expiré?'#f0fff4':'#fff0f0'};color:${c.actif && !expiré?'#3FA66B':'#D9534F'}">${c.actif && !expiré ? 'Actif' : (expiré ? 'Expiré' : 'Désactivé')}</span>
                         </div>
                         <div style="display:flex;gap:6px">
-                            <button onclick="toggleCodePromo('${c.id}',${!c.actif})" style="background:#fff8f0;color:#ff6600;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${c.actif?'⏸️ Désactiver':'▶️ Activer'}</button>
-                            <button onclick="supprimerCodePromo('${c.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️ Supprimer</button>
+                            <button onclick="toggleCodePromo('${c.id}',${!c.actif})" style="background:#fff8f0;color:#E8792E;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${c.actif?'⏸️ Désactiver':'▶️ Activer'}</button>
+                            <button onclick="supprimerCodePromo('${c.id}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️ Supprimer</button>
                         </div>
                     </div>`;
                 }).join('')}
@@ -3478,7 +3496,7 @@ async function afficherPanneauAdmin() {
 
         <!-- VISITEURS -->
         <div id="tab-visiteurs" style="display:none">
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:4px">👥 Visiteurs (${visiteurs.length})</h2>
                 <p style="font-size:0.78rem;color:#888;margin-bottom:16px">Tracking anonyme (identifiant aléatoire) — un nom n'apparaît que si le visiteur a créé un compte.</p>
                 ${!visiteurs.length ? '<p style="color:#888">Aucune activité enregistrée pour le moment.</p>' :
@@ -3503,7 +3521,7 @@ async function afficherPanneauAdmin() {
 
         <!-- FLASH COMBO -->
         <div id="tab-combo" style="display:none">
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px;margin-bottom:16px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
                 <h2 style="font-size:1rem;margin-bottom:4px">⚡ Créer un Flash Combo</h2>
                 <p style="font-size:0.78rem;color:#888;margin-bottom:14px">1 produit principal + le client choisit ses accessoires parmi la liste ci-dessous, à un prix forfaitaire fixe.</p>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px">
@@ -3523,11 +3541,11 @@ async function afficherPanneauAdmin() {
                         <input type="checkbox" class="combo-new-choix-item" value="${p.id}"> ${p.name} <span style="color:#999">(${fmt(p.resale_price)} F)</span>
                     </label>`).join('')}
                 </div>
-                <button onclick="creerOffreGroupee()" style="background:#1a5c2a;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">➕ Créer le Flash Combo</button>
+                <button onclick="creerOffreGroupee()" style="background:#1F6B3A;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">➕ Créer le Flash Combo</button>
                 <p id="combo-new-res" style="min-height:18px;font-size:0.82rem;margin-top:8px"></p>
             </div>
 
-            <div style="background:white;border-radius:12px;border:1px solid #e8e8e8;padding:22px">
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:14px">📋 Combos existants (${offresGroupees.length})</h2>
                 ${!offresGroupees.length ? '<p style="color:#888">Aucun Flash Combo créé.</p>' :
                 offresGroupees.map(o=>{
@@ -3538,16 +3556,16 @@ async function afficherPanneauAdmin() {
                     return `<div style="background:#f8f8f8;border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid #eee">
                         <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:10px">
                             <div>
-                                <div style="font-weight:700;font-size:0.92rem">${o.nom} — <span style="color:#1a5c2a">${fmt(o.prix_ensemble)} FCFA</span></div>
+                                <div style="font-weight:700;font-size:0.92rem">${o.nom} — <span style="color:#1F6B3A">${fmt(o.prix_ensemble)} FCFA</span></div>
                                 <div style="font-size:0.8rem;color:#555;margin-top:2px">Principal : ${nomPrincipal} + ${o.nb_choix_requis} accessoire(s) au choix parmi ${(o.choix||[]).length}</div>
                                 <div style="font-size:0.75rem;color:#888;margin-top:2px">
                                     ${debut ? 'du ' + debut.toLocaleString('fr-FR') : ''} ${fin ? "jusqu'au " + fin.toLocaleString('fr-FR') : ''}
                                 </div>
-                                <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${o.actif && !expire?'#f0fff4':'#fff0f0'};color:${o.actif && !expire?'#2dc653':'#e63946'}">${o.actif && !expire ? 'Actif' : (expire ? 'Expiré' : 'Désactivé')}</span>
+                                <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${o.actif && !expire?'#f0fff4':'#fff0f0'};color:${o.actif && !expire?'#3FA66B':'#D9534F'}">${o.actif && !expire ? 'Actif' : (expire ? 'Expiré' : 'Désactivé')}</span>
                             </div>
                             <div style="display:flex;gap:6px">
-                                <button onclick="toggleOffreGroupee('${o.id}',${!o.actif})" style="background:#fff8f0;color:#ff6600;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${o.actif?'⏸️ Désactiver':'▶️ Activer'}</button>
-                                <button onclick="supprimerOffreGroupee('${o.id}')" style="background:#fff0f0;color:#e63946;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️ Supprimer</button>
+                                <button onclick="toggleOffreGroupee('${o.id}',${!o.actif})" style="background:#fff8f0;color:#E8792E;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${o.actif?'⏸️ Désactiver':'▶️ Activer'}</button>
+                                <button onclick="supprimerOffreGroupee('${o.id}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️ Supprimer</button>
                             </div>
                         </div>
                         <div style="margin-top:8px;font-size:0.76rem;color:#777">Pool : ${(o.choix||[]).map(c=>c ? c.name : '?').join(', ') || '—'}</div>
@@ -3559,10 +3577,11 @@ async function afficherPanneauAdmin() {
         </div>
     </div>
     <style>
-        .adm-tab{background:rgba(255,255,255,0.15);color:white;border:none;padding:7px 12px;border-radius:7px;cursor:pointer;font-size:0.78rem;font-weight:600;font-family:Inter,sans-serif}
-        .adm-tab:hover,.adm-tab.active{background:#ff6600}
-        .adm-input{background:#f4f6f4;border:1.5px solid #e8e8e8;padding:12px;color:#1a1a1a;border-radius:9px;font-size:0.9rem;width:100%;font-family:Inter,sans-serif}
-        .mktg-prod-item:hover{background:#eee}
+        .adm-tab{background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.92);border:none;padding:8px 14px;border-radius:20px;cursor:pointer;font-size:0.78rem;font-weight:600;font-family:Inter,sans-serif;transition:background 0.2s ease,transform 0.15s ease}
+        .adm-tab:hover{background:rgba(255,255,255,0.22);transform:translateY(-1px)}
+        .adm-tab.active{background:#fff;color:#1F6B3A}
+        .adm-input{background:#f4f6f4;border:1.5px solid #eef0ee;padding:12px;color:#1a1a1a;border-radius:9px;font-size:0.9rem;width:100%;font-family:Inter,sans-serif}
+        .mktg-prod-item:hover{background:#f4f6f4}
     </style>`;
 
     document.getElementById('mktg-type').onchange = function() {
@@ -3592,7 +3611,7 @@ window.creerCodePromo = async () => {
         await adminAction('codes_promo', 'insert', { payload: { code, type, valeur, montant_min, usage_max, date_expiration } });
         afficherPanneauAdmin();
     } catch (e) {
-        res.style.color = '#e63946'; res.textContent = '❌ ' + (e.message || 'Erreur');
+        res.style.color = '#D9534F'; res.textContent = '❌ ' + (e.message || 'Erreur');
     }
 };
 
@@ -3626,7 +3645,7 @@ window.creerOffreGroupee = async () => {
         await adminAction('offres_groupees', 'insert', { payload: { nom, produit_principal_id, prix_ensemble, nb_choix_requis, date_debut, date_fin, choix_ids } });
         afficherPanneauAdmin();
     } catch (e) {
-        res.style.color = '#e63946'; res.textContent = '❌ ' + (e.message || 'Erreur');
+        res.style.color = '#D9534F'; res.textContent = '❌ ' + (e.message || 'Erreur');
     }
 };
 
@@ -3746,9 +3765,9 @@ window.sauvegarderParametres = async () => {
         }
         await adminAction('parametres', 'upsert', { payload: rows });
         paramCatFiles = {};
-        res.style.color = '#2dc653'; res.textContent = '✅ Paramètres enregistrés — visibles immédiatement sur le site.';
+        res.style.color = '#3FA66B'; res.textContent = '✅ Paramètres enregistrés — visibles immédiatement sur le site.';
     } catch (e) {
-        res.style.color = '#e63946'; res.textContent = '❌ ' + e.message;
+        res.style.color = '#D9534F'; res.textContent = '❌ ' + e.message;
     }
 };
 
@@ -3758,20 +3777,20 @@ function renderCmdsAdmin(data) {
     return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.8rem">
         <thead><tr>${['Code','Client','Zone','Total','Date & heure','Statut','Action',''].map(h=>`<th style="color:#888;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0f0;font-size:0.72rem;text-transform:uppercase">${h}</th>`).join('')}</tr></thead>
         <tbody>${data.map(r=>`<tr style="border-bottom:1px solid #f8f8f8">
-            <td style="padding:10px;font-family:monospace;color:#1a5c2a;font-weight:700">${r.code}</td>
+            <td style="padding:10px;font-family:monospace;color:#1F6B3A;font-weight:700">${r.code}</td>
             <td style="padding:10px">${echapperHtml(r.nom_client)}<br><span style="color:#888;font-size:0.72rem">${echapperHtml(r.telephone)}</span></td>
             <td style="padding:10px;color:#888;font-size:0.78rem">📍${r.zone_livraison||'—'}</td>
             <td style="padding:10px;font-weight:600">${fmt(r.total)} F</td>
             <td style="padding:10px;color:#888;font-size:0.75rem">${new Date(r.created_at).toLocaleDateString('fr-FR')} à ${new Date(r.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</td>
-            <td style="padding:10px"><span style="padding:3px 10px;border-radius:8px;font-size:0.7rem;font-weight:700;background:${r.statut==='en attente'?'#fff8f0':r.statut==='valide'?'#f0fff4':'#fff0f0'};color:${r.statut==='en attente'?'#ff6600':r.statut==='valide'?'#2dc653':'#e63946'}">${r.statut}</span></td>
-            <td style="padding:10px"><select onchange="changerStatutAdmin('${r.id}',this.value)" style="background:#f4f6f4;color:#1a1a1a;border:1px solid #e8e8e8;border-radius:6px;padding:5px;font-size:0.75rem">
+            <td style="padding:10px"><span style="padding:3px 10px;border-radius:8px;font-size:0.7rem;font-weight:700;background:${r.statut==='en attente'?'#fff8f0':r.statut==='valide'?'#f0fff4':'#fff0f0'};color:${r.statut==='en attente'?'#E8792E':r.statut==='valide'?'#3FA66B':'#D9534F'}">${r.statut}</span></td>
+            <td style="padding:10px"><select onchange="changerStatutAdmin('${r.id}',this.value)" style="background:#f4f6f4;color:#1a1a1a;border:1px solid #eef0ee;border-radius:6px;padding:5px;font-size:0.75rem">
                 <option value="">Changer...</option>
                 <option value="en attente">⏳ En attente</option>
                 <option value="valide">✅ Validée</option>
                 <option value="livre">🚚 Livrée</option>
                 <option value="annule">❌ Annulée</option>
             </select></td>
-            <td style="padding:10px"><button onclick="ouvrirDetailsCmdAdmin('${r.code}')" style="background:none;border:1px solid #e8e8e8;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem">👁️ Détails</button></td>
+            <td style="padding:10px"><button onclick="ouvrirDetailsCmdAdmin('${r.code}')" style="background:none;border:1px solid #eef0ee;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem">👁️ Détails</button></td>
         </tr>`).join('')}</tbody>
     </table></div>`;
 }
@@ -3801,11 +3820,11 @@ window.ouvrirDetailsCmdAdmin = (code) => {
             ${(r.items||[]).map(i=>`<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0">
                 <span>${i.name} ×${i.qty}</span><span>${fmt((i.prix||0)*(i.qty||1))} F</span>
             </div>`).join('')}
-            <div style="display:flex;justify-content:space-between;font-weight:700;color:#1a5c2a;padding-top:8px;border-top:1px solid #eee;margin-top:6px">
+            <div style="display:flex;justify-content:space-between;font-weight:700;color:#1F6B3A;padding-top:8px;border-top:1px solid #eee;margin-top:6px">
                 <span>TOTAL</span><span>${fmt(r.total)} F</span>
             </div>
         </div>
-        <button onclick="telechargerFactureAdmin('${r.code}')" style="width:100%;margin-top:16px;background:#1a5c2a;color:white;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">${estPaye?'🧾 Télécharger le reçu complet':'📄 Télécharger le suivi (non payé)'}</button>
+        <button onclick="telechargerFactureAdmin('${r.code}')" style="width:100%;margin-top:16px;background:#1F6B3A;color:white;border:none;padding:11px;border-radius:8px;font-weight:700;cursor:pointer">${estPaye?'🧾 Télécharger le reçu complet':'📄 Télécharger le suivi (non payé)'}</button>
     </div>`;
     document.body.appendChild(el);
 };
@@ -3978,7 +3997,7 @@ function renderAdminImgThumbs() {
         const x = document.createElement('button');
         x.textContent = '✕';
         x.type = 'button';
-        x.style.cssText = 'position:absolute;top:-6px;right:-6px;background:#e63946;color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:0.6rem;cursor:pointer;line-height:1;padding:0';
+        x.style.cssText = 'position:absolute;top:-6px;right:-6px;background:#D9534F;color:white;border:none;border-radius:50%;width:16px;height:16px;font-size:0.6rem;cursor:pointer;line-height:1;padding:0';
         x.onclick = () => { selectedFilesAll.splice(idx + 1, 1); renderAdminImgThumbs(); };
         wrap.appendChild(x);
         extra.appendChild(wrap);
@@ -4005,8 +4024,8 @@ window.analyserProduitIA = async () => {
     const res = document.getElementById('ia-res');
     const modeLot = document.getElementById('ia-mode-lot').checked;
     const fichiers = selectedFilesAll.length ? selectedFilesAll : (selectedFile ? [selectedFile] : []);
-    if (!fichiers.length) { res.style.color = '#e63946'; res.textContent = '❌ Uploade d\'abord au moins une photo.'; return; }
-    if (modeLot && fichiers.length < 2) { res.style.color = '#e63946'; res.textContent = '❌ Le mode "produits différents" demande au moins 2 photos.'; return; }
+    if (!fichiers.length) { res.style.color = '#D9534F'; res.textContent = '❌ Uploade d\'abord au moins une photo.'; return; }
+    if (modeLot && fichiers.length < 2) { res.style.color = '#D9534F'; res.textContent = '❌ Le mode "produits différents" demande au moins 2 photos.'; return; }
     const btn = document.getElementById('btn-ia-analyser');
     btn.disabled = true; btn.textContent = '⏳ Analyse...';
     res.style.color = '#888'; res.textContent = modeLot ? `L'IA regarde les ${fichiers.length} photos séparément...` : (fichiers.length > 1 ? `L'IA regarde les ${fichiers.length} photos...` : 'L\'IA regarde la photo...');
@@ -4027,15 +4046,15 @@ window.analyserProduitIA = async () => {
         if (modeLot) {
             const liste = Array.isArray(data) ? data : (data.produits || []);
             afficherResultatsLot(liste, fichiers);
-            res.style.color = '#2dc653'; res.textContent = `✅ ${liste.length} produit(s) détecté(s) — complète le prix et la quantité de chacun ci-dessous.`;
+            res.style.color = '#3FA66B'; res.textContent = `✅ ${liste.length} produit(s) détecté(s) — complète le prix et la quantité de chacun ci-dessous.`;
         } else {
             if (data.name) document.getElementById('p-name').value = data.name;
             if (data.description) document.getElementById('p-desc').value = data.description;
             if (data.category) document.getElementById('p-cat').value = data.category;
-            res.style.color = '#2dc653'; res.textContent = '✅ Nom, catégorie et description pré-remplis — vérifie et ajoute le prix + la quantité.';
+            res.style.color = '#3FA66B'; res.textContent = '✅ Nom, catégorie et description pré-remplis — vérifie et ajoute le prix + la quantité.';
         }
     } catch (e) {
-        res.style.color = '#e63946'; res.textContent = '❌ ' + e.message;
+        res.style.color = '#D9534F'; res.textContent = '❌ ' + e.message;
     }
     btn.disabled = false; btn.textContent = "🤖 Analyser avec l'IA";
 };
@@ -4056,7 +4075,7 @@ function afficherResultatsLot(produits, fichiers) {
                     <input type="number" id="ia-lot-vente-${i}" class="adm-input" placeholder="Prix vente *">
                     <input type="number" id="ia-lot-qte-${i}" class="adm-input" placeholder="Quantité *">
                 </div>
-                <button onclick="validerProduitLot(${i})" id="ia-lot-btn-${i}" style="align-self:flex-start;background:#1a5c2a;color:white;border:none;padding:8px 16px;border-radius:7px;font-size:0.82rem;cursor:pointer;font-weight:600">✅ Ajouter ce produit</button>
+                <button onclick="validerProduitLot(${i})" id="ia-lot-btn-${i}" style="align-self:flex-start;background:#1F6B3A;color:white;border:none;padding:8px 16px;border-radius:7px;font-size:0.82rem;cursor:pointer;font-weight:600">✅ Ajouter ce produit</button>
                 <p id="ia-lot-res-${i}" style="font-size:0.76rem;min-height:14px"></p>
             </div>
         </div>`).join('');
@@ -4082,10 +4101,10 @@ window.validerProduitLot = async (i) => {
     const vente = parseFloat(document.getElementById(`ia-lot-vente-${i}`).value);
     const qte = parseInt(document.getElementById(`ia-lot-qte-${i}`).value);
     res.textContent = '';
-    if (!name) { res.style.color = '#e63946'; res.textContent = '❌ Nom requis'; return; }
-    if (!achat || achat <= 0) { res.style.color = '#e63946'; res.textContent = '❌ Prix d\'achat requis'; return; }
-    if (!vente || vente <= 0) { res.style.color = '#e63946'; res.textContent = '❌ Prix de vente requis'; return; }
-    if (!qte || qte < 0) { res.style.color = '#e63946'; res.textContent = '❌ Quantité requise'; return; }
+    if (!name) { res.style.color = '#D9534F'; res.textContent = '❌ Nom requis'; return; }
+    if (!achat || achat <= 0) { res.style.color = '#D9534F'; res.textContent = '❌ Prix d\'achat requis'; return; }
+    if (!vente || vente <= 0) { res.style.color = '#D9534F'; res.textContent = '❌ Prix de vente requis'; return; }
+    if (!qte || qte < 0) { res.style.color = '#D9534F'; res.textContent = '❌ Quantité requise'; return; }
     btn.disabled = true; btn.textContent = '⏳ Ajout...';
     try {
         const fichier = window._iaLotFichiers[i];
@@ -4094,7 +4113,7 @@ window.validerProduitLot = async (i) => {
             name, description: desc, category: cat,
             purchase_price: achat, resale_price: vente, quantity: qte, image_url: imageUrl
         }});
-        res.style.color = '#2dc653'; res.textContent = '✅ Produit ajouté !';
+        res.style.color = '#3FA66B'; res.textContent = '✅ Produit ajouté !';
         btn.textContent = '✅ Ajouté'; btn.style.background = '#888'; btn.disabled = true;
         rafraichirProduits();
         setTimeout(() => {
@@ -4105,11 +4124,11 @@ window.validerProduitLot = async (i) => {
                 zone.style.display = 'none'; zone.innerHTML = '';
                 resetAdminImg(); // vide aussi les photos et la case "produits différents" en haut
                 const msg = document.getElementById('prod-msg');
-                if (msg) { msg.style.color = '#2dc653'; msg.textContent = '✅ Tous les produits du lot ont été ajoutés !'; }
+                if (msg) { msg.style.color = '#3FA66B'; msg.textContent = '✅ Tous les produits du lot ont été ajoutés !'; }
             }
         }, 900);
     } catch (e) {
-        res.style.color = '#e63946'; res.textContent = '❌ ' + e.message;
+        res.style.color = '#D9534F'; res.textContent = '❌ ' + e.message;
         btn.disabled = false; btn.textContent = '✅ Ajouter ce produit';
     }
 };
@@ -4120,15 +4139,15 @@ window.sauvegarderProduit = async () => {
     const qty=parseInt(document.getElementById('p-qty').value);
     const achat=parseFloat(document.getElementById('p-achat').value);
     const vente=parseFloat(document.getElementById('p-vente').value);
-    if(!name||!qty||!achat||!vente){msg.style.color='#e63946';msg.textContent='❌ Remplissez les champs obligatoires';return;}
+    if(!name||!qty||!achat||!vente){msg.style.color='#D9534F';msg.textContent='❌ Remplissez les champs obligatoires';return;}
     msg.style.color='#888';msg.textContent='Enregistrement...';
     let imageUrl=document.getElementById('p-img-url').value.trim();
-    if(selectedFile){try{imageUrl=await uploadImage(selectedFile);}catch(e){msg.style.color='#e63946';msg.textContent='❌ Upload: '+e.message;return;}}
+    if(selectedFile){try{imageUrl=await uploadImage(selectedFile);}catch(e){msg.style.color='#D9534F';msg.textContent='❌ Upload: '+e.message;return;}}
     const prod={name,description:document.getElementById('p-desc').value.trim()||null,category:document.getElementById('p-cat').value,quantity:qty,purchase_price:achat,resale_price:vente,image_url:imageUrl||null,promo_active:document.getElementById('p-promo-chk').checked,promo_prix:parseFloat(document.getElementById('p-promo').value)||null,flash_active:document.getElementById('p-flash-chk').checked,flash_fin:document.getElementById('p-flash-fin').value?new Date(document.getElementById('p-flash-fin').value).toISOString():null};
     try {
         await (editingId ? adminAction('products','update',{id:editingId,payload:prod}) : adminAction('products','insert',{payload:prod}));
-    } catch(e) { msg.style.color='#e63946'; msg.textContent='❌ '+e.message; return; }
-    msg.style.color='#2dc653';msg.textContent='✅ Enregistré !';
+    } catch(e) { msg.style.color='#D9534F'; msg.textContent='❌ '+e.message; return; }
+    msg.style.color='#3FA66B';msg.textContent='✅ Enregistré !';
     annulerEdit();
     rafraichirProduits();
 };
@@ -4172,14 +4191,14 @@ window.publierMessage = async () => {
     const msg=document.getElementById('mktg-msg').value.trim();
     const type=document.getElementById('mktg-type').value;
     const res=document.getElementById('mktg-res');
-    if(!msg){res.style.color='#e63946';res.textContent='❌ Message vide';return;}
+    if(!msg){res.style.color='#D9534F';res.textContent='❌ Message vide';return;}
     const payload={message:msg,type,actif:true};
     if(type==='slider'){
         let sliderUrl = document.getElementById('mktg-img-url').value.trim();
         if (sliderImgFile) {
             res.style.color='#888'; res.textContent='⏳ Envoi de l\'image...';
             try { sliderUrl = await uploadImage(sliderImgFile); }
-            catch(e){ res.style.color='#e63946'; res.textContent='❌ Upload: '+e.message; return; }
+            catch(e){ res.style.color='#D9534F'; res.textContent='❌ Upload: '+e.message; return; }
         }
         payload.titre=document.getElementById('mktg-titre').value;
         payload.tag=document.getElementById('mktg-tag').value;
@@ -4194,7 +4213,7 @@ window.publierMessage = async () => {
         if (popupFlyerFile) {
             res.style.color='#888'; res.textContent='⏳ Envoi de l\'image...';
             try { flyerUrl = await uploadImage(popupFlyerFile); }
-            catch(e){ res.style.color='#e63946'; res.textContent='❌ Upload: '+e.message; return; }
+            catch(e){ res.style.color='#D9534F'; res.textContent='❌ Upload: '+e.message; return; }
         }
         payload.image_url = flyerUrl || null;
         payload.lien = document.getElementById('mktg-popup-lien').value.trim() || null;
@@ -4202,8 +4221,8 @@ window.publierMessage = async () => {
         payload.produits_ids = idsChoisis.length ? idsChoisis : null;
     }
     try { await adminAction('bannieres','insert',{payload}); }
-    catch(e){res.style.color='#e63946';res.textContent='❌ '+e.message;return;}
-    res.style.color='#2dc653';res.textContent='✅ Publié !';
+    catch(e){res.style.color='#D9534F';res.textContent='❌ '+e.message;return;}
+    res.style.color='#3FA66B';res.textContent='✅ Publié !';
     document.getElementById('mktg-msg').value='';
     popupFlyerFile = null;
     sliderImgFile = null;

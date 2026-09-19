@@ -29,7 +29,6 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
-const { circuitOuvert, signalerEchec, signalerSucces } = require('./_lib/circuitBreaker');
 const { verifierRequeteUtilisateur } = require('./_lib/verifierFirebaseToken');
 const { tropDeTentatives, signalerEchecTentative } = require('./_lib/rateLimit');
 
@@ -330,15 +329,9 @@ module.exports = async (req, res) => {
         if (resa.statut === 'valide') return res.status(400).json({ error: 'Cette commande est déjà payée' });
         if (!resa.total || resa.total < 100) return res.status(400).json({ error: 'Montant de commande invalide' });
 
-        const circuit = await circuitOuvert(supabase, 'ikeepay');
-        if (circuit.ouvert) {
-            return res.status(503).json({ error: `Paiement temporairement indisponible, réessayez dans ${Math.ceil(circuit.retryAfterSeconds / 60)} min.` });
-        }
         if (!process.env.IKEEPAY_PUBLIC_KEY) {
             return res.status(500).json({ error: 'Clé iKeePay manquante côté serveur (IKEEPAY_PUBLIC_KEY)' });
         }
-
-        await signalerSucces(supabase, 'ikeepay');
 
         return res.status(200).json({
             success: true,
@@ -350,10 +343,6 @@ module.exports = async (req, res) => {
         });
     } catch (e) {
         console.error('Erreur preparer-paiement:', e.message);
-        try {
-            const supabase2 = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-            await signalerEchec(supabase2, 'ikeepay');
-        } catch (_) {}
-        return res.status(500).json({ error: e.message });
+        return res.status(500).json({ error: 'Impossible de préparer le paiement, réessaie plus tard.' });
     }
 };

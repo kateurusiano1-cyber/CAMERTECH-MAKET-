@@ -47,7 +47,8 @@ module.exports = async (req, res) => {
     const data = await response.json();
     if (!response.ok) {
       await signalerEchec(supabase, 'gemini');
-      return res.status(500).json({ error: data.error?.message || 'Erreur API IA' });
+      console.error('Erreur API Gemini (traduire-produits):', data.error?.message || JSON.stringify(data));
+      return res.status(500).json({ error: 'Erreur du service de traduction, réessaie.' });
     }
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const clean = text.replace(/```json|```/g, '').trim();
