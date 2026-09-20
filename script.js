@@ -3175,8 +3175,8 @@ async function afficherPanneauAdmin() {
         <!-- DASHBOARD -->
         <div id="tab-dash">
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">
-                ${[['💰','Total ventes',fmt(totalV)+' F'],['🧾','Commandes',commandesPayees.length],['⏳','En attente',enAtt],['📦','Produits',(prods||[]).length],['👥','Clients',(users||[]).length],['⚠️','Alertes stock',sfaible.length+szero.length]].map(([ico,lbl,val])=>`
-                <div style="background:white;border:1px solid #eef0ee;border-radius:16px;padding:18px;text-align:center;box-shadow:0 2px 10px rgba(20,40,25,0.05);transition:transform 0.15s ease" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+                ${[['💰','Total ventes',fmt(totalV)+' F','tab-cmds'],['🧾','Commandes',commandesPayees.length,'tab-cmds'],['⏳','En attente',enAtt,'tab-cmds'],['📦','Produits',(prods||[]).length,'tab-prods'],['👥','Clients',(users||[]).length,'tab-users'],['⚠️','Alertes stock',sfaible.length+szero.length,'tab-prods']].map(([ico,lbl,val,cible])=>`
+                <div onclick="showTab('${cible}')" style="background:white;border:1px solid #eef0ee;border-radius:16px;padding:18px;text-align:center;box-shadow:0 2px 10px rgba(20,40,25,0.05);transition:transform 0.15s ease;cursor:pointer" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                     <div style="font-size:1.7rem;margin-bottom:6px">${ico}</div>
                     <div style="font-size:1.2rem;font-weight:800;color:#1F6B3A;font-family:Poppins,sans-serif">${val}</div>
                     <div style="color:#888;font-size:0.75rem;margin-top:2px">${lbl}</div>
@@ -3485,8 +3485,8 @@ async function afficherPanneauAdmin() {
                             </div>
                             <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${c.actif && !expiré?'#f0fff4':'#fff0f0'};color:${c.actif && !expiré?'#3FA66B':'#D9534F'}">${c.actif && !expiré ? 'Actif' : (expiré ? 'Expiré' : 'Désactivé')}</span>
                         </div>
-                        <div style="display:flex;gap:6px">
-                            <button onclick="toggleCodePromo('${c.id}',${!c.actif})" style="background:#fff8f0;color:#E8792E;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${c.actif?'⏸️ Désactiver':'▶️ Activer'}</button>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap">
+                            ${expiré ? `<button onclick="reactiverCodePromo('${c.id}')" style="background:#eef6ff;color:#1a5c9c;border:1px solid #cfe4fb;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600">🔄 Réactiver (+30j)</button>` : `<button onclick="toggleCodePromo('${c.id}',${!c.actif})" style="background:#fff8f0;color:#E8792E;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${c.actif?'⏸️ Désactiver':'▶️ Activer'}</button>`}
                             <button onclick="supprimerCodePromo('${c.id}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️ Supprimer</button>
                         </div>
                     </div>`;
@@ -3563,8 +3563,8 @@ async function afficherPanneauAdmin() {
                                 </div>
                                 <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${o.actif && !expire?'#f0fff4':'#fff0f0'};color:${o.actif && !expire?'#3FA66B':'#D9534F'}">${o.actif && !expire ? 'Actif' : (expire ? 'Expiré' : 'Désactivé')}</span>
                             </div>
-                            <div style="display:flex;gap:6px">
-                                <button onclick="toggleOffreGroupee('${o.id}',${!o.actif})" style="background:#fff8f0;color:#E8792E;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${o.actif?'⏸️ Désactiver':'▶️ Activer'}</button>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                ${expire ? `<button onclick="reactiverOffreGroupee('${o.id}')" style="background:#eef6ff;color:#1a5c9c;border:1px solid #cfe4fb;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600">🔄 Réactiver (+7j)</button>` : `<button onclick="toggleOffreGroupee('${o.id}',${!o.actif})" style="background:#fff8f0;color:#E8792E;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${o.actif?'⏸️ Désactiver':'▶️ Activer'}</button>`}
                                 <button onclick="supprimerOffreGroupee('${o.id}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️ Supprimer</button>
                             </div>
                         </div>
@@ -3620,6 +3620,16 @@ window.toggleCodePromo = async (id, actif) => {
     afficherPanneauAdmin();
 };
 
+// Relance un code promo expiré sans repasser par tout le formulaire de
+// création : on garde exactement la même config (réduction, minimum
+// d'achat, limite d'usage) et on repousse juste la date d'expiration.
+window.reactiverCodePromo = async (id) => {
+    const nouvelleExpiration = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+    await adminAction('codes_promo', 'update', { id, payload: { actif: true, date_expiration: nouvelleExpiration } });
+    notifier('✅ Code promo réactivé pour 30 jours de plus.', 'succes');
+    afficherPanneauAdmin();
+};
+
 window.supprimerCodePromo = async (id) => {
     if (!confirm('Supprimer définitivement ce code promo ?')) return;
     await adminAction('codes_promo', 'delete', { id });
@@ -3651,6 +3661,17 @@ window.creerOffreGroupee = async () => {
 
 window.toggleOffreGroupee = async (id, actif) => {
     await adminAction('offres_groupees', 'update', { id, payload: { actif } });
+    afficherPanneauAdmin();
+};
+
+// Relance un Flash Combo expiré à l'identique (même produit principal, même
+// pool d'accessoires, même prix) — juste une nouvelle fenêtre de 7 jours à
+// partir de maintenant, sans repasser par tout le formulaire de création.
+window.reactiverOffreGroupee = async (id) => {
+    const maintenant = new Date().toISOString();
+    const dansSeptJours = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    await adminAction('offres_groupees', 'update', { id, payload: { actif: true, date_debut: maintenant, date_fin: dansSeptJours } });
+    notifier('✅ Flash Combo réactivé pour 7 jours.', 'succes');
     afficherPanneauAdmin();
 };
 

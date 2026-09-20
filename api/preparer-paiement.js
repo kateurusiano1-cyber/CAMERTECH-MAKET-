@@ -258,10 +258,21 @@ module.exports = async (req, res) => {
             }
             const aTraiterNormalement = [...itemsNormaux, ...idsDansCombosInvalides];
 
+            // Fusionne les doublons du même produit (même id) en une seule
+            // ligne à quantité cumulée — quelle que soit la cause côté
+            // navigateur (double clic, bug d'affichage...), la commande
+            // enregistrée ne doit jamais afficher deux fois le même article.
+            const quantitesParId = new Map();
             for (const it of aTraiterNormalement) {
-                const p = produits && produits.find(x => x.id === it.id);
-                if (!p) return res.status(400).json({ error: `Produit introuvable ou retiré du catalogue (id: ${it && it.id})` });
-                const qty = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
+                if (!it || !it.id) continue;
+                const qtyDemandee = Math.max(1, Math.min(99, parseInt(it.qty, 10) || 1));
+                quantitesParId.set(it.id, (quantitesParId.get(it.id) || 0) + qtyDemandee);
+            }
+
+            for (const [id, qtyTotale] of quantitesParId) {
+                const p = produits && produits.find(x => x.id === id);
+                if (!p) return res.status(400).json({ error: `Produit introuvable ou retiré du catalogue (id: ${id})` });
+                const qty = Math.min(99, qtyTotale);
                 const prix = prixReel(p);
                 sousTotal += prix * qty;
                 itemsValides.push({ id: p.id, name: p.name, qty, prix });

@@ -5,7 +5,7 @@
 // servies depuis le cache, pour ne jamais afficher de stock/prix/statut
 // périmé au client.
 
-const CACHE_NOM = 'camertech-cache-v3';
+const CACHE_NOM = 'camertech-cache-v4';
 const FICHIERS_STATIQUES = [
     '/', '/index.html', '/style.css', '/script.js', '/config.js',
     '/logo.png', '/icon-192.png', '/icon-512.png', '/manifest.json',
