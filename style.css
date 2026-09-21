@@ -9,9 +9,9 @@
     --white: #ffffff;
     --bg: #F6F7F8;
     --card: #ffffff;
-    --text: #14181C;
-    --text2: #52606B;
-    --text3: #7A8794;
+    --text: #0A0C0E;
+    --text2: #1F2328;
+    --text3: #3A4046;
     --border: #E7E9EC;
     --radius-sm: 10px;
     --radius: 16px;
@@ -421,7 +421,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 .card-body { padding: 14px; }
 .card-cat { font-size: 0.64rem; color: var(--green); font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; font-family: var(--font-body); }
 .card-name { font-size: 0.86rem; font-weight: 600; margin-bottom: 6px; line-height: 1.35; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: var(--font-body); min-height: 2.35em; }
-.card-qty { font-size: 0.7rem; color: var(--text3); margin-bottom: 6px; font-family: var(--font-body); }
+.card-qty { font-size: 0.7rem; color: var(--text3); font-weight: 600; margin-bottom: 6px; font-family: var(--font-body); }
 .prix-barre-sm { font-size: 0.72rem; color: var(--text3); text-decoration: line-through; font-family: var(--font-title); }
 .card-price { font-size: 1.18rem; font-weight: 700; color: var(--green); font-family: var(--font-title); letter-spacing: 0.2px; }
 .card-price.promo { color: var(--danger); }
