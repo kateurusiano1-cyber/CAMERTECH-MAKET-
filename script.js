@@ -1153,6 +1153,9 @@ window.convertirPointsFidelite = async () => {
 // ===== FLASH COMBO (kit sur-mesure à prix forfaitaire) =====
 let flashComboActif = null; // { id, nom, prix_ensemble, nb_choix_requis, produit_principal, choix:[...], date_fin }
 let flashComboMinuteur = null;
+let flashCombosValides = []; // toutes les offres actives en même temps, pour l'alternance
+let flashComboIndex = 0;
+let flashComboRotation = null;
 
 async function chargerFlashCombo() {
     try {
@@ -1168,19 +1171,40 @@ async function chargerFlashCombo() {
         );
         if (!valides.length) { $('flash-combo-bar').style.display = 'none'; return; }
 
-        // S'il y en a plusieurs actives, on met en avant celle qui se
-        // termine le plus tôt (la plus "urgente").
+        // La plus urgente (celle qui se termine le plus tôt) passe en
+        // premier ; s'il y en a plusieurs, elles alternent ensuite dans le
+        // même bandeau au lieu de n'en montrer qu'une seule en permanence.
         valides.sort((a, b) => (a.date_fin || '9999') > (b.date_fin || '9999') ? 1 : -1);
-        const offre = valides[0];
 
-        const { data: choixRows } = await db.from('offres_groupees_choix')
-            .select('produit_id, products(*)').eq('offre_id', offre.id);
-        offre.choix = (choixRows || []).map(c => c.products).filter(Boolean);
-        offre.prix_ensemble = prixCharme(offre.prix_ensemble);
+        for (const offre of valides) {
+            const { data: choixRows } = await db.from('offres_groupees_choix')
+                .select('produit_id, products(*)').eq('offre_id', offre.id);
+            offre.choix = (choixRows || []).map(c => c.products).filter(Boolean);
+            offre.prix_ensemble = prixCharme(offre.prix_ensemble);
+        }
 
-        flashComboActif = offre;
+        flashCombosValides = valides;
+        flashComboIndex = 0;
+        flashComboActif = flashCombosValides[0];
         afficherBandeauFlashCombo();
+        demarrerRotationFlashCombo();
     } catch (e) { console.error('Erreur chargement Flash Combo:', e); }
+}
+
+// Alterne entre les Flash Combo actifs en même temps, toutes les 6 secondes
+// — un seul emplacement dans le header, mais chacun a son tour d'affichage
+// au lieu qu'un seul écrase silencieusement les autres.
+function demarrerRotationFlashCombo() {
+    clearInterval(flashComboRotation);
+    if (flashCombosValides.length < 2) return;
+    flashComboRotation = setInterval(() => {
+        flashComboIndex = (flashComboIndex + 1) % flashCombosValides.length;
+        flashComboActif = flashCombosValides[flashComboIndex];
+        const bar = $('flash-combo-bar');
+        bar.style.transition = 'opacity 0.25s ease';
+        bar.style.opacity = '0';
+        setTimeout(() => { afficherBandeauFlashCombo(); bar.style.opacity = '1'; }, 250);
+    }, 6000);
 }
 
 function afficherBandeauFlashCombo() {
@@ -1205,7 +1229,19 @@ function afficherBandeauFlashCombo() {
     timerEl.style.display = 'inline-block';
     const maj = () => {
         const restant = new Date(o.date_fin) - new Date();
-        if (restant <= 0) { clearInterval(flashComboMinuteur); bar.style.display = 'none'; return; }
+        if (restant <= 0) {
+            clearInterval(flashComboMinuteur);
+            // Cette offre précise vient d'expirer en plein affichage —
+            // on la retire de la rotation plutôt que de cacher tout le
+            // bandeau s'il en reste d'autres encore valides.
+            flashCombosValides = flashCombosValides.filter(x => x.id !== o.id);
+            if (!flashCombosValides.length) { bar.style.display = 'none'; return; }
+            flashComboIndex = 0;
+            flashComboActif = flashCombosValides[0];
+            afficherBandeauFlashCombo();
+            demarrerRotationFlashCombo();
+            return;
+        }
         const h = Math.floor(restant / 3600000), m = Math.floor((restant % 3600000) / 60000), s = Math.floor((restant % 60000) / 1000);
         timerEl.textContent = `⏳ ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     };
