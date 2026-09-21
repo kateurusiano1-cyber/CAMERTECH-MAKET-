@@ -1169,6 +1169,7 @@ async function chargerFlashCombo() {
         const valides = offres.filter(o =>
             (!o.date_debut || o.date_debut <= maintenant) && (!o.date_fin || o.date_fin >= maintenant)
         );
+        console.log('[Flash Combo] offres actives reçues :', offres.length, '| valides après filtre dates :', valides.length, valides.map(o => ({ nom: o.nom, debut: o.date_debut, fin: o.date_fin })));
         if (!valides.length) { $('flash-combo-bar').style.display = 'none'; return; }
 
         // La plus urgente (celle qui se termine le plus tôt) passe en
@@ -1196,7 +1197,8 @@ async function chargerFlashCombo() {
 // au lieu qu'un seul écrase silencieusement les autres.
 function demarrerRotationFlashCombo() {
     clearInterval(flashComboRotation);
-    if (flashCombosValides.length < 2) return;
+    console.log('[Flash Combo] démarrage rotation, nombre de combos valides :', flashCombosValides.length);
+    if (flashCombosValides.length < 2) { console.log('[Flash Combo] rotation non démarrée (moins de 2 combos valides)'); return; }
     flashComboRotation = setInterval(() => {
         flashComboIndex = (flashComboIndex + 1) % flashCombosValides.length;
         flashComboActif = flashCombosValides[flashComboIndex];
