@@ -1169,7 +1169,6 @@ async function chargerFlashCombo() {
         const valides = offres.filter(o =>
             (!o.date_debut || o.date_debut <= maintenant) && (!o.date_fin || o.date_fin >= maintenant)
         );
-        console.log('[Flash Combo] offres actives reçues :', offres.length, '| valides après filtre dates :', valides.length, valides.map(o => ({ nom: o.nom, debut: o.date_debut, fin: o.date_fin })));
         if (!valides.length) { $('flash-combo-bar').style.display = 'none'; return; }
 
         // La plus urgente (celle qui se termine le plus tôt) passe en
@@ -1197,8 +1196,7 @@ async function chargerFlashCombo() {
 // au lieu qu'un seul écrase silencieusement les autres.
 function demarrerRotationFlashCombo() {
     clearInterval(flashComboRotation);
-    console.log('[Flash Combo] démarrage rotation, nombre de combos valides :', flashCombosValides.length);
-    if (flashCombosValides.length < 2) { console.log('[Flash Combo] rotation non démarrée (moins de 2 combos valides)'); return; }
+    if (flashCombosValides.length < 2) return;
     flashComboRotation = setInterval(() => {
         flashComboIndex = (flashComboIndex + 1) % flashCombosValides.length;
         flashComboActif = flashCombosValides[flashComboIndex];
@@ -3186,7 +3184,7 @@ async function afficherPanneauAdmin() {
     // N'apparaît dans "Commandes" que ce qui a réellement été payé —
     // jamais une tentative de paiement en cours ou échouée.
     const commandesPayees = (reservations||[]).filter(r => !['paiement_en_cours','paiement_echoue'].includes(r.statut));
-    window._prods=prods||[]; window._res=commandesPayees;
+    window._prods=prods||[]; window._res=commandesPayees; window._codesPromo=codesPromo; window._offresGroupees=offresGroupees; window._bannieres=bannieres;
 
     page.innerHTML=`
     <div style="font-family:Inter,sans-serif">
@@ -3339,7 +3337,7 @@ async function afficherPanneauAdmin() {
         <!-- MARKETING -->
         <div id="tab-mktg" style="display:none">
             <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
-                <h2 style="font-size:1rem;margin-bottom:14px">📢 Publier un message</h2>
+                <h2 id="mktg-form-title" style="font-size:1rem;margin-bottom:14px">📢 Publier un message</h2>
                 <div style="display:flex;flex-direction:column;gap:10px">
                     <input type="text" id="mktg-msg" placeholder="Message..." class="adm-input">
                     <select id="mktg-type" class="adm-input">
@@ -3391,7 +3389,8 @@ async function afficherPanneauAdmin() {
                             </div>
                         </div>
                     </div>
-                    <button onclick="publierMessage()" style="background:#1F6B3A;color:white;border:none;padding:12px;border-radius:9px;font-weight:700;cursor:pointer">Publier</button>
+                    <button id="btn-publier-mktg" onclick="publierMessage()" style="background:#1F6B3A;color:white;border:none;padding:12px;border-radius:9px;font-weight:700;cursor:pointer">Publier</button>
+                    <button id="btn-annuler-edit-mktg" onclick="annulerEditBanniere()" style="display:none;background:#f4f6f4;color:#555;border:1px solid #ddd;padding:12px;border-radius:9px;font-weight:600;cursor:pointer">Annuler</button>
                     <p id="mktg-res" style="min-height:18px;font-size:0.82rem"></p>
                 </div>
             </div>
@@ -3403,7 +3402,11 @@ async function afficherPanneauAdmin() {
                             ${b.image_url?`<img src="${b.image_url}" style="width:44px;height:44px;object-fit:cover;border-radius:6px">`:''}
                             <div><span style="background:${b.type==='popup'?'#0088ff':b.type==='slider'?'#E8792E':'#1F6B3A'};color:white;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700">${b.type.toUpperCase()}</span><span style="margin-left:8px;font-size:0.88rem">${b.message}</span>${b.produits_ids?.length?`<span style="margin-left:8px;color:#888;font-size:0.72rem">🛍️ ${b.produits_ids.length} produit(s)</span>`:''}</div>
                         </div>
-                        <button onclick="desactiverBanniere('${b.id}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">Désactiver</button>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap">
+                            <button onclick="chargerEditBanniere('${b.id}')" style="background:#eef6ff;color:#1a5c9c;border:1px solid #cfe4fb;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">✏️ Modifier</button>
+                            <button onclick="toggleBanniere('${b.id}',${!b.actif})" style="background:#fff8f0;color:#E8792E;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">${b.actif?'⏸️ Désactiver':'▶️ Activer'}</button>
+                            <button onclick="supprimerBanniere('${b.id}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.8rem;cursor:pointer">🗑️ Supprimer</button>
+                        </div>
                     </div>`).join(''):'<p style="color:#888">Aucun message actif.</p>'}
                 </div>
             </div>
@@ -3492,7 +3495,7 @@ async function afficherPanneauAdmin() {
         <!-- CODES PROMO -->
         <div id="tab-promo" style="display:none">
             <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
-                <h2 style="font-size:1rem;margin-bottom:14px">🏷️ Créer un code promo</h2>
+                <h2 id="promo-form-title" style="font-size:1rem;margin-bottom:14px">🏷️ Créer un code promo</h2>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
                     <input id="promo-new-code" placeholder="CODE (ex: BIENVENUE10)" style="padding:10px;border-radius:8px;border:1px solid #ddd;text-transform:uppercase">
                     <select id="promo-new-type" style="padding:10px;border-radius:8px;border:1px solid #ddd">
@@ -3504,7 +3507,8 @@ async function afficherPanneauAdmin() {
                     <input id="promo-new-max-usage" type="number" min="1" placeholder="Utilisations max (optionnel)" style="padding:10px;border-radius:8px;border:1px solid #ddd">
                     <input id="promo-new-expiration" type="date" style="padding:10px;border-radius:8px;border:1px solid #ddd">
                 </div>
-                <button onclick="creerCodePromo()" style="background:#1F6B3A;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">➕ Créer le code</button>
+                <button id="btn-creer-promo" onclick="creerCodePromo()" style="background:#1F6B3A;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">➕ Créer le code</button>
+                <button id="btn-annuler-edit-promo" onclick="annulerEditPromo()" style="display:none;background:#f4f6f4;color:#555;border:1px solid #ddd;padding:12px 20px;border-radius:9px;font-weight:600;cursor:pointer;margin-left:8px">Annuler</button>
                 <p id="promo-new-res" style="min-height:18px;font-size:0.82rem;margin-top:8px"></p>
             </div>
             <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
@@ -3524,6 +3528,7 @@ async function afficherPanneauAdmin() {
                             <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${c.actif && !expiré?'#f0fff4':'#fff0f0'};color:${c.actif && !expiré?'#3FA66B':'#D9534F'}">${c.actif && !expiré ? 'Actif' : (expiré ? 'Expiré' : 'Désactivé')}</span>
                         </div>
                         <div style="display:flex;gap:6px;flex-wrap:wrap">
+                            <button onclick="chargerEditCodePromo('${c.id}')" style="background:#eef6ff;color:#1a5c9c;border:1px solid #cfe4fb;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">✏️ Modifier</button>
                             ${expiré ? `<button onclick="reactiverCodePromo('${c.id}')" style="background:#eef6ff;color:#1a5c9c;border:1px solid #cfe4fb;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600">🔄 Réactiver (+30j)</button>` : `<button onclick="toggleCodePromo('${c.id}',${!c.actif})" style="background:#fff8f0;color:#E8792E;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${c.actif?'⏸️ Désactiver':'▶️ Activer'}</button>`}
                             <button onclick="supprimerCodePromo('${c.id}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️ Supprimer</button>
                         </div>
@@ -3560,7 +3565,7 @@ async function afficherPanneauAdmin() {
         <!-- FLASH COMBO -->
         <div id="tab-combo" style="display:none">
             <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
-                <h2 style="font-size:1rem;margin-bottom:4px">⚡ Créer un Flash Combo</h2>
+                <h2 id="combo-form-title" style="font-size:1rem;margin-bottom:4px">⚡ Créer un Flash Combo</h2>
                 <p style="font-size:0.78rem;color:#888;margin-bottom:14px">1 produit principal + le client choisit ses accessoires parmi la liste ci-dessous, à un prix forfaitaire fixe.</p>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px">
                     <input id="combo-new-nom" placeholder="Nom de l'offre (ex: Kit Audio)" style="padding:10px;border-radius:8px;border:1px solid #ddd">
@@ -3579,7 +3584,8 @@ async function afficherPanneauAdmin() {
                         <input type="checkbox" class="combo-new-choix-item" value="${p.id}"> ${p.name} <span style="color:#999">(${fmt(p.resale_price)} F)</span>
                     </label>`).join('')}
                 </div>
-                <button onclick="creerOffreGroupee()" style="background:#1F6B3A;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">➕ Créer le Flash Combo</button>
+                <button id="btn-creer-combo" onclick="creerOffreGroupee()" style="background:#1F6B3A;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">➕ Créer le Flash Combo</button>
+                <button id="btn-annuler-edit-combo" onclick="annulerEditCombo()" style="display:none;background:#f4f6f4;color:#555;border:1px solid #ddd;padding:12px 20px;border-radius:9px;font-weight:600;cursor:pointer;margin-left:8px">Annuler</button>
                 <p id="combo-new-res" style="min-height:18px;font-size:0.82rem;margin-top:8px"></p>
             </div>
 
@@ -3602,6 +3608,7 @@ async function afficherPanneauAdmin() {
                                 <span style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:8px;font-size:0.72rem;font-weight:700;background:${o.actif && !expire?'#f0fff4':'#fff0f0'};color:${o.actif && !expire?'#3FA66B':'#D9534F'}">${o.actif && !expire ? 'Actif' : (expire ? 'Expiré' : 'Désactivé')}</span>
                             </div>
                             <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                <button onclick="chargerEditOffreGroupee('${o.id}')" style="background:#eef6ff;color:#1a5c9c;border:1px solid #cfe4fb;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">✏️ Modifier</button>
                                 ${expire ? `<button onclick="reactiverOffreGroupee('${o.id}')" style="background:#eef6ff;color:#1a5c9c;border:1px solid #cfe4fb;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600">🔄 Réactiver (+7j)</button>` : `<button onclick="toggleOffreGroupee('${o.id}',${!o.actif})" style="background:#fff8f0;color:#E8792E;border:1px solid #ffd8b0;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">${o.actif?'⏸️ Désactiver':'▶️ Activer'}</button>`}
                                 <button onclick="supprimerOffreGroupee('${o.id}')" style="background:#fff0f0;color:#D9534F;border:1px solid #fcc;padding:6px 12px;border-radius:6px;font-size:0.78rem;cursor:pointer">🗑️ Supprimer</button>
                             </div>
@@ -3635,6 +3642,7 @@ window.changerStatutRetour = async (id, statut) => {
     afficherPanneauAdmin();
 };
 
+let editingPromoId = null;
 window.creerCodePromo = async () => {
     const res = document.getElementById('promo-new-res');
     const code = document.getElementById('promo-new-code').value.trim();
@@ -3644,13 +3652,42 @@ window.creerCodePromo = async () => {
     const usage_max = document.getElementById('promo-new-max-usage').value;
     const date_expiration = document.getElementById('promo-new-expiration').value;
     if (!code || !valeur) { res.style.color = 'var(--danger)'; res.textContent = 'Code et valeur requis.'; return; }
-    res.style.color = '#888'; res.textContent = 'Création...';
+    res.style.color = '#888'; res.textContent = editingPromoId ? 'Enregistrement...' : 'Création...';
     try {
-        await adminAction('codes_promo', 'insert', { payload: { code, type, valeur, montant_min, usage_max, date_expiration } });
+        const payload = { code, type, valeur, montant_min, usage_max, date_expiration };
+        if (editingPromoId) await adminAction('codes_promo', 'update', { id: editingPromoId, payload });
+        else await adminAction('codes_promo', 'insert', { payload });
+        editingPromoId = null;
         afficherPanneauAdmin();
     } catch (e) {
         res.style.color = '#D9534F'; res.textContent = '❌ ' + (e.message || 'Erreur');
     }
+};
+
+// Pré-remplit le formulaire du haut avec le code existant, comme pour
+// l'édition d'un produit — modifier une valeur ou une date sans devoir
+// supprimer puis tout recréer.
+window.chargerEditCodePromo = (id) => {
+    const c = (window._codesPromo || []).find(x => x.id === id); if (!c) return;
+    editingPromoId = id;
+    document.getElementById('promo-form-title').textContent = '✏️ Modifier le code promo';
+    document.getElementById('promo-new-code').value = c.code;
+    document.getElementById('promo-new-type').value = c.type;
+    document.getElementById('promo-new-valeur').value = c.valeur;
+    document.getElementById('promo-new-min').value = c.montant_min || '';
+    document.getElementById('promo-new-max-usage').value = c.usage_max || '';
+    document.getElementById('promo-new-expiration').value = c.date_expiration ? c.date_expiration.slice(0, 10) : '';
+    document.getElementById('btn-creer-promo').textContent = '💾 Enregistrer les modifications';
+    document.getElementById('btn-annuler-edit-promo').style.display = '';
+    showTab('tab-promo'); window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.annulerEditPromo = () => {
+    editingPromoId = null;
+    ['promo-new-code','promo-new-valeur','promo-new-min','promo-new-max-usage','promo-new-expiration'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.getElementById('promo-form-title').textContent = '🏷️ Créer un code promo';
+    document.getElementById('btn-creer-promo').textContent = '➕ Créer le code';
+    document.getElementById('btn-annuler-edit-promo').style.display = 'none';
 };
 
 window.toggleCodePromo = async (id, actif) => {
@@ -3674,6 +3711,7 @@ window.supprimerCodePromo = async (id) => {
     afficherPanneauAdmin();
 };
 
+let editingComboId = null;
 window.creerOffreGroupee = async () => {
     const res = document.getElementById('combo-new-res');
     const nom = document.getElementById('combo-new-nom').value.trim() || 'Flash Combo';
@@ -3688,13 +3726,47 @@ window.creerOffreGroupee = async () => {
     if (choix_ids.length < 2) { res.style.color = 'var(--danger)'; res.textContent = 'Coche au moins 2 accessoires éligibles.'; return; }
     if (choix_ids.includes(produit_principal_id)) { res.style.color = 'var(--danger)'; res.textContent = 'Le produit principal ne peut pas être aussi un accessoire.'; return; }
 
-    res.style.color = '#888'; res.textContent = 'Création...';
+    res.style.color = '#888'; res.textContent = editingComboId ? 'Enregistrement...' : 'Création...';
     try {
-        await adminAction('offres_groupees', 'insert', { payload: { nom, produit_principal_id, prix_ensemble, nb_choix_requis, date_debut, date_fin, choix_ids } });
+        const payload = { nom, produit_principal_id, prix_ensemble, nb_choix_requis, date_debut, date_fin, choix_ids };
+        if (editingComboId) await adminAction('offres_groupees', 'update', { id: editingComboId, payload });
+        else await adminAction('offres_groupees', 'insert', { payload });
+        editingComboId = null;
         afficherPanneauAdmin();
     } catch (e) {
         res.style.color = '#D9534F'; res.textContent = '❌ ' + (e.message || 'Erreur');
     }
+};
+
+// Pré-remplit le formulaire du haut avec le combo existant (nom, produit
+// principal, prix, dates, ET les accessoires déjà cochés) — permet de
+// changer n'importe quel réglage sans devoir tout supprimer et recréer.
+window.chargerEditOffreGroupee = (id) => {
+    const o = (window._offresGroupees || []).find(x => x.id === id); if (!o) return;
+    editingComboId = id;
+    document.getElementById('combo-form-title').textContent = '✏️ Modifier le Flash Combo';
+    document.getElementById('combo-new-nom').value = o.nom || '';
+    document.getElementById('combo-new-principal').value = o.produit_principal_id || o.produit_principal?.id || '';
+    document.getElementById('combo-new-prix').value = o.prix_ensemble;
+    document.getElementById('combo-new-nbchoix').value = o.nb_choix_requis || 2;
+    document.getElementById('combo-new-debut').value = o.date_debut ? o.date_debut.slice(0, 16) : '';
+    document.getElementById('combo-new-fin').value = o.date_fin ? o.date_fin.slice(0, 16) : '';
+    const idsChoix = new Set((o.choix || []).map(p => p.id));
+    document.querySelectorAll('.combo-new-choix-item').forEach(cb => { cb.checked = idsChoix.has(cb.value); });
+    document.getElementById('btn-creer-combo').textContent = '💾 Enregistrer les modifications';
+    document.getElementById('btn-annuler-edit-combo').style.display = '';
+    showTab('tab-combo'); window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.annulerEditCombo = () => {
+    editingComboId = null;
+    ['combo-new-nom','combo-new-prix','combo-new-debut','combo-new-fin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const sel = document.getElementById('combo-new-principal'); if (sel) sel.value = '';
+    document.getElementById('combo-new-nbchoix').value = 2;
+    document.querySelectorAll('.combo-new-choix-item').forEach(cb => { cb.checked = false; });
+    document.getElementById('combo-form-title').textContent = '⚡ Créer un Flash Combo';
+    document.getElementById('btn-creer-combo').textContent = '➕ Créer le Flash Combo';
+    document.getElementById('btn-annuler-edit-combo').style.display = 'none';
 };
 
 window.toggleOffreGroupee = async (id, actif) => {
@@ -4002,7 +4074,6 @@ window.adminSupprimerUtilisateur = async (userId, nom) => {
         notifier('❌ ' + e.message, 'erreur');
     }
 };
-window.desactiverBanniere = async id => { await adminAction('bannieres','update',{id,payload:{actif:false}}); afficherPanneauAdmin(); };
 
 window.previewAdminImg = input => {
     ajouterFichiersImage(input.files);
@@ -4246,6 +4317,7 @@ window.annulerEdit = () => {
 window.supprimerProduit = async id => { if(!confirm('Supprimer ce produit ?'))return; await adminAction('products','delete',{id}); rafraichirProduits(); };
 window.toggleFlash = async (id, actif) => { await adminAction('products','update',{id,payload:{flash_active:!actif}}); rafraichirProduits(); };
 
+let editingBanniereId = null;
 window.publierMessage = async () => {
     const msg=document.getElementById('mktg-msg').value.trim();
     const type=document.getElementById('mktg-type').value;
@@ -4279,11 +4351,61 @@ window.publierMessage = async () => {
         const idsChoisis = Array.from(document.querySelectorAll('.mktg-prod-chk:checked')).map(c=>c.value).slice(0,4);
         payload.produits_ids = idsChoisis.length ? idsChoisis : null;
     }
-    try { await adminAction('bannieres','insert',{payload}); }
+    try {
+        if (editingBanniereId) await adminAction('bannieres','update',{id:editingBanniereId,payload});
+        else await adminAction('bannieres','insert',{payload});
+    }
     catch(e){res.style.color='#D9534F';res.textContent='❌ '+e.message;return;}
     res.style.color='#3FA66B';res.textContent='✅ Publié !';
-    document.getElementById('mktg-msg').value='';
+    annulerEditBanniere();
     popupFlyerFile = null;
     sliderImgFile = null;
     setTimeout(()=>afficherPanneauAdmin(),600);
 };
+
+// Pré-remplit le formulaire du haut avec la bannière/popup/slide existant —
+// évite de devoir la supprimer et tout retaper pour changer un simple mot.
+window.chargerEditBanniere = (id) => {
+    const b = (window._bannieres || []).find(x => x.id === id); if (!b) return;
+    editingBanniereId = id;
+    document.getElementById('mktg-form-title').textContent = '✏️ Modifier le message';
+    document.getElementById('mktg-msg').value = b.message || '';
+    document.getElementById('mktg-type').value = b.type;
+    document.getElementById('mktg-type').onchange();
+    if (b.type === 'slider') {
+        document.getElementById('mktg-titre').value = b.titre || '';
+        document.getElementById('mktg-tag').value = b.tag || '';
+        document.getElementById('mktg-img-url').value = b.image_url || '';
+        document.getElementById('mktg-btn-txt').value = b.btn_texte || '';
+        document.getElementById('mktg-slide-produit').value = b.produit_id || '';
+        document.getElementById('mktg-prix-actuel').value = b.prix_actuel || '';
+        document.getElementById('mktg-prix-ancien').value = b.prix_ancien || '';
+        if (b.image_url) { document.getElementById('mktg-slider-preview-img').src = b.image_url; document.getElementById('mktg-slider-preview').style.display = 'block'; }
+    }
+    if (b.type === 'popup') {
+        document.getElementById('mktg-popup-img').value = b.image_url || '';
+        document.getElementById('mktg-popup-lien').value = b.lien || '';
+        if (b.image_url) { document.getElementById('mktg-popup-preview-img').src = b.image_url; document.getElementById('mktg-popup-preview').style.display = 'block'; }
+        const idsChoisis = new Set(b.produits_ids || []);
+        document.querySelectorAll('.mktg-prod-chk').forEach(cb => { cb.checked = idsChoisis.has(cb.value); });
+    }
+    document.getElementById('btn-publier-mktg').textContent = '💾 Enregistrer les modifications';
+    document.getElementById('btn-annuler-edit-mktg').style.display = '';
+    showTab('tab-mktg'); window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.annulerEditBanniere = () => {
+    editingBanniereId = null;
+    document.getElementById('mktg-msg').value = '';
+    ['mktg-titre','mktg-tag','mktg-img-url','mktg-btn-txt','mktg-prix-actuel','mktg-prix-ancien','mktg-popup-img','mktg-popup-lien'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const sp = document.getElementById('mktg-slide-produit'); if (sp) sp.value = '';
+    document.querySelectorAll('.mktg-prod-chk').forEach(cb => { cb.checked = false; });
+    const sPrev = document.getElementById('mktg-slider-preview'); if (sPrev) sPrev.style.display = 'none';
+    const pPrev = document.getElementById('mktg-popup-preview'); if (pPrev) pPrev.style.display = 'none';
+    document.getElementById('mktg-form-title').textContent = '📢 Publier un message';
+    document.getElementById('btn-publier-mktg').textContent = 'Publier';
+    document.getElementById('btn-annuler-edit-mktg').style.display = 'none';
+};
+
+window.toggleBanniere = async (id, actif) => { await adminAction('bannieres','update',{id,payload:{actif}}); afficherPanneauAdmin(); };
+window.supprimerBanniere = async (id) => { if(!confirm('Supprimer définitivement ce message ?'))return; await adminAction('bannieres','delete',{id}); afficherPanneauAdmin(); };
