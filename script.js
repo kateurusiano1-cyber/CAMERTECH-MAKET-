@@ -1853,6 +1853,17 @@ function injecterSchemaProduit(p) {
     });
 }
 
+// Bascule grille/liste, mémorisée pour les prochaines visites. On ne
+// touche à rien d'autre : renderProducts() construit exactement le même
+// HTML dans les deux cas, seule la classe CSS sur le conteneur change.
+window.changerVueProduits = (mode) => {
+    localStorage.setItem('cmkt_vue_produits', mode);
+    $('product-grid').classList.toggle('vue-liste', mode === 'liste');
+    $('btn-vue-grille').classList.toggle('active', mode === 'grille');
+    $('btn-vue-liste').classList.toggle('active', mode === 'liste');
+};
+if (localStorage.getItem('cmkt_vue_produits') === 'liste') changerVueProduits('liste');
+
 function renderProducts(products) {
     const grid = $('product-grid');
     const filtered = currentCat === 'tous' ? products : products.filter(p => p.category === currentCat);
@@ -3622,11 +3633,39 @@ async function afficherPanneauAdmin() {
         </div>
     </div>
     <style>
+        #admin-page { animation: admFadeIn 0.35s ease both; }
+        @keyframes admFadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+        @media (prefers-reduced-motion: reduce) { #admin-page, #admin-page button { animation:none !important; transition:none !important; } }
+
         .adm-tab{background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.92);border:none;padding:8px 14px;border-radius:20px;cursor:pointer;font-size:0.78rem;font-weight:600;font-family:Inter,sans-serif;transition:background 0.2s ease,transform 0.15s ease}
         .adm-tab:hover{background:rgba(255,255,255,0.22);transform:translateY(-1px)}
-        .adm-tab.active{background:#fff;color:#1F6B3A}
-        .adm-input{background:#f4f6f4;border:1.5px solid #eef0ee;padding:12px;color:#1a1a1a;border-radius:9px;font-size:0.9rem;width:100%;font-family:Inter,sans-serif}
+        .adm-tab.active{background:#fff;color:#1F6B3A;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+
+        .adm-input{background:#f4f6f4;border:1.5px solid #eef0ee;padding:12px;color:#1a1a1a;border-radius:9px;font-size:0.9rem;width:100%;font-family:Inter,sans-serif;transition:border-color 0.15s ease,box-shadow 0.15s ease}
+        .adm-input:focus{outline:none;border-color:#3FA66B;box-shadow:0 0 0 3px rgba(63,166,107,0.15);background:#fff}
+
         .mktg-prod-item:hover{background:#f4f6f4}
+
+        /* Petit effet de survol cohérent sur tous les boutons de l'admin,
+           sans casser les boutons qui définissent déjà leur propre animation. */
+        #admin-page button{transition:transform 0.13s ease,filter 0.13s ease,box-shadow 0.13s ease}
+        #admin-page button:hover{filter:brightness(1.05)}
+        #admin-page button:active{transform:scale(0.97)}
+
+        /* Ascenseur plus discret dans les listes déroulantes (accessoires,
+           produits du popup) — l'ascenseur par défaut du navigateur jure
+           avec le reste du design. */
+        #admin-page *::-webkit-scrollbar{width:8px;height:8px}
+        #admin-page *::-webkit-scrollbar-track{background:transparent}
+        #admin-page *::-webkit-scrollbar-thumb{background:#cfe0d3;border-radius:8px}
+        #admin-page *::-webkit-scrollbar-thumb:hover{background:#a9c7b1}
+
+        /* Titres de section un peu plus affirmés, cohérents partout. */
+        #admin-page h2{color:#16341f;letter-spacing:0.1px}
+
+        /* Lignes de commande/produit qui se distinguent légèrement au survol
+           dans les tableaux, pour mieux suivre où on regarde. */
+        #cmds-admin-table tr:hover, #mktg-prod-liste label:hover{background:#f6f9f6 !important}
     </style>`;
 
     document.getElementById('mktg-type').onchange = function() {

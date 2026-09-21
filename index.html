@@ -335,7 +335,13 @@
     <section class="section" id="produits">
         <div class="section-hdr">
             <h2 data-i18n="titre_produits">🛒 Nos Produits</h2>
-            <span id="prod-count" class="count-tag"></span>
+            <div style="display:flex;align-items:center;gap:10px">
+                <span id="prod-count" class="count-tag"></span>
+                <div id="vue-toggle" role="group" aria-label="Mode d'affichage">
+                    <button id="btn-vue-grille" type="button" class="vue-btn active" onclick="changerVueProduits('grille')" title="Affichage en grille" aria-label="Affichage en grille">▦</button>
+                    <button id="btn-vue-liste" type="button" class="vue-btn" onclick="changerVueProduits('liste')" title="Affichage en liste" aria-label="Affichage en liste">☰</button>
+                </div>
+            </div>
         </div>
         <div id="loader" class="loader" data-i18n="chargement">Chargement...</div>
         <div id="product-grid" class="grid"></div>

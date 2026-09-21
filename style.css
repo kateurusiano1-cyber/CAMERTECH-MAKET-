@@ -368,6 +368,35 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
    si un téléphone détecte une largeur d'écran plus grande que prévu
    (réglages d'affichage/zoom réduits, contexte PWA particulier, etc.). */
 .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; min-height: 380px; }
+
+/* ===== BASCULE GRILLE / LISTE ===== */
+#vue-toggle { display: inline-flex; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px; }
+.vue-btn { border: none; background: transparent; color: var(--text3); width: 30px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; transition: background 0.15s ease, color 0.15s ease; }
+.vue-btn:hover { color: var(--text); }
+.vue-btn.active { background: var(--card); color: var(--green); box-shadow: var(--shadow-sm); }
+
+/* Mode liste : on réutilise exactement les mêmes cartes que la grille,
+   juste réorganisées horizontalement en CSS — aucune duplication de HTML. */
+.grid.vue-liste { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.grid.vue-liste .card { display: flex; align-items: stretch; }
+.grid.vue-liste:hover .card:not(:hover) { opacity: 1; }
+.grid.vue-liste .card:hover { transform: none; box-shadow: var(--shadow-sm); border-color: var(--border); background: var(--bg); }
+.grid.vue-liste .card-img-wrap { flex: 0 0 84px; width: 84px; }
+.grid.vue-liste .card-img, .grid.vue-liste .card-img-ph { width: 84px; height: 84px; }
+.grid.vue-liste .card:hover .card-img { transform: none; }
+.grid.vue-liste .card-body { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 10px 14px; min-width: 0; }
+.grid.vue-liste .card-name { min-height: 0; -webkit-line-clamp: 1; margin-bottom: 3px; }
+.grid.vue-liste .card-qty { margin-bottom: 3px; }
+.grid.vue-liste .card-cat { margin-bottom: 3px; }
+.grid.vue-liste .card-price { font-size: 1rem; }
+.grid.vue-liste .btn-acheter { display: none; } /* toute la ligne est déjà cliquable en liste, pas besoin du bouton en plus */
+.grid.vue-liste .card-admin-btns { border-top: none; margin-top: 4px; padding-top: 0; }
+.grid.vue-liste .badge { transform: scale(0.8); transform-origin: top left; }
+@media (min-width: 640px) {
+    .grid.vue-liste .card-body { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+    .grid.vue-liste .card-name { margin-bottom: 0; }
+    .grid.vue-liste .card-qty, .grid.vue-liste .card-cat { margin-bottom: 0; }
+}
 @media (min-width: 900px) {
     .grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 18px; }
 }
