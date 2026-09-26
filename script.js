@@ -1516,7 +1516,7 @@ async function envoyerLienReset() {
             handleCodeInApp: true
         });
         err.style.color = 'var(--success)';
-        err.textContent = '✅ Email envoyé à ' + email + ' — clique sur le lien pour choisir un nouveau mot de passe.';
+        err.textContent = '✅ Email envoyé à ' + email + ' — clique sur le lien pour choisir un nouveau mot de passe. Tu ne le vois pas dans quelques minutes ? Pense à vérifier tes spams/indésirables.';
     } catch (e) {
         err.textContent = '❌ ' + traduireErreurFirebase(e.code);
     }
@@ -4097,7 +4097,7 @@ window.adminResetMdp = async (userId, nom, email) => {
     if (!confirm(`Envoyer un lien de réinitialisation de mot de passe à ${nom} (${email}) ?`)) return;
     try {
         await window.fbSendPasswordResetEmail(window.firebaseAuth, email);
-        notifier(`✅ Email de réinitialisation envoyé à ${email}.`, 'succes');
+        notifier(`✅ Email de réinitialisation envoyé à ${email} (pense à lui dire de vérifier ses spams si rien n'arrive).`, 'succes');
     } catch (e) {
         notifier('❌ ' + traduireErreurFirebase(e.code), 'erreur');
     }
