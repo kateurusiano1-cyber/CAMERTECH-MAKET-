@@ -119,6 +119,34 @@ input:checked + .toggle-thumb:before { transform: translateX(20px); }
 /* ===== HEADER ===== */
 .header { background: var(--card); box-shadow: var(--shadow); position: sticky; top: 0; z-index: 200; }
 
+.search-compact-btn { display: none; }
+
+/* Repliage progressif de l'en-tête au défilement vers le bas (mobile
+   uniquement) : libère de la place à l'écran pour voir plus de produits.
+   Se redéploie automatiquement en remontant, ou en touchant la loupe. */
+@media (max-width: 640px) {
+    #flash-combo-bar, .header-search-tip, .cat-bar, .logo-text, .header-search-full {
+        transition: max-height 0.22s ease, opacity 0.18s ease, margin 0.22s ease, padding 0.22s ease;
+        overflow: hidden;
+    }
+    .header.compact #flash-combo-bar { max-height: 0 !important; padding-top: 0; padding-bottom: 0; opacity: 0; }
+    .header.compact .header-search-tip { max-height: 0; opacity: 0; margin: 0; }
+    .header.compact .cat-bar { max-height: 0; padding: 0; opacity: 0; border: none; }
+    .header.compact .logo-text { max-height: 0; opacity: 0; }
+    .header.compact .header-main { padding-top: 8px; padding-bottom: 8px; transition: padding 0.22s ease; }
+
+    .header.compact .header-search-full { max-height: 0; opacity: 0; margin: 0; }
+    .header.compact .header-search { max-width: 40px; min-width: 40px; flex: 0 0 40px; }
+    .header.compact .search-compact-btn {
+        display: flex; align-items: center; justify-content: center;
+        width: 40px; height: 40px; border-radius: 50%; border: none;
+        background: var(--green); color: #fff; font-size: 1.05rem; cursor: pointer; flex-shrink: 0;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        #flash-combo-bar, .header-search-tip, .cat-bar, .logo-text, .header-search-full, .header-main { transition: none !important; }
+    }
+}
+
 #chat-widget-btn {
     position: fixed; bottom: 20px; right: 20px; z-index: 500;
     width: 56px; height: 56px; border-radius: 50%; border: none;

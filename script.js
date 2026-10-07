@@ -179,6 +179,34 @@ let allProducts = [], panier = [], modalProduct = null;
 // clients, nom d'invité, etc.) dans un innerHTML — sans ça, un commentaire
 // piégé s'exécute comme du vrai code dans le navigateur de quiconque le lit,
 // y compris l'admin (faille XSS stockée corrigée en session).
+// Replie l'en-tête (bandeau Flash Combo, astuce photo, catégories, nom du
+// logo) quand on défile vers le bas sur mobile, pour laisser plus de place
+// aux produits à l'écran — se redéploie en remontant ou en touchant la loupe.
+(() => {
+    let dernierScrollY = window.scrollY;
+    let enCompact = false;
+    const SEUIL = 56; // px avant de replier, pour ignorer les petits rebonds
+    window.addEventListener('scroll', () => {
+        const y = window.scrollY;
+        const header = document.querySelector('.header');
+        if (!header) return;
+        if (y <= SEUIL) {
+            if (enCompact) { header.classList.remove('compact'); enCompact = false; }
+        } else if (y > dernierScrollY && !enCompact) {
+            header.classList.add('compact'); enCompact = true;
+        } else if (y < dernierScrollY - 4 && enCompact) {
+            header.classList.remove('compact'); enCompact = false;
+        }
+        dernierScrollY = y;
+    }, { passive: true });
+
+    const btnCompact = document.getElementById('search-compact-btn');
+    if (btnCompact) btnCompact.onclick = () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(() => document.getElementById('search-bar')?.focus(), 300);
+    };
+})();
+
 function echapperHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }
