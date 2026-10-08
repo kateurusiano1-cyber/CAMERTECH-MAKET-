@@ -1550,24 +1550,46 @@ function setupChatWidget() {
 
 
 // ===== FAVORIS =====
+// Appel authentifié vers /api/mon-profil (jeton Firebase vérifié côté serveur).
+// Sert au panier et aux favoris, qui ne sont plus accessibles avec la clé publique.
+async function appelCompte(methode, ressource, corps) {
+    const fbUser = await attendreFirebaseUser();
+    if (!fbUser) throw new Error('Non connecté');
+    const idToken = await fbUser.getIdToken();
+    const resp = await fetch('/api/mon-profil' + (ressource ? '?ressource=' + ressource : ''), {
+        method: methode,
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+        body: corps ? JSON.stringify(corps) : undefined
+    });
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(j.error || ('Erreur ' + resp.status));
+    return j;
+}
+
 async function chargerFavoris() {
     if (!currentUser) return;
-    const { data } = await db.from('favoris').select('product_id').eq('utilisateur_id', currentUser.id);
-    favorisIds = new Set((data||[]).map(f => f.product_id));
-    if (allProducts.length) renderProducts(allProducts);
+    try {
+        const j = await appelCompte('GET', 'favoris');
+        favorisIds = new Set(j.favoris || []);
+        if (allProducts.length) renderProducts(allProducts);
+    } catch (e) { console.error('Erreur chargement favoris :', e.message || e); }
 }
 
 window.toggleFavori = async (productId, btn) => {
     if (!currentUser) { openOverlay('auth-overlay'); return; }
     const estFavori = favorisIds.has(productId);
-    if (estFavori) {
-        favorisIds.delete(productId);
-        await db.from('favoris').delete().eq('utilisateur_id', currentUser.id).eq('product_id', productId);
-    } else {
-        favorisIds.add(productId);
-        await db.from('favoris').insert([{ utilisateur_id: currentUser.id, product_id: productId }]);
-    }
+    // Affichage immédiat (le Set est mis à jour avant tout await : le reste de
+    // l'interface le relit tout de suite), puis enregistrement côté serveur.
+    if (estFavori) favorisIds.delete(productId); else favorisIds.add(productId);
     if (btn) { btn.textContent = estFavori ? '🤍' : '❤️'; btn.classList.toggle('active', !estFavori); }
+    try {
+        await appelCompte('POST', null, { action: estFavori ? 'favori_retirer' : 'favori_ajouter', product_id: productId });
+    } catch (e) {
+        // Échec : on remet l'état d'avant pour ne pas afficher un favori qui n'est pas enregistré.
+        if (estFavori) favorisIds.add(productId); else favorisIds.delete(productId);
+        if (btn) { btn.textContent = estFavori ? '❤️' : '🤍'; btn.classList.toggle('active', estFavori); }
+        console.error('Erreur favori :', e.message || e);
+    }
 };
 
 function afficherFavoris() {
@@ -2328,9 +2350,11 @@ function updatePanierBtn() {
 // ===== SYNCHRO PANIER ENTRE APPAREILS =====
 // Objectif : un client qui commence sa commande sur PC et revient sur son téléphone
 // pour payer doit retrouver son panier déjà là, à jour.
-let panierChannel = null;
-let syncPanierTimeout = null;
-let dernierPanierEnvoye = null; // évite de se re-synchroniser soi-même via l'écho Realtime
+let syncPanierTimeout = null;     // sauvegarde locale en attente (anti-rebond)
+let syncPanierEnCours = false;    // sauvegarde en cours d'envoi au serveur
+let derniereMajPanier = null;     // date de la dernière version du panier connue du serveur
+let panierPollTimer = null;       // interrogation régulière pour la synchro multi-appareils
+const INTERVALLE_SYNC_PANIER = 20000; // 20 s, uniquement onglet visible
 
 // Sauvegarde le panier courant côté serveur (anti-rebond : regroupe les appels rapprochés
 // pour ne pas spammer Supabase à chaque clic +/-).
@@ -2348,21 +2372,18 @@ function syncPanierServeur() {
     if (!currentUser) return;
     clearTimeout(syncPanierTimeout);
     syncPanierTimeout = setTimeout(async () => {
-        const items = panier;
-        dernierPanierEnvoye = JSON.stringify(items);
+        syncPanierTimeout = null;
+        syncPanierEnCours = true;
         try {
-            // Note : supabase-js ne lève pas d'exception JS pour une écriture refusée
-            // côté serveur (RLS, contrainte...) — l'erreur arrive dans `error`, pas
-            // dans un catch. On la vérifie donc explicitement ici.
-            const { error } = await db.from('paniers').upsert({
-                utilisateur_id: currentUser.id,
-                items,
-                zone: userZone || null,
-                frais_livraison: fraisLivraison || 0,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'utilisateur_id' });
-            if (error) console.error('Erreur synchro panier :', error.message);
-        } catch (e) { console.error('Erreur synchro panier :', e); }
+            // Le panier passe par le serveur (jeton Firebase vérifié) : la table
+            // `paniers` n'est plus accessible avec la clé publique.
+            const j = await appelCompte('POST', null, {
+                action: 'panier_sauver', items: panier,
+                zone: userZone || null, frais_livraison: fraisLivraison || 0
+            });
+            if (j.updated_at) derniereMajPanier = j.updated_at; // c'est notre propre sauvegarde
+        } catch (e) { console.error('Erreur synchro panier :', e.message || e); }
+        syncPanierEnCours = false;
     }, 600);
 }
 
@@ -2372,8 +2393,10 @@ function syncPanierServeur() {
 async function chargerPanierServeur() {
     if (!currentUser) return;
     try {
-        const { data } = await db.from('paniers').select('*').eq('utilisateur_id', currentUser.id).single();
+        const j = await appelCompte('GET', 'panier');
+        const data = j.panier;
         if (!data) return;
+        derniereMajPanier = data.updated_at || null;
         (data.items || []).forEach(item => {
             const ex = panier.find(x => x.id === item.id);
             if (ex) ex.qty = Math.max(ex.qty, item.qty);
@@ -2408,33 +2431,42 @@ function restaurerPanierInvite() {
     } catch (e) {}
 }
 
-// Écoute en direct les changements faits depuis un AUTRE appareil connecté au même compte
-// (ex : le client ajoute un article sur PC pendant que son téléphone est ouvert sur le site).
+// Synchro avec un AUTRE appareil connecté au même compte (ex : le client ajoute un
+// article sur PC pendant que son téléphone est ouvert sur le site). Le panier
+// n'étant plus lisible avec la clé publique, on n'écoute plus Supabase en direct :
+// on interroge le serveur toutes les 20 s (onglet visible seulement) et dès que
+// l'onglet redevient visible.
+async function verifierPanierDistant() {
+    if (!currentUser || document.hidden) return;
+    if (syncPanierTimeout || syncPanierEnCours) return; // des modifs locales sont en route
+    try {
+        const j = await appelCompte('GET', 'panier');
+        const data = j.panier;
+        if (!data || !data.updated_at || data.updated_at === derniereMajPanier) return;
+        if (syncPanierTimeout || syncPanierEnCours) return; // une modif locale a démarré pendant l'appel
+        derniereMajPanier = data.updated_at;
+        panier = data.items || [];
+        userZone = data.zone || userZone;
+        fraisLivraison = data.frais_livraison || 0;
+        updatePanierBtn();
+        if ($('zone-select')) $('zone-select').value = userZone || '';
+        if ($('panier-overlay') && $('panier-overlay').style.display === 'flex') {
+            panier.length ? renderPanier() : openPanier();
+        }
+    } catch (e) { /* réseau coupé ou session expirée : on réessaiera au prochain tour */ }
+}
+function surVisibilitePanier() { if (!document.hidden) verifierPanierDistant(); }
+
 function ecouterPanierEnDirect() {
-    if (!currentUser || panierChannel) return;
-    panierChannel = db.channel('panier-' + currentUser.id)
-        .on('postgres_changes', {
-            event: '*', schema: 'public', table: 'paniers',
-            filter: 'utilisateur_id=eq.' + currentUser.id
-        }, payload => {
-            const nouveau = payload.new;
-            if (!nouveau) return;
-            if (dernierPanierEnvoye === JSON.stringify(nouveau.items)) return; // c'est notre propre écho
-            panier = nouveau.items || [];
-            userZone = nouveau.zone || userZone;
-            fraisLivraison = nouveau.frais_livraison || 0;
-            updatePanierBtn();
-            if ($('zone-select')) $('zone-select').value = userZone || '';
-            if ($('panier-overlay') && $('panier-overlay').style.display === 'flex') {
-                panier.length ? renderPanier() : openPanier();
-            }
-        })
-        .subscribe();
+    if (!currentUser || panierPollTimer) return;
+    panierPollTimer = setInterval(verifierPanierDistant, INTERVALLE_SYNC_PANIER);
+    document.addEventListener('visibilitychange', surVisibilitePanier);
 }
 
-// Coupe l'écoute en direct (à la déconnexion, pour ne pas laisser un canal ouvert inutilement).
+// Coupe la synchro (à la déconnexion).
 function arreterEcoutePanier() {
-    if (panierChannel) { db.removeChannel(panierChannel); panierChannel = null; }
+    if (panierPollTimer) { clearInterval(panierPollTimer); panierPollTimer = null; }
+    document.removeEventListener('visibilitychange', surVisibilitePanier);
 }
 
 function setupPanier() {
