@@ -182,28 +182,88 @@ let allProducts = [], panier = [], modalProduct = null;
 // Replie l'en-tête (bandeau Flash Combo, astuce photo, catégories, nom du
 // logo) quand on défile vers le bas sur mobile, pour laisser plus de place
 // aux produits à l'écran — se redéploie en remontant ou en touchant la loupe.
+//
+// Anti-saccades : la hauteur de .header dans la page est gelée (--header-h),
+// donc replier/déplier ne déplace jamais le contenu (c'était la cause de la
+// boucle « replie → la page bouge → redéploie → ... » et du lag). Le script
+// de défilement est aussi regroupé par image (requestAnimationFrame).
 (() => {
-    let dernierScrollY = window.scrollY;
-    let enCompact = false;
-    const SEUIL = 56; // px avant de replier, pour ignorer les petits rebonds
-    window.addEventListener('scroll', () => {
-        const y = window.scrollY;
-        const header = document.querySelector('.header');
-        if (!header) return;
-        if (y <= SEUIL) {
-            if (enCompact) { header.classList.remove('compact'); enCompact = false; }
-        } else if (y > dernierScrollY && !enCompact) {
-            header.classList.add('compact'); enCompact = true;
-        } else if (y < dernierScrollY - 4 && enCompact) {
-            header.classList.remove('compact'); enCompact = false;
+    const header = document.querySelector('.header');
+    const interieur = header && header.querySelector('.header-inner');
+    if (!header || !interieur) return;
+    const mobile = window.matchMedia('(max-width: 640px)');
+    const H_COMPACT = 56;      // hauteur approximative de l'en-tête replié (px)
+    const MONTEE_MIN = 14;     // px à remonter avant de redéployer (anti-rebond)
+    let hauteurComplete = 0, enCompact = false, dernierY = window.scrollY;
+    let monteeCumulee = 0, enAttente = false, verrouJusqua = 0;
+    window._enteteEnMouvement = false;
+
+    const barreRecherche = () => document.getElementById('search-bar');
+
+    // Mesure l'en-tête COMPLET (jamais pendant le repliage ni une animation)
+    function mesurer() {
+        if (!mobile.matches) { header.style.removeProperty('--header-h'); hauteurComplete = 0; return; }
+        if (enCompact || Date.now() < verrouJusqua) return;
+        const h = Math.ceil(interieur.getBoundingClientRect().height);
+        if (h > 0 && h !== hauteurComplete) {
+            hauteurComplete = h;
+            header.style.setProperty('--header-h', h + 'px');
         }
-        dernierScrollY = y;
+    }
+
+    function appliquer(etat) {
+        if (etat === enCompact) return;
+        enCompact = etat;
+        header.classList.toggle('compact', etat);
+        verrouJusqua = Date.now() + 350;
+        window._enteteEnMouvement = true;   // le slider attend la fin du mouvement
+        setTimeout(() => { window._enteteEnMouvement = false; mesurer(); }, 350);
+    }
+
+    // On ne replie qu'une fois la zone « réservée » de l'en-tête sortie de
+    // l'écran, sinon une bande vide apparaîtrait sous l'en-tête replié.
+    const seuilReplier = () => Math.max(60, hauteurComplete - H_COMPACT);
+
+    function evaluer() {
+        enAttente = false;
+        if (!mobile.matches) { appliquer(false); dernierY = window.scrollY; return; }
+        // Ignore les rebonds élastiques (au-delà du haut ou du bas de page)
+        const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+        const y = Math.min(Math.max(window.scrollY, 0), maxY);
+        const delta = y - dernierY;
+        dernierY = y;
+        // Clavier ouvert / saisie en cours : l'en-tête reste complet
+        if (document.activeElement === barreRecherche()) { appliquer(false); return; }
+        if (y <= seuilReplier()) { monteeCumulee = 0; appliquer(false); return; }
+        if (delta > 1) { monteeCumulee = 0; appliquer(true); }
+        else if (delta < 0) {
+            monteeCumulee += -delta;
+            if (monteeCumulee >= MONTEE_MIN) appliquer(false);
+        }
+    }
+
+    window.addEventListener('scroll', () => {
+        if (enAttente) return;
+        enAttente = true;
+        requestAnimationFrame(evaluer);
     }, { passive: true });
+
+    // Re-mesure quand la taille de l'en-tête change (bandeau Flash Combo qui
+    // apparaît, polices chargées, rotation d'écran, changement de langue…)
+    if ('ResizeObserver' in window) new ResizeObserver(mesurer).observe(interieur);
+    window.addEventListener('resize', mesurer);
+    window.addEventListener('orientationchange', () => setTimeout(mesurer, 300));
+    window.addEventListener('load', mesurer);
+    if (mobile.addEventListener) mobile.addEventListener('change', mesurer);
+    mesurer();
 
     const btnCompact = document.getElementById('search-compact-btn');
     if (btnCompact) btnCompact.onclick = () => {
+        appliquer(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
-        setTimeout(() => document.getElementById('search-bar')?.focus(), 300);
+        // Focus immédiat (geste tactile encore « valide » → le clavier s'ouvre)
+        const champ = barreRecherche();
+        if (champ) champ.focus({ preventScroll: true });
     };
 })();
 
@@ -1703,7 +1763,7 @@ function initSlider(slidesData) {
     }
 
     if (slideTimer) clearInterval(slideTimer);
-    if (totalSlides > 1) slideTimer = setInterval(() => goSlide((slideIndex+1) % totalSlides), 3200);
+    if (totalSlides > 1) slideTimer = setInterval(() => { if (!window._enteteEnMouvement) goSlide((slideIndex+1) % totalSlides); }, 3200);
 
     $('slider-prev').onclick = () => goSlide((slideIndex - 1 + totalSlides) % totalSlides);
     $('slider-next').onclick = () => goSlide((slideIndex + 1) % totalSlides);

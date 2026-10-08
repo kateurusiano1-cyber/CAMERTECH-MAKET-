@@ -123,25 +123,39 @@ input:checked + .toggle-thumb:before { transform: translateX(20px); }
 
 /* Repliage progressif de l'en-tête au défilement vers le bas (mobile
    uniquement) : libère de la place à l'écran pour voir plus de produits.
-   Se redéploie automatiquement en remontant, ou en touchant la loupe. */
+   Se redéploie en remontant, ou en touchant la loupe.
+
+   IMPORTANT (anti-saccades) : la hauteur de .header dans la page est
+   GELÉE (variable --header-h, mesurée par le script quand l'en-tête est
+   complet). Replier ou déplier le contenu à l'intérieur ne déplace donc
+   plus jamais la page : plus de boucle « replie / redéploie » et un
+   recalcul de mise en page limité à l'en-tête (contain: layout). */
 @media (max-width: 640px) {
+    .header { background: transparent; box-shadow: none; pointer-events: none;
+              height: var(--header-h, auto); contain: layout style; }
+    .header-inner { background: var(--card); box-shadow: var(--shadow); pointer-events: auto; }
+    /* Le flou « verre » ne se voit pas sur le fond uni de l'en-tête mais
+       coûte cher à chaque image sur les téléphones d'entrée de gamme. */
+    .header .glass { -webkit-backdrop-filter: none; backdrop-filter: none; }
+
     #flash-combo-bar, .header-search-tip, .cat-bar, .logo-text, .header-search-full {
-        transition: max-height 0.22s ease, opacity 0.18s ease, margin 0.22s ease, padding 0.22s ease;
+        transition: opacity 0.18s ease;
         overflow: hidden;
     }
     .header.compact #flash-combo-bar { max-height: 0 !important; padding-top: 0; padding-bottom: 0; opacity: 0; }
     .header.compact .header-search-tip { max-height: 0; opacity: 0; margin: 0; }
     .header.compact .cat-bar { max-height: 0; padding: 0; opacity: 0; border: none; }
     .header.compact .logo-text { max-height: 0; opacity: 0; }
-    .header.compact .header-main { padding-top: 8px; padding-bottom: 8px; transition: padding 0.22s ease; }
+    .header.compact .header-main { padding-top: 8px; padding-bottom: 8px; }
 
     .header.compact .header-search-full { max-height: 0; opacity: 0; margin: 0; }
-    .header.compact .header-search { max-width: 40px; min-width: 40px; flex: 0 0 40px; }
+    .header.compact .header-search { max-width: 40px; min-width: 40px; flex: 0 0 40px; margin-top: 0; }
     .header.compact .search-compact-btn {
         display: flex; align-items: center; justify-content: center;
         width: 40px; height: 40px; border-radius: 50%; border: none;
         background: var(--green); color: #fff; font-size: 1.05rem; cursor: pointer; flex-shrink: 0;
     }
+    .slider-track { will-change: transform; }
     @media (prefers-reduced-motion: reduce) {
         #flash-combo-bar, .header-search-tip, .cat-bar, .logo-text, .header-search-full, .header-main { transition: none !important; }
     }
