@@ -982,7 +982,7 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
         localStorage.setItem('cmkt_user', JSON.stringify(profil));
         showUserUI();
         lierSessionVisiteur();
-        await chargerPanierServeur();
+        await chargerPanierServeur(true);
         ecouterPanierEnDirect();
         return { ok: true };
     }
@@ -1007,7 +1007,7 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
             localStorage.setItem('cmkt_user', JSON.stringify(j.profil));
             showUserUI();
             lierSessionVisiteur();
-            await chargerPanierServeur();
+            await chargerPanierServeur(true);
             ecouterPanierEnDirect();
             return { ok: true };
         } catch (e) {
@@ -1149,6 +1149,7 @@ function setupAuth() {
         $('user-menu').style.display = 'none';
         $('btn-auth-show').style.display = '';
         panier = []; updatePanierBtn();
+        try { localStorage.removeItem('cmkt_panier_invite'); } catch (e) {} // pas de panier de compte laissé sur un appareil partagé
         renderProducts(allProducts);
     };
 
@@ -2373,8 +2374,12 @@ function updatePanierBtn() {
 let syncPanierTimeout = null;     // sauvegarde locale en attente (anti-rebond)
 let syncPanierEnCours = false;    // sauvegarde en cours d'envoi au serveur
 let derniereMajPanier = null;     // date de la dernière version du panier connue du serveur
-let panierPollTimer = null;       // interrogation régulière pour la synchro multi-appareils
-const INTERVALLE_SYNC_PANIER = 20000; // 20 s, uniquement onglet visible
+let panierPollTimer = null;       // interrogation de secours pour la synchro multi-appareils
+let panierCanal = null;           // canal Supabase Realtime (simple signal « le panier a changé »)
+let panierCanalPret = false;      // vrai quand le canal instantané fonctionne
+let panierInviteAFusionner = null; // panier d'invité à reprendre UNE fois dans le compte
+const INTERVALLE_SYNC_PANIER_RAPIDE = 15000; // sans canal instantané : vérification toutes les 15 s
+const INTERVALLE_SYNC_PANIER_LENT = 60000;   // avec canal instantané : simple filet de sécurité
 
 // Sauvegarde le panier courant côté serveur (anti-rebond : regroupe les appels rapprochés
 // pour ne pas spammer Supabase à chaque clic +/-).
@@ -2385,7 +2390,9 @@ function syncPanierServeur() {
     // multi-appareils ci-dessous (source de vérité dans ce cas).
     try {
         localStorage.setItem('cmkt_panier_invite', JSON.stringify({
-            items: panier, zone: userZone || null, frais: fraisLivraison || 0, horodatage: Date.now()
+            items: panier, zone: userZone || null, frais: fraisLivraison || 0, horodatage: Date.now(),
+            // À qui appartient cette copie : id du compte, ou null pour un visiteur sans compte.
+            proprietaire: currentUser ? currentUser.id : null
         }));
     } catch (e) {}
 
@@ -2402,31 +2409,53 @@ function syncPanierServeur() {
                 zone: userZone || null, frais_livraison: fraisLivraison || 0
             });
             if (j.updated_at) derniereMajPanier = j.updated_at; // c'est notre propre sauvegarde
+            signalerMajPanier();                                // les autres appareils se mettent à jour tout de suite
         } catch (e) { console.error('Erreur synchro panier :', e.message || e); }
         syncPanierEnCours = false;
-    }, 600);
+    }, 300);
 }
 
 // Charge le panier sauvegardé côté serveur à la connexion (ou à la restauration de session).
 // Fusionne avec un panier local déjà présent au lieu de l'écraser, pour ne jamais faire
 // perdre un article que le client vient d'ajouter avant même que la fusion arrive.
-async function chargerPanierServeur() {
+// Pour un compte connecté, le SERVEUR fait foi : on remplace le panier local par celui
+// du serveur. (Avant, on fusionnait avec la copie gardée dans le navigateur : un article
+// acheté ou retiré sur un appareil revenait depuis la vieille copie de l'autre appareil,
+// et le nombre d'articles montait ou descendait au rechargement.)
+// Seule exception : le panier rempli SANS compte juste avant de se connecter, repris
+// une seule fois dans le compte.
+async function chargerPanierServeur(fusionnerPanierInvite = false) {
     if (!currentUser) return;
+    const aFusionner = panierInviteAFusionner
+        || (fusionnerPanierInvite && panier.length ? panier.map(x => ({ ...x })) : null);
+    panierInviteAFusionner = null;
     try {
         const j = await appelCompte('GET', 'panier');
+        // Le client vient de modifier son panier : sa version part au serveur et prime.
+        if (syncPanierTimeout || syncPanierEnCours) return;
         const data = j.panier;
-        if (!data) return;
-        derniereMajPanier = data.updated_at || null;
-        (data.items || []).forEach(item => {
-            const ex = panier.find(x => x.id === item.id);
-            if (ex) ex.qty = Math.max(ex.qty, item.qty);
-            else panier.push(item);
-        });
-        if (!userZone && data.zone) userZone = data.zone;
-        if (!fraisLivraison && data.frais_livraison) fraisLivraison = data.frais_livraison;
+        let aEnregistrer = false;
+        if (data) {
+            derniereMajPanier = data.updated_at || null;
+            panier = (data.items || []).map(x => ({ ...x }));
+            if (data.zone) userZone = data.zone;
+            if (aFusionner) {
+                aFusionner.forEach(item => {
+                    const ex = panier.find(x => x.id === item.id && (x.combo_id || null) === (item.combo_id || null));
+                    if (ex) ex.qty = Math.max(ex.qty, item.qty); else panier.push(item);
+                });
+                aEnregistrer = true;
+            }
+        } else {
+            // Pas encore de panier serveur : on garde ce qu'il y a (copie locale ou panier d'invité).
+            if (aFusionner) panier = aFusionner;
+            aEnregistrer = panier.length > 0;
+        }
         updatePanierBtn();
-        if ($('zone-select') && userZone) { $('zone-select').value = userZone; updateLivraison(); }
-    } catch (e) { /* pas encore de panier serveur pour ce compte : normal */ }
+        if ($('zone-select') && userZone) { $('zone-select').value = userZone; updateLivraison(true); }
+        if ($('panier-overlay') && $('panier-overlay').style.display === 'flex') renderPanier();
+        if (aEnregistrer) syncPanierServeur();
+    } catch (e) { /* hors ligne : on garde la copie locale affichée */ }
 }
 
 // Restaure le panier d'un visiteur SANS compte depuis le navigateur — c'est
@@ -2443,19 +2472,32 @@ function restaurerPanierInvite() {
             localStorage.removeItem('cmkt_panier_invite');
             return;
         }
+        // proprietaire : id du compte, null (visiteur sans compte) ou absent (ancien format).
+        const proprio = ('proprietaire' in sauvegarde) ? sauvegarde.proprietaire : undefined;
+        if (currentUser) {
+            // Panier d'un autre compte sur ce navigateur : on l'ignore.
+            if (proprio && proprio !== currentUser.id) return;
+            // Panier d'un visiteur sans compte : repris UNE fois dans le compte (voir chargerPanierServeur).
+            if (proprio === null) { panierInviteAFusionner = sauvegarde.items; return; }
+            // Sinon : simple copie du panier du compte, affichée en attendant la réponse du
+            // serveur (qui fera foi).
+        } else if (proprio) {
+            return; // jamais le panier d'un compte pour un visiteur déconnecté
+        }
         panier = sauvegarde.items;
         if (sauvegarde.zone) userZone = sauvegarde.zone;
         if (sauvegarde.frais) fraisLivraison = sauvegarde.frais;
         updatePanierBtn();
-        if ($('zone-select') && userZone) { $('zone-select').value = userZone; updateLivraison(); }
+        if ($('zone-select') && userZone) { $('zone-select').value = userZone; updateLivraison(true); }
     } catch (e) {}
 }
 
 // Synchro avec un AUTRE appareil connecté au même compte (ex : le client ajoute un
 // article sur PC pendant que son téléphone est ouvert sur le site). Le panier
-// n'étant plus lisible avec la clé publique, on n'écoute plus Supabase en direct :
-// on interroge le serveur toutes les 20 s (onglet visible seulement) et dès que
-// l'onglet redevient visible.
+// n'étant plus lisible avec la clé publique, la mise à jour passe par le serveur :
+// un signal instantané (canal Realtime, sans donnée) prévient les autres appareils,
+// avec en filet de sécurité une vérification régulière (onglet visible seulement) et
+// dès que l'onglet redevient visible.
 async function verifierPanierDistant() {
     if (!currentUser || document.hidden) return;
     if (syncPanierTimeout || syncPanierEnCours) return; // des modifs locales sont en route
@@ -2477,16 +2519,50 @@ async function verifierPanierDistant() {
 }
 function surVisibilitePanier() { if (!document.hidden) verifierPanierDistant(); }
 
+// Programme la vérification de secours : 15 s tant que le signal instantané n'est
+// pas disponible, 60 s quand il fonctionne.
+function programmerVerifPanier() {
+    if (panierPollTimer) clearInterval(panierPollTimer);
+    panierPollTimer = setInterval(verifierPanierDistant, panierCanalPret ? INTERVALLE_SYNC_PANIER_LENT : INTERVALLE_SYNC_PANIER_RAPIDE);
+}
+
+// Canal « signal seulement » (Supabase Realtime Broadcast) : quand un appareil
+// enregistre son panier, il envoie un simple « maj » (AUCUNE donnée de panier dans le
+// message) ; les autres appareils du même compte vont alors lire le panier via le
+// serveur authentifié. Le contenu du panier ne transite jamais par ce canal.
+function ouvrirCanalPanier() {
+    if (!currentUser || panierCanal || typeof db.channel !== 'function') return;
+    try {
+        panierCanal = db.channel('panier-' + currentUser.id, { config: { broadcast: { self: false } } });
+        panierCanal.on('broadcast', { event: 'maj' }, () => verifierPanierDistant());
+        panierCanal.subscribe((statut) => {
+            const pret = (statut === 'SUBSCRIBED');
+            if (pret !== panierCanalPret) { panierCanalPret = pret; if (panierPollTimer) programmerVerifPanier(); }
+        });
+    } catch (e) { panierCanal = null; panierCanalPret = false; }
+}
+
+function signalerMajPanier() {
+    if (!panierCanal || !panierCanalPret) return;
+    try {
+        const envoi = panierCanal.send({ type: 'broadcast', event: 'maj', payload: { t: Date.now() } });
+        if (envoi && envoi.catch) envoi.catch(() => {});
+    } catch (e) {}
+}
+
 function ecouterPanierEnDirect() {
     if (!currentUser || panierPollTimer) return;
-    panierPollTimer = setInterval(verifierPanierDistant, INTERVALLE_SYNC_PANIER);
+    programmerVerifPanier();
     document.addEventListener('visibilitychange', surVisibilitePanier);
+    ouvrirCanalPanier();
 }
 
 // Coupe la synchro (à la déconnexion).
 function arreterEcoutePanier() {
     if (panierPollTimer) { clearInterval(panierPollTimer); panierPollTimer = null; }
     document.removeEventListener('visibilitychange', surVisibilitePanier);
+    if (panierCanal) { try { db.removeChannel(panierCanal); } catch (e) {} panierCanal = null; }
+    panierCanalPret = false;
 }
 
 function setupPanier() {
@@ -2717,7 +2793,7 @@ function updateTotaux(sousTotal) {
     </div>`;
 }
 
-function updateLivraison() {
+function updateLivraison(sansSync) {
     const zone=$('zone-select').value;
     userZone=zone;
     const couverte = CONFIG.ZONES_COUVERTES.includes(zone);
@@ -2745,7 +2821,7 @@ function updateLivraison() {
         warn.style.display='none';
     }
     if(panier.length) renderPanier();
-    syncPanierServeur();
+    if (sansSync !== true) syncPanierServeur(); // (sansSync peut être un événement : on teste === true)
 }
 
 // ===== PAIEMENT =====
