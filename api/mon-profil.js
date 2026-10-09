@@ -49,6 +49,9 @@ function nettoyerPanier(brut) {
             name: texteCourt(a.name, 200) || 'Produit',
             prix: Number.isFinite(prix) && prix >= 0 && prix <= 100000000 ? prix : 0,
             qty: entier(a.qty, 1, 99, 1),
+            // Prix réellement encaissé (le prix affiché, lui, est un prix "charme").
+            ...((a.prix_reel !== undefined && a.prix_reel !== null && Number.isFinite(Number(a.prix_reel)) && Number(a.prix_reel) >= 0 && Number(a.prix_reel) <= 100000000)
+                ? { prix_reel: Math.round(Number(a.prix_reel)) } : {}),
             image_url: texteCourt(a.image_url, 500),
             ...(a.combo_id ? { combo_id: texteCourt(String(a.combo_id), 64), combo_nom: texteCourt(a.combo_nom, 200) } : {})
         });

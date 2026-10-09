@@ -322,6 +322,25 @@ function prixCharme(prix) {
     const p = Math.round(prix || 0);
     return (p > 0 && p % 100 === 0) ? p - 1 : p;
 }
+// Prix RÉELLEMENT encaissé = celui du serveur (api/preparer-paiement.js) : prix en
+// base arrondi, SANS l'effet "charme". getPrix() ne sert qu'à l'AFFICHAGE des
+// fiches produit (500 -> 499) ; le panier et l'écran de paiement montrent le vrai
+// montant à payer pour que le client ne soit jamais surpris.
+const prixReelProduit = p => Math.round(((p.promo_active || p.flash_active) && p.promo_prix ? p.promo_prix : p.resale_price) || 0);
+
+// Prix réel d'une ligne de panier (anciens paniers sans prix_reel : on le retrouve
+// dans le catalogue ou les combos chargés ; en dernier recours, le prix affiché).
+function prixReelLigne(item) {
+    if (!item) return 0;
+    if (Number.isFinite(item.prix_reel)) return item.prix_reel;
+    if (item.combo_id) {
+        if (!item.prix) return 0; // article inclus dans un kit
+        const o = (typeof flashCombosValides !== 'undefined' && flashCombosValides || []).find(x => x.id === item.combo_id);
+        return o && Number.isFinite(o.prix_ensemble_reel) ? o.prix_ensemble_reel : item.prix;
+    }
+    const prod = (typeof allProducts !== 'undefined' && allProducts || []).find(x => x.id === item.id);
+    return prod ? prixReelProduit(prod) : (item.prix || 0);
+}
 const fmt = n => parseInt(n).toLocaleString('fr-FR');
 const $ = id => document.getElementById(id);
 
@@ -1268,7 +1287,8 @@ async function chargerFlashCombo() {
             const { data: choixRows } = await db.from('offres_groupees_choix')
                 .select('produit_id, products(*)').eq('offre_id', offre.id);
             offre.choix = (choixRows || []).map(c => c.products).filter(Boolean);
-            offre.prix_ensemble = prixCharme(offre.prix_ensemble);
+            offre.prix_ensemble_reel = Math.round(offre.prix_ensemble || 0); // prix réellement encaissé
+            offre.prix_ensemble = prixCharme(offre.prix_ensemble);               // prix affiché
         }
 
         flashCombosValides = valides;
@@ -1406,11 +1426,11 @@ function ouvrirCompositionFlashCombo() {
         const btn = el.querySelector('#flash-combo-btn-ajouter');
         if (btn && choisis.size >= o.nb_choix_requis) {
             btn.onclick = () => {
-                panier.push({ id: o.produit_principal.id, name: o.produit_principal.name, prix: o.prix_ensemble, qty: 1, image_url: o.produit_principal.image_url, combo_id: o.id, combo_nom: o.nom });
+                panier.push({ id: o.produit_principal.id, name: o.produit_principal.name, prix: o.prix_ensemble, prix_reel: o.prix_ensemble_reel, qty: 1, image_url: o.produit_principal.image_url, combo_id: o.id, combo_nom: o.nom });
                 logVisiteur('panier_ajout', o.produit_principal.id, { nom: o.produit_principal.name, combo: o.nom });
                 for (const id of choisis) {
                     const p = o.choix.find(c => c.id === id);
-                    panier.push({ id: p.id, name: p.name, prix: 0, qty: 1, image_url: p.image_url, combo_id: o.id, combo_nom: o.nom });
+                    panier.push({ id: p.id, name: p.name, prix: 0, prix_reel: 0, qty: 1, image_url: p.image_url, combo_id: o.id, combo_nom: o.nom });
                     logVisiteur('panier_ajout', p.id, { nom: p.name, combo: o.nom });
                 }
                 updatePanierBtn(); syncPanierServeur();
@@ -1734,7 +1754,7 @@ function initSlider(slidesData) {
             slide.className = 'slide';
             if (s.image_url) {
                 const prixHtml = s.prix_actuel ? `<div class="slide-prix-bloc">
-                    <span class="slide-prix-actuel">${fmt(s.prix_actuel)} FCFA</span>
+                    <span class="slide-prix-actuel">${fmt(prixCharme(s.prix_actuel))} FCFA</span>
                     ${s.prix_ancien ? `<span class="slide-prix-ancien">${fmt(s.prix_ancien)} FCFA</span>` : ''}
                 </div>` : '';
                 slide.innerHTML = `<div class="slide-inner">
@@ -2129,7 +2149,7 @@ $('btn-add-cart').onclick = () => {
     const prix = getPrix(modalProduct);
     const ex = panier.find(x => x.id === modalProduct.id);
     if (ex) ex.qty = Math.min(ex.qty+qty, modalProduct.quantity);
-    else panier.push({ id:modalProduct.id, name:modalProduct.name, prix, qty, image_url:modalProduct.image_url });
+    else panier.push({ id:modalProduct.id, name:modalProduct.name, prix, prix_reel:prixReelProduit(modalProduct), qty, image_url:modalProduct.image_url });
     logVisiteur('panier_ajout', modalProduct.id, { nom: modalProduct.name, qty, prix });
     updatePanierBtn();
     syncPanierServeur();
@@ -2162,7 +2182,7 @@ window.addQuick = (id, evt) => {
     if (!p) return;
     const ex = panier.find(x=>x.id===id);
     if (ex) ex.qty++;
-    else panier.push({id:p.id, name:p.name, prix:getPrix(p), qty:1});
+    else panier.push({id:p.id, name:p.name, prix:getPrix(p), prix_reel:prixReelProduit(p), qty:1});
     logVisiteur('panier_ajout', p.id, { nom: p.name, qty: ex ? ex.qty : 1, prix: getPrix(p) });
     updatePanierBtn();
     syncPanierServeur();
@@ -2677,14 +2697,23 @@ async function appliquerCodePromo() {
     updateTotaux(sousTotal);
 }
 
-function updateTotaux(sousTotal) {
+// Montants exacts, tels que le serveur les facturera (même règle : prix réels).
+// `sousTotal` = somme des prix AFFICHÉS (sert seulement à reconnaître le code promo déjà validé).
+function calculerMontants(sousTotal) {
     const reduction = (codePromoApplique && codePromoApplique.sousTotal === sousTotal) ? codePromoApplique.reduction : 0;
-    const total = Math.max(0, sousTotal - reduction) + fraisLivraison;
+    const sousReel = panier.reduce((s, p) => s + prixReelLigne(p) * p.qty, 0);
+    return { reduction, sousReel, total: Math.max(0, sousReel - reduction) + fraisLivraison };
+}
+
+function updateTotaux(sousTotal) {
+    const { reduction, sousReel, total } = calculerMontants(sousTotal);
+    const ecart = sousReel - sousTotal; // arrondi entre prix affichés et prix réels
     $('panier-totaux').innerHTML=`<div class="totaux-box">
         <div class="total-ligne"><span>Sous-total</span><span>${fmt(sousTotal)} FCFA</span></div>
+        ${ecart !== 0 ? `<div class="total-ligne"><span>Ajustement d'arrondi</span><span>${ecart > 0 ? '+' : '-'}${fmt(Math.abs(ecart))} FCFA</span></div>` : ''}
         ${reduction > 0 ? `<div class="total-ligne" style="color:var(--success)"><span>Réduction</span><span>-${fmt(reduction)} FCFA</span></div>` : ''}
         <div class="total-ligne"><span>Livraison</span><span>${fraisLivraison>0?fmt(fraisLivraison)+' FCFA':'—'}</span></div>
-        <div class="total-final"><span>Total</span><span>${fmt(total)} FCFA</span></div>
+        <div class="total-final"><span>Total à payer</span><span>${fmt(total)} FCFA</span></div>
     </div>`;
 }
 
@@ -2745,7 +2774,7 @@ async function initierPaiement() {
     } else {
         inviteInfo = null;
     }
-    const total = panier.reduce((s,p)=>s+p.prix*p.qty,0) + fraisLivraison;
+    const { total } = calculerMontants(panier.reduce((s,p)=>s+p.prix*p.qty,0));
     $('pay-amount').textContent = fmt(total) + ' FCFA';
     $('pay-status').textContent='';
     $('btn-pay-confirm').disabled=false;
@@ -2920,7 +2949,7 @@ function afficherSuccesDepuisResa(resa) {
         panier = d.items; userZone = d.zone; fraisLivraison = d.frais;
         sessionStorage.removeItem('cmkt_panier_'+resa.code);
     } else {
-        panier = (resa.items||[]).map(i => ({ id:i.id, name:i.name, qty:i.qty, prix:i.prix }));
+        panier = (resa.items||[]).map(i => ({ id:i.id, name:i.name, qty:i.qty, prix:i.prix, prix_reel:i.prix }));
         userZone = resa.zone_livraison; fraisLivraison = resa.frais_livraison || 0;
     }
     afficherSucces(resa.code, resa.total, resa.date_limite_retrait);
@@ -2929,7 +2958,7 @@ function afficherSuccesDepuisResa(resa) {
 
 function afficherCode(code, total) {
     $('code-display').textContent = code;
-    let html=panier.map(p=>`<div class="recap-ligne"><span>${p.name} ×${p.qty}</span><span>${fmt(p.prix*p.qty)} F</span></div>`).join('');
+    let html=panier.map(p=>`<div class="recap-ligne"><span>${p.name} ×${p.qty}</span><span>${fmt(prixReelLigne(p)*p.qty)} F</span></div>`).join('');
     if(fraisLivraison>0) html+=`<div class="recap-ligne"><span>🚚 Livraison (${userZone})</span><span>${fmt(fraisLivraison)} F</span></div>`;
     html+=`<div class="recap-total"><span>Total</span><span>${fmt(total)} FCFA</span></div>`;
     $('code-recap').innerHTML=html;
@@ -2959,7 +2988,7 @@ function afficherSucces(code, total, dateLimiteRetrait) {
     const itemsAffiches = panier.map(p => ({ ...p, image_url: p.image_url || allProducts.find(x => x.id === p.id)?.image_url }));
     const estLivraisonDomicile = CONFIG.ZONES_COUVERTES.includes(userZone);
     $('success-anim').innerHTML = construireAnimationSucces(itemsAffiches, estLivraisonDomicile);
-    let html=itemsAffiches.map(p=>`<div class="recap-ligne"><span class="recap-ligne-label">${p.image_url?`<img src="${p.image_url}" class="recap-img" alt="">`:''}${p.name} ×${p.qty}</span><span>${fmt(p.prix*p.qty)} F</span></div>`).join('');
+    let html=itemsAffiches.map(p=>`<div class="recap-ligne"><span class="recap-ligne-label">${p.image_url?`<img src="${p.image_url}" class="recap-img" alt="">`:''}${p.name} ×${p.qty}</span><span>${fmt(prixReelLigne(p)*p.qty)} F</span></div>`).join('');
     if(fraisLivraison>0) html+=`<div class="recap-ligne"><span>🚚 Livraison (${userZone})</span><span>${fmt(fraisLivraison)} F</span></div>`;
     html+=`<div class="recap-total"><span>Total</span><span>${fmt(total)} FCFA</span></div>`;
     $('success-recap').innerHTML = html;

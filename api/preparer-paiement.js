@@ -32,18 +32,16 @@ const crypto = require('crypto');
 const { verifierRequeteUtilisateur } = require('./_lib/verifierFirebaseToken');
 const { tropDeTentatives, signalerEchecTentative } = require('./_lib/rateLimit');
 
-// Même logique de prix que côté client (getPrix dans script.js), mais ici
-// c'est la SEULE version qui compte — celle du navigateur ne sert plus qu'à
-// l'affichage.
-const prixReel = p => prixCharme((p.promo_active || p.flash_active) && p.promo_prix ? p.promo_prix : p.resale_price);
-
-// Prix psychologique / "charm pricing" — DOIT rester identique à la copie
-// côté client (script.js) : c'est cette version-ci, côté serveur, qui fait
-// foi pour l'encaissement (voir en-tête du fichier).
-function prixCharme(prix) {
-    const p = Math.round(prix || 0);
-    return (p > 0 && p % 100 === 0) ? p - 1 : p;
-}
+// PRIX ENCAISSÉ : le prix réel en base, arrondi au FCFA. C'est la SEULE version
+// qui compte pour l'encaissement — le navigateur ne l'utilise que pour afficher
+// le montant exact avant de payer.
+//
+// Attention : le site AFFICHE un prix "charme" sur les fiches produit (500 ->
+// 499, voir prixCharme dans script.js), mais ce n'est que de l'affichage. Ce
+// prix affiché n'est JAMAIS envoyé ni utilisé ici : le navigateur n'envoie que
+// des id et des quantités, et tout est recalculé à partir de la base.
+const arrondiFCFA = n => Math.round(n || 0);
+const prixReel = p => arrondiFCFA((p.promo_active || p.flash_active) && p.promo_prix ? p.promo_prix : p.resale_price);
 
 // Code aléatoire cryptographique — remplace 'CMT-'+Math.random()...+Date.now()
 // (seulement ~46 656 combinaisons réelles, et un suffixe d'horodatage
@@ -112,7 +110,7 @@ async function validerOffreGroupee(supabase, offreId, itemsDuGroupe) {
     const poolIds = new Set((pool || []).map(p => p.produit_id));
     if (!idsAccessoires.every(id => poolIds.has(id))) return { valide: false };
 
-    return { valide: true, prix: prixCharme(offre.prix_ensemble), nom: offre.nom };
+    return { valide: true, prix: arrondiFCFA(offre.prix_ensemble), nom: offre.nom };
 }
 
 module.exports = async (req, res) => {
