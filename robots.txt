@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin-cmr2025
 Disallow: /api/
 
-Sitemap: https://camertech-maket.vercel.app/sitemap.xml
+Sitemap: https://www.kapmaket.shop/sitemap.xml

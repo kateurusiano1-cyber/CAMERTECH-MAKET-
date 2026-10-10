@@ -5,10 +5,10 @@
 // servies depuis le cache, pour ne jamais afficher de stock/prix/statut
 // périmé au client.
 
-const CACHE_NOM = 'camertech-cache-v8';
+const CACHE_NOM = 'kapmaket-cache-v10';
 const FICHIERS_STATIQUES = [
     '/', '/index.html', '/style.css', '/script.js', '/config.js',
-    '/logo.png', '/icon-192.png', '/icon-512.png', '/manifest.json',
+    '/logo.png', '/logo-panier.png', '/icon-192.png', '/icon-512.png', '/favicon.ico', '/favicon-32.png', '/manifest.json',
     '/admin-cmr2025', '/manifest-admin.json', '/icon-admin-192.png', '/icon-admin-512.png'
 ];
 
@@ -61,7 +61,7 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
     let donnees = {};
     try { donnees = event.data ? event.data.json() : {}; } catch (e) {}
-    const titre = donnees.titre || 'CAMERTECH MARKET';
+    const titre = donnees.titre || 'Kapmaket';
 
     event.waitUntil((async () => {
         // Le badge (nombre sur l'icône) est le vrai signal recherché ici —

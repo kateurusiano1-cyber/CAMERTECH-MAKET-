@@ -10,7 +10,7 @@ function configurerVapid() {
         throw new Error('VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY manquants côté serveur');
     }
     webpush.setVapidDetails(
-        'mailto:contact@camertechmarket.com',
+        'https://www.kapmaket.shop',
         process.env.VAPID_PUBLIC_KEY,
         process.env.VAPID_PRIVATE_KEY
     );

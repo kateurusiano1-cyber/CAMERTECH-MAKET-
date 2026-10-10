@@ -43,7 +43,7 @@ module.exports = async (req, res) => {
             return res.status(503).json({ error: `Recherche par photo temporairement indisponible, réessaie dans ${Math.ceil(circuit.retryAfterSeconds / 60)} min.` });
         }
 
-        const prompt = `Un client d'une boutique tech au Cameroun (CAMERTECH MARKET) prend cette photo pour chercher un produit similaire dans le catalogue. Identifie de quel type de produit il s'agit. Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : {"category":"une seule valeur parmi : Téléphonie, Accessoires, Électronique, Réseau, Gaming, Autre","motscles":["2 à 5 mots-clés courts en français décrivant le produit, ex: écouteurs, bluetooth, chargeur, câble type-c"]}`;
+        const prompt = `Un client d'une boutique tech au Cameroun (Kapmaket) prend cette photo pour chercher un produit similaire dans le catalogue. Identifie de quel type de produit il s'agit. Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : {"category":"une seule valeur parmi : Téléphonie, Accessoires, Électronique, Réseau, Gaming, Autre","motscles":["2 à 5 mots-clés courts en français décrivant le produit, ex: écouteurs, bluetooth, chargeur, câble type-c"]}`;
 
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,

@@ -10,7 +10,7 @@ const PDFDocument = require('pdfkit');
 // avec les fonctions serverless.
 async function recupererLogo() {
     try {
-        const resp = await fetch('https://camertech-maket.vercel.app/logo.png');
+        const resp = await fetch('https://www.kapmaket.shop/logo.png');
         if (!resp.ok) return null;
         const arr = await resp.arrayBuffer();
         return Buffer.from(arr);
@@ -74,10 +74,10 @@ function genererFacturePdf(reservation) {
             const logo = await recupererLogo();
             if (logo) {
                 doc.image(logo, 50, 45, { width: 42 });
-                doc.fillColor(vert).fontSize(18).font('Helvetica-Bold').text('CAMERTECH MARKET', 100, 50);
+                doc.fillColor(vert).fontSize(18).font('Helvetica-Bold').text('Kapmaket', 100, 50);
                 doc.fillColor(gris).fontSize(9).font('Helvetica').text('Douala, PK14 — Cameroun', 100, 72);
             } else {
-                doc.fillColor(vert).fontSize(20).font('Helvetica-Bold').text('CAMERTECH MARKET', 50, 50);
+                doc.fillColor(vert).fontSize(20).font('Helvetica-Bold').text('Kapmaket', 50, 50);
                 doc.fillColor(gris).fontSize(9).font('Helvetica').text('Douala, PK14 — Cameroun', 50, 74);
             }
 
@@ -178,7 +178,7 @@ function genererFacturePdf(reservation) {
 
             doc.fillColor(gris).font('Helvetica').fontSize(8)
                 .text('Politique de retour : 7 jours après réception pour demander un retour (rubrique "Politique de retour" du site ou "Mes commandes").', 50, 745, { align: 'center', width: 495 });
-            doc.text('Merci pour votre confiance — CAMERTECH MARKET', 50, 760, { align: 'center', width: 495 });
+            doc.text('Merci pour votre confiance — Kapmaket', 50, 760, { align: 'center', width: 495 });
 
             doc.end();
         } catch (e) {

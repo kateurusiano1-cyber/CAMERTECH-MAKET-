@@ -1,7 +1,7 @@
 {
-  "name": "CAMERTECH MARKET — Admin",
-  "short_name": "CT Admin",
-  "description": "Espace d'administration CAMERTECH MARKET.",
+  "name": "Kapmaket — Admin",
+  "short_name": "KM Admin",
+  "description": "Espace d'administration Kapmaket.",
   "id": "/admin-cmr2025",
   "start_url": "/admin-cmr2025",
   "scope": "/admin-cmr2025",

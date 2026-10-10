@@ -48,11 +48,11 @@ module.exports = async (req, res) => {
 
     let prompt;
     if (modeLot) {
-      prompt = `Voici ${images.length} photos de ${images.length} PRODUITS TECH DIFFÉRENTS (une photo = un produit distinct, dans l'ordre exact où elles sont fournies), destinés à une boutique en ligne au Cameroun (CAMERTECH MARKET). Analyse chaque photo indépendamment. Réponds UNIQUEMENT avec un tableau JSON valide de ${images.length} objets, un par photo dans le même ordre, sans aucun texte autour, chaque objet exactement sous cette forme : ${champsJson}`;
+      prompt = `Voici ${images.length} photos de ${images.length} PRODUITS TECH DIFFÉRENTS (une photo = un produit distinct, dans l'ordre exact où elles sont fournies), destinés à une boutique en ligne au Cameroun (Kapmaket). Analyse chaque photo indépendamment. Réponds UNIQUEMENT avec un tableau JSON valide de ${images.length} objets, un par photo dans le même ordre, sans aucun texte autour, chaque objet exactement sous cette forme : ${champsJson}`;
     } else if (images.length > 1) {
-      prompt = `Regarde ces ${images.length} photos du MÊME produit tech (sous différents angles) destiné à une boutique en ligne au Cameroun (CAMERTECH MARKET). Combine les informations visibles sur toutes les photos. Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : ${champsJson}`;
+      prompt = `Regarde ces ${images.length} photos du MÊME produit tech (sous différents angles) destiné à une boutique en ligne au Cameroun (Kapmaket). Combine les informations visibles sur toutes les photos. Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : ${champsJson}`;
     } else {
-      prompt = `Regarde cette photo d'un produit tech destiné à une boutique en ligne au Cameroun (CAMERTECH MARKET). Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : ${champsJson}`;
+      prompt = `Regarde cette photo d'un produit tech destiné à une boutique en ligne au Cameroun (Kapmaket). Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : ${champsJson}`;
     }
 
     const parts = [

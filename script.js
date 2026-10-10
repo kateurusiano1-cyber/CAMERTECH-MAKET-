@@ -436,7 +436,7 @@ function ouvrirPresentationTelechargement() {
     const estIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const estAdmin = window.location.pathname.replace(/\//g, '') === 'admin-cmr2025';
 
-    const nom = estAdmin ? 'CT Admin' : 'CAMERTECH MARKET';
+    const nom = estAdmin ? 'KM Admin' : 'Kapmaket';
     const icone = estAdmin ? 'icon-admin-192.png' : 'icon-192.png';
     const degrade = estAdmin ? 'linear-gradient(135deg,#8e1c1c,#C62828 70%,#e35353)' : 'linear-gradient(135deg,var(--green-dark),var(--green) 70%,var(--green-light))';
     const sousTitre = estAdmin ? "Installe l'app admin pour une gestion plus rapide" : "Installe l'app pour une expérience plus rapide";
@@ -808,7 +808,7 @@ const I18N = {
         choisir: 'Choisir...', retrait_gratuit: '🏪 Retrait gratuit',
         rechercher_ph: '🔎 Rechercher un produit...', btn_connexion: '👤 Connexion',
         titre_flash: '⚡ Ventes Flash', titre_produits: '🛒 Nos Produits', chargement: 'Chargement...',
-        footer_sub: 'Votre boutique tech à Douala', footer_copy: '© {annee} CAMERTECH MARKET — Douala, Cameroun',
+        footer_sub: 'Votre boutique tech à Douala', footer_copy: '© {annee} Kapmaket — Douala, Cameroun',
         tab_connexion: 'Connexion', tab_inscription: 'Inscription', titre_connexion: '👤 Connexion',
         ph_email: 'Adresse email', ph_mdp: 'Mot de passe', btn_se_connecter: 'Se connecter',
         btn_mdp_oublie: 'Mot de passe oublié ?', ou: 'ou', btn_google: 'Continuer avec Google',
@@ -837,7 +837,7 @@ const I18N = {
         choisir: 'Choose...', retrait_gratuit: '🏪 Free pickup',
         rechercher_ph: '🔎 Search a product...', btn_connexion: '👤 Login',
         titre_flash: '⚡ Flash Sales', titre_produits: '🛒 Our Products', chargement: 'Loading...',
-        footer_sub: 'Your tech shop in Douala', footer_copy: '© {annee} CAMERTECH MARKET — Douala, Cameroon',
+        footer_sub: 'Your tech shop in Douala', footer_copy: '© {annee} Kapmaket — Douala, Cameroon',
         tab_connexion: 'Login', tab_inscription: 'Sign up', titre_connexion: '👤 Login',
         ph_email: 'Email address', ph_mdp: 'Password', btn_se_connecter: 'Log in',
         btn_mdp_oublie: 'Forgot password?', ou: 'or', btn_google: 'Continue with Google',
@@ -1552,7 +1552,7 @@ function setupChatWidget() {
         panel.style.display = ouvert ? 'none' : 'flex';
         if (!ouvert && !dejaOuvert) {
             dejaOuvert = true;
-            chatWidgetAjouterBulle("👋 Salut ! Je suis l'assistant CamerTech. Choisis une question ci-dessous, ou tape la tienne :", 'bot');
+            chatWidgetAjouterBulle("👋 Salut ! Je suis l'assistant Kapmaket. Choisis une question ci-dessous, ou tape la tienne :", 'bot');
             chatWidgetAfficherSuggestions();
         }
     };
@@ -1714,11 +1714,11 @@ async function afficherPopup() {
     }
     if (!popupMsg && !vitrine.length) return;
 
-    const msg = popupMsg?.message || '🎉 Bienvenue sur CAMERTECH MARKET !';
+    const msg = popupMsg?.message || '🎉 Bienvenue sur Kapmaket !';
     const titreVitrine = popupMsg?.produits_ids?.length ? '🛍️ Sélection du moment' : '⚡ Ventes Flash';
     const flyerHtml = popupMsg?.image_url
-        ? `<img src="${popupMsg.image_url}" alt="Offre spéciale CAMERTECH MARKET" ${popupMsg.lien ? `onclick="closePopup();window.open('${popupMsg.lien}','_blank')" style="cursor:pointer;` : 'style="'}width:100%;border-radius:12px;margin-bottom:14px;display:block">`
-        : `<img src="logo.png" alt="Logo CAMERTECH MARKET" style="height:55px;width:55px;border-radius:50%;margin-bottom:12px">`;
+        ? `<img src="${popupMsg.image_url}" alt="Offre spéciale Kapmaket" ${popupMsg.lien ? `onclick="closePopup();window.open('${popupMsg.lien}','_blank')" style="cursor:pointer;` : 'style="'}width:100%;border-radius:12px;margin-bottom:14px;display:block">`
+        : `<img src="logo-panier.png" alt="Logo Kapmaket" style="height:55px;width:55px;border-radius:50%;margin-bottom:12px">`;
     const prods = vitrine.length ? `<p style="font-weight:700;color:var(--orange-text);margin:14px 0 8px">${titreVitrine}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
         ${vitrine.map(p=>`<div onclick="closePopup();openModal('${p.id}')" style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px;cursor:pointer;text-align:center">
@@ -1732,7 +1732,7 @@ async function afficherPopup() {
     el.innerHTML = `<div style="background:var(--card);border-radius:18px;padding:28px;max-width:400px;width:100%;text-align:center;position:relative;max-height:90vh;overflow-y:auto">
         <button onclick="closePopup()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.9);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:0.9rem;color:var(--text);z-index:1">✕</button>
         ${flyerHtml}
-        ${!popupMsg?.image_url ? `<h2 style="font-family:Poppins,sans-serif;color:var(--green);margin-bottom:8px">CAMERTECH MARKET</h2>` : ''}
+        ${!popupMsg?.image_url ? `<h2 style="font-family:Poppins,sans-serif;color:var(--green);margin-bottom:8px">Kapmaket</h2>` : ''}
         <p style="color:var(--text2);line-height:1.6;margin-bottom:10px">${msg}</p>
         ${prods}
         <button onclick="closePopup()" style="background:var(--green);color:white;border:none;padding:12px 28px;border-radius:10px;font-weight:700;cursor:pointer;font-size:0.95rem;font-family:Inter,sans-serif">Explorer →</button>
@@ -1951,14 +1951,14 @@ function injecterSchemaCatalogue(products) {
                 "priceCurrency": "XAF",
                 "price": getPrix(p),
                 "availability": p.quantity > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-                "url": "https://camertechmarket.com/"
+                "url": "https://www.kapmaket.shop/"
             }
         }
     }));
     injecterJsonLd('schema-catalogue', {
         "@context": "https://schema.org",
         "@type": "ItemList",
-        "name": "Catalogue CAMERTECH MARKET",
+        "name": "Catalogue Kapmaket",
         "itemListElement": items
     });
 }
@@ -1978,8 +1978,8 @@ function injecterSchemaProduit(p) {
             "priceCurrency": "XAF",
             "price": getPrix(p),
             "availability": p.quantity > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-            "url": "https://camertechmarket.com/",
-            "seller": { "@type": "Organization", "name": "CAMERTECH MARKET" }
+            "url": "https://www.kapmaket.shop/",
+            "seller": { "@type": "Organization", "name": "Kapmaket" }
         }
     });
 }
@@ -2128,7 +2128,7 @@ async function openModal(productId) {
         img.onload = () => { img.style.opacity = '1'; };
         img.src = p.image_url; img.style.display = 'block';
     } else img.style.display = 'none';
-    const waMsg = encodeURIComponent(`Bonjour CAMERTECH MARKET, intéressé par : ${p.name} (${fmt(prix)} FCFA)`);
+    const waMsg = encodeURIComponent(`Bonjour Kapmaket, intéressé par : ${p.name} (${fmt(prix)} FCFA)`);
     $('prod-wa').href = `https://wa.me/${CONFIG.WA1}?text=${waMsg}`;
     // "Ajouter au panier" est maintenant disponible à tout le monde — la
     // connexion n'est demandée qu'au moment de payer (achat invité possible).
@@ -3071,7 +3071,7 @@ function afficherSucces(code, total, dateLimiteRetrait) {
     $('success-agence-msg').textContent = estLivraisonDomicile
         ? `🚚 Livraison à domicile prévue à ${userZone}. Nous vous contacterons pour organiser la remise. Besoin d'aide ? Contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')}.`
         : `Veuillez vous présenter à notre agence (${CONFIG.AGENCE_ADRESSE}) pour le retrait, ou contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')} pour organiser une expédition par agence de voyage si nécessaire.${dateLimiteRetrait ? ` ⏳ À retirer avant le ${new Date(dateLimiteRetrait).toLocaleDateString('fr-FR')} — passé ce délai, nous ne sommes plus garants de la marchandise.` : ''}`;
-    $('success-wa').href = `https://wa.me/${CONFIG.AGENCE_TEL}?text=${encodeURIComponent('Bonjour, je viens de payer ma commande '+code+' sur CAMERTECH MARKET.')}`;
+    $('success-wa').href = `https://wa.me/${CONFIG.AGENCE_TEL}?text=${encodeURIComponent('Bonjour, je viens de payer ma commande '+code+' sur Kapmaket.')}`;
     $('invite-nudge-success').style.display = (inviteInfo && !currentUser) ? 'block' : 'none';
     closeOverlay('panier-overlay');
     openOverlay('success-overlay');
@@ -3259,8 +3259,8 @@ function afficherLoginAdmin() {
     document.body.innerHTML=`
     <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f4f6f4;padding:20px;font-family:Inter,sans-serif">
         <div style="background:white;border-radius:18px;padding:36px;max-width:380px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.1)">
-            <img src="logo.png" alt="Logo CAMERTECH MARKET" style="height:70px;width:70px;border-radius:50%;margin-bottom:14px;border:3px solid #1a5c2a">
-            <h1 style="color:#1a5c2a;font-family:Poppins,sans-serif;margin-bottom:4px;font-size:1.3rem">CAMERTECH MARKET</h1>
+            <img src="logo-panier.png" alt="Logo Kapmaket" style="height:70px;width:70px;border-radius:50%;margin-bottom:14px;border:3px solid #1a5c2a">
+            <h1 style="color:#1a5c2a;font-family:Poppins,sans-serif;margin-bottom:4px;font-size:1.3rem">Kapmaket</h1>
             <p style="color:#666;font-size:0.85rem;margin-bottom:24px">Espace Administrateur</p>
             <div id="step1">
                 <input type="text" id="adm-id" placeholder="Identifiant admin" style="width:100%;background:#f4f6f4;border:1.5px solid #e8e8e8;padding:13px;color:#1a1a1a;border-radius:10px;margin-bottom:10px;font-size:0.95rem;font-family:Inter,sans-serif">
@@ -3298,7 +3298,7 @@ window.adminStep1 = async () => {
             return;
         }
         adminTicketTemp = data.ticket;
-        const msg=encodeURIComponent(`🔐 CAMERTECH MARKET\nCode admin : ${data.code}\nValide 5 min.`);
+        const msg=encodeURIComponent(`🔐 Kapmaket\nCode admin : ${data.code}\nValide 5 min.`);
         window.open(`https://wa.me/${data.wa}?text=${msg}`,'_blank');
         document.getElementById('step1').style.display='none';
         document.getElementById('step2').style.display='block';
@@ -3425,7 +3425,7 @@ async function afficherPanneauAdmin() {
     page.innerHTML=`
     <div style="font-family:Inter,sans-serif">
         <div style="background:linear-gradient(135deg,#1F6B3A,#164F2B);color:white;padding:16px 26px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:10;box-shadow:0 2px 14px rgba(0,0,0,0.12)">
-            <h1 style="font-family:Poppins,sans-serif;font-size:1.1rem;margin:0;font-weight:600;letter-spacing:0.2px">⚙️ CAMERTECH MARKET Admin</h1>
+            <h1 style="font-family:Poppins,sans-serif;font-size:1.1rem;margin:0;font-weight:600;letter-spacing:0.2px">⚙️ Kapmaket Admin</h1>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button onclick="showTab('tab-dash')" class="adm-tab active" id="tb-dash">📊 Dashboard</button>
                 <button onclick="showTab('tab-prods')" class="adm-tab" id="tb-prods">📦 Produits</button>
@@ -4302,7 +4302,7 @@ window.exporterCommandesCsv = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `commandes_camertech_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `commandes_kapmaket_${new Date().toISOString().slice(0,10)}.csv`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     notifier(`✅ ${data.length} commande(s) exportée(s).`, 'succes');
