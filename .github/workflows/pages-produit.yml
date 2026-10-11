@@ -1,0 +1,56 @@
+# Génère les pages produit (une page par produit, pour Google) et le plan de site, puis les
+# enregistre dans le dépôt : Vercel redéploie alors le site, comme pour n'importe quelle modification.
+#
+# Quand il se lance :
+#   - tous les jours à 03h00 (UTC), pour suivre les produits ajoutés, modifiés ou retirés ;
+#   - à chaque modification de index.html ou du générateur (les pages produit reprennent index.html) ;
+#   - à la demande : onglet « Actions » > « Pages produit » > « Run workflow ».
+#
+# Sécurité : le générateur ne fait jamais échouer le flux ; s'il ne peut pas lire la base
+# (réseau, base indisponible), il ne change RIEN et les pages existantes restent en place.
+name: Pages produit
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'scripts/generer-pages.js'
+      - '.github/workflows/pages-produit.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-produit
+  cancel-in-progress: false
+
+jobs:
+  generer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Générer les pages produit et le plan de site
+        run: node scripts/generer-pages.js
+
+      - name: Enregistrer les changements (seulement s'il y en a)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A produit sitemap.xml
+          if git diff --cached --quiet; then
+            echo "Aucun changement : rien à enregistrer."
+          else
+            git commit -m "Pages produit : mise à jour automatique"
+            git push
+          fi
