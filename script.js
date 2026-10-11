@@ -1024,7 +1024,9 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
     return { ok: false, pending: true };
 }
 
-function traduireErreurFirebase(code) {
+function traduireErreurFirebase(erreur) {
+    // Accepte l'objet erreur (recommandé) ou directement un code.
+    const code = typeof erreur === 'string' ? erreur : (erreur && erreur.code);
     const map = {
         'auth/invalid-email': 'Adresse email invalide',
         'auth/user-not-found': 'Aucun compte avec cet email',
@@ -1033,9 +1035,19 @@ function traduireErreurFirebase(code) {
         'auth/email-already-in-use': 'Un compte existe déjà avec cet email',
         'auth/weak-password': 'Mot de passe trop court (6 min)',
         'auth/too-many-requests': 'Trop de tentatives, réessaie plus tard',
-        'auth/popup-closed-by-user': 'Fenêtre Google fermée avant la fin'
+        'auth/popup-closed-by-user': 'Fenêtre Google fermée avant la fin',
+        'auth/network-request-failed': 'Connexion internet instable, réessaie',
+        'auth/popup-blocked': 'Fenêtre Google bloquée par le navigateur : autorise les popups',
+        'auth/unauthorized-domain': "Cette adresse du site n'est pas autorisée pour la connexion Google",
+        'auth/operation-not-supported-in-this-environment': 'Ce navigateur ne permet pas cette connexion, essaie avec un autre',
+        'app/module-non-charge': "Le service de connexion ne s'est pas chargé : vérifie ta connexion internet puis recharge la page"
     };
-    return map[code] || 'Une erreur est survenue, réessaie';
+    if (map[code]) return map[code];
+    if (code && code.indexOf('auth/requests-from-referer') === 0) return 'Cette adresse du site est bloquée pour la connexion (clé API) [' + code + ']';
+    // Erreur inconnue : on affiche un court code technique pour pouvoir la diagnostiquer.
+    const detail = code || (erreur && erreur.name) || 'erreur';
+    const msg = (!code && erreur && erreur.message) ? ' : ' + String(erreur.message).slice(0, 80) : '';
+    return 'Une erreur est survenue, réessaie (' + detail + msg + ')';
 }
 
 function setupAuth() {
@@ -1064,13 +1076,27 @@ function setupAuth() {
         if (!email.includes('@')) { err.textContent = '❌ Email invalide'; return; }
         if (!mdp) { err.textContent = '❌ Mot de passe requis'; return; }
         $('btn-login').textContent = 'Connexion...';
+        let cred = null;
         try {
-            const cred = await window.fbSignInWithEmail(window.firebaseAuth, email, mdp);
-            const r = await creerOuChargerProfil(cred.user);
-            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
-            else if (!r.pending) { err.textContent = '❌ Profil introuvable : ' + (r.error?.message || 'contacte le support'); }
+            // Le module Firebase est chargé depuis Internet : s'il n'a pas pu l'être
+            // (réseau mobile instable), on le dit clairement au lieu d'une erreur vague.
+            if (typeof window.fbSignInWithEmail !== 'function') throw { code: 'app/module-non-charge' };
+            cred = await window.fbSignInWithEmail(window.firebaseAuth, email, mdp);
         } catch (e) {
-            err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+            console.error('Connexion e-mail :', e);
+            err.textContent = '❌ ' + traduireErreurFirebase(e);
+        }
+        if (cred) {
+            try {
+                const r = await creerOuChargerProfil(cred.user);
+                if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+                else if (!r.pending) { err.textContent = '❌ Profil introuvable : ' + (r.error?.message || r.error || 'contacte le support'); }
+            } catch (e) {
+                // Connexion réussie mais un problème est survenu juste après : un rechargement
+                // de la page reconnecte automatiquement le client.
+                console.error('Chargement du profil après connexion :', e);
+                err.textContent = '❌ Connecté, mais le chargement du profil a échoué (' + String((e && e.message) || e).slice(0, 80) + '). Recharge la page.';
+            }
         }
         $('btn-login').textContent = 'Se connecter';
     };
@@ -1084,7 +1110,7 @@ function setupAuth() {
             if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
             else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
         } catch (e) {
-            err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+            err.textContent = '❌ ' + traduireErreurFirebase(e);
         }
     };
 
@@ -1099,7 +1125,7 @@ function setupAuth() {
             if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
             else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
         } catch (e) {
-            err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+            err.textContent = '❌ ' + traduireErreurFirebase(e);
         }
     };
 
@@ -1136,7 +1162,7 @@ function setupAuth() {
             else { err.textContent = '❌ Compte créé mais profil non enregistré : ' + (r.error?.message || 'contacte le support'); }
         } catch (e) {
             $('btn-register').textContent = 'Créer mon compte';
-            err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+            err.textContent = '❌ ' + traduireErreurFirebase(e);
         }
     };
 
@@ -1649,7 +1675,7 @@ async function envoyerLienReset() {
         err.style.color = 'var(--success)';
         err.textContent = '✅ Email envoyé à ' + email + ' — clique sur le lien pour choisir un nouveau mot de passe. Tu ne le vois pas dans quelques minutes ? Pense à vérifier tes spams/indésirables.';
     } catch (e) {
-        err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+        err.textContent = '❌ ' + traduireErreurFirebase(e);
     }
     $('btn-reset-envoyer').textContent = 'Envoyer le lien'; $('btn-reset-envoyer').disabled = false;
 }
@@ -1684,7 +1710,7 @@ async function confirmerNouveauMdpDepuisEmail() {
         notifier('✅ Mot de passe changé ! Tu peux te connecter.', 'succes');
         openOverlay('auth-overlay');
     } catch (e) {
-        err.textContent = '❌ ' + traduireErreurFirebase(e.code);
+        err.textContent = '❌ ' + traduireErreurFirebase(e);
     }
     $('btn-confirm-reset').textContent = 'Valider le nouveau mot de passe'; $('btn-confirm-reset').disabled = false;
 }
@@ -4324,7 +4350,7 @@ window.adminResetMdp = async (userId, nom, email) => {
         await window.fbSendPasswordResetEmail(window.firebaseAuth, email);
         notifier(`✅ Email de réinitialisation envoyé à ${email} (pense à lui dire de vérifier ses spams si rien n'arrive).`, 'succes');
     } catch (e) {
-        notifier('❌ ' + traduireErreurFirebase(e.code), 'erreur');
+        notifier('❌ ' + traduireErreurFirebase(e), 'erreur');
     }
 };
 window.adminSupprimerUtilisateur = async (userId, nom) => {
