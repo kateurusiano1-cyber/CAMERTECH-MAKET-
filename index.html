@@ -66,9 +66,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <!-- Firebase volontairement figé sur 12.16.0 : les versions 12.17.0 et 12.17.1 ont un bug connu
+         (« Database is closing/hidden », firebase-js-sdk n°10264) qui fait échouer la connexion sur
+         mobile dès que la page passe en arrière-plan (clavier, gestionnaire de mots de passe, PWA).
+         À ne remonter de version qu'après avoir testé la connexion sur téléphone. -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
         const firebaseConfig = {
             apiKey: "AIzaSyCTIOt_TEhQnfhIkLiDIu2HjjhSzAMH9iE",
             authDomain: "camertech-maket.firebaseapp.com",

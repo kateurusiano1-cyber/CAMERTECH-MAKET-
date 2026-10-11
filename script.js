@@ -1024,6 +1024,21 @@ async function creerOuChargerProfil(fbUser, extra = {}) {
     return { ok: false, pending: true };
 }
 
+// Filet de sécurité : si le stockage interne de Firebase est brièvement fermé par le navigateur
+// (« Database is closing/hidden », fréquent sur mobile), on réessaie UNE fois après un court délai.
+// Réservé aux opérations sans effet de bord (la connexion), jamais à la création de compte.
+async function avecReessaiBase(operation) {
+    try {
+        return await operation();
+    } catch (e) {
+        if (e && /Database is closing\/hidden/i.test(String((e && e.message) || e))) {
+            await new Promise(r => setTimeout(r, 700));
+            return await operation();
+        }
+        throw e;
+    }
+}
+
 function traduireErreurFirebase(erreur) {
     // Accepte l'objet erreur (recommandé) ou directement un code.
     const code = typeof erreur === 'string' ? erreur : (erreur && erreur.code);
@@ -1081,7 +1096,7 @@ function setupAuth() {
             // Le module Firebase est chargé depuis Internet : s'il n'a pas pu l'être
             // (réseau mobile instable), on le dit clairement au lieu d'une erreur vague.
             if (typeof window.fbSignInWithEmail !== 'function') throw { code: 'app/module-non-charge' };
-            cred = await window.fbSignInWithEmail(window.firebaseAuth, email, mdp);
+            cred = await avecReessaiBase(() => window.fbSignInWithEmail(window.firebaseAuth, email, mdp));
         } catch (e) {
             console.error('Connexion e-mail :', e);
             err.textContent = '❌ ' + traduireErreurFirebase(e);
