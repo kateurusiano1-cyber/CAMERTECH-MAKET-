@@ -315,12 +315,44 @@ const getPrix = p => prixCharme((p.promo_active || p.flash_active) && p.promo_pr
 // centaine (5000, 12000, 800...) est affiché et facturé 1 FCFA en dessous
 // (4999, 11999, 799...). Ne touche jamais aux prix déjà "cassés" par
 // l'admin (ex: 4750 reste 4750) — uniquement les comptes ronds.
-// ⚠️ Cette fonction existe AUSSI côté serveur (api/preparer-paiement.js,
-// prixReel) et DOIT rester identique des deux côtés : le serveur revérifie
-// et encaisse exactement ce montant, jamais celui affiché au navigateur.
+// Prix « charme » : sert UNIQUEMENT à l'AFFICHAGE des fiches produit (500 -> 499).
+// Le serveur (api/preparer-paiement.js) encaisse toujours le prix réel de la base ;
+// il n'utilise jamais ce calcul ni un prix envoyé par le navigateur.
 function prixCharme(prix) {
     const p = Math.round(prix || 0);
     return (p > 0 && p % 100 === 0) ? p - 1 : p;
+}
+
+// ===== ADRESSE DE CHAQUE PRODUIT (/produit/<nom>-<id>) =====
+// ⚠️ Ces règles existent AUSSI dans scripts/generer-pages.js (qui fabrique les pages
+// produit à chaque déploiement) et DOIVENT rester identiques des deux côtés.
+function idCourtProduit(id) {
+    return String(id).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(-8) || 'x';
+}
+function slugProduit(p) {
+    const base = String(p.name || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/&/g, ' et ')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60)
+        .replace(/-+$/, '') || 'produit';
+    return base + '-' + idCourtProduit(p.id);
+}
+// Produit désigné par l'adresse de la page (ex : /produit/powerbank-oraimo-27000-mah-3fa9c1d2), s'il existe.
+function produitDepuisURL() {
+    const m = window.location.pathname.match(/^\/produit\/([^\/]+)\/?$/);
+    if (!m) return null;
+    const court = m[1].split('-').pop();
+    return allProducts.find(p => idCourtProduit(p.id) === court) || null;
+}
+// À l'arrivée sur /produit/..., ouvre la fiche du produit ; adresse inconnue : retour à l'accueil.
+function ouvrirProduitDepuisURL() {
+    if (window.location.pathname.indexOf('/produit/') !== 0) return;
+    const p = produitDepuisURL();
+    if (p) openModal(p.id);
+    else window.history.replaceState(null, '', '/');
 }
 // Prix RÉELLEMENT encaissé = celui du serveur (api/preparer-paiement.js) : prix en
 // base arrondi, SANS l'effet "charme". getPrix() ne sert qu'à l'AFFICHAGE des
@@ -437,7 +469,7 @@ function ouvrirPresentationTelechargement() {
     const estAdmin = window.location.pathname.replace(/\//g, '') === 'admin-cmr2025';
 
     const nom = estAdmin ? 'KM Admin' : 'Kapmaket';
-    const icone = estAdmin ? 'icon-admin-192.png' : 'icon-192.png';
+    const icone = estAdmin ? '/icon-admin-192.png' : '/icon-192.png';
     const degrade = estAdmin ? 'linear-gradient(135deg,#8e1c1c,#C62828 70%,#e35353)' : 'linear-gradient(135deg,var(--green-dark),var(--green) 70%,var(--green-light))';
     const sousTitre = estAdmin ? "Installe l'app admin pour une gestion plus rapide" : "Installe l'app pour une expérience plus rapide";
 
@@ -667,7 +699,10 @@ const hide = id => { const el=$(id); if(el) el.style.display='none'; };
 const showFlex = id => { const el=$(id); if(el) el.style.display='flex'; };
 
 function openOverlay(id) { const el=$(id); if(el){el.style.display='flex'; document.body.style.overflow='hidden';} }
-function closeOverlay(id) { const el=$(id); if(el){el.style.display='none'; document.body.style.overflow='';} }
+function closeOverlay(id) {
+    const el=$(id); if(el){el.style.display='none'; document.body.style.overflow='';}
+    if (id === 'prod-overlay' && window.location.pathname.indexOf('/produit/') === 0) window.history.replaceState(null, '', '/');
+}
 
 // ===== DOM READY =====
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1759,7 +1794,7 @@ async function afficherPopup() {
     const titreVitrine = popupMsg?.produits_ids?.length ? '🛍️ Sélection du moment' : '⚡ Ventes Flash';
     const flyerHtml = popupMsg?.image_url
         ? `<img src="${popupMsg.image_url}" alt="Offre spéciale Kapmaket" ${popupMsg.lien ? `onclick="closePopup();window.open('${popupMsg.lien}','_blank')" style="cursor:pointer;` : 'style="'}width:100%;border-radius:12px;margin-bottom:14px;display:block">`
-        : `<img src="logo-panier.png" alt="Logo Kapmaket" style="height:55px;width:55px;border-radius:50%;margin-bottom:12px">`;
+        : `<img src="/logo-panier.png" alt="Logo Kapmaket" style="height:55px;width:55px;border-radius:50%;margin-bottom:12px">`;
     const prods = vitrine.length ? `<p style="font-weight:700;color:var(--orange-text);margin:14px 0 8px">${titreVitrine}</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
         ${vitrine.map(p=>`<div onclick="closePopup();openModal('${p.id}')" style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px;cursor:pointer;text-align:center">
@@ -1957,6 +1992,7 @@ async function fetchProducts() {
         chargerFlash(allProducts);
         injecterSchemaCatalogue(allProducts);
         chargerFlashCombo();
+        ouvrirProduitDepuisURL();
         const { data: slidesData } = await db.from('bannières').select('*').eq('type', 'slider').eq('actif', true);
         initSlider(slidesData);
     } catch(e) { console.error(e); renderProducts([]); initSlider([]); }
@@ -1992,7 +2028,7 @@ function injecterSchemaCatalogue(products) {
                 "priceCurrency": "XAF",
                 "price": getPrix(p),
                 "availability": p.quantity > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-                "url": "https://www.kapmaket.shop/"
+                "url": "https://www.kapmaket.shop/produit/" + slugProduit(p)
             }
         }
     }));
@@ -2019,7 +2055,7 @@ function injecterSchemaProduit(p) {
             "priceCurrency": "XAF",
             "price": getPrix(p),
             "availability": p.quantity > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-            "url": "https://www.kapmaket.shop/",
+            "url": "https://www.kapmaket.shop/produit/" + slugProduit(p),
             "seller": { "@type": "Organization", "name": "Kapmaket" }
         }
     });
@@ -2060,7 +2096,7 @@ function renderProducts(products) {
             </div>
             <div class="card-body">
                 <div class="card-cat">${catLabel(p.category)}</div>
-                <div class="card-name">${txt.name}</div>
+                <div class="card-name"><a class="card-lien" href="/produit/${slugProduit(p)}" onclick="if(!event.ctrlKey&&!event.metaKey&&!event.shiftKey)event.preventDefault()">${txt.name}</a></div>
                 <div class="card-qty">${currentLang==='en'?'Qty':'Qté'} : ${p.quantity}</div>
                 ${hasPromo ? `<div class="prix-barre-sm">${fmt(p.resale_price)} FCFA</div>` : ''}
                 <div class="card-price ${hasPromo?'promo':''}">${fmt(prix)} FCFA</div>
@@ -2177,6 +2213,8 @@ async function openModal(productId) {
     $('prod-login-hint').style.display='none';
     $('feedback-produit-zone').innerHTML = htmlFeedbackProduit(p.id, p.category);
     openOverlay('prod-overlay');
+    const urlProduit = '/produit/' + slugProduit(p);
+    if (window.location.pathname !== urlProduit) window.history.replaceState(null, '', urlProduit);
     chargerCrossSell(p);
     chargerAvis(p.id);
     injecterSchemaProduit(p);
@@ -3300,7 +3338,7 @@ function afficherLoginAdmin() {
     document.body.innerHTML=`
     <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f4f6f4;padding:20px;font-family:Inter,sans-serif">
         <div style="background:white;border-radius:18px;padding:36px;max-width:380px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.1)">
-            <img src="logo-panier.png" alt="Logo Kapmaket" style="height:70px;width:70px;border-radius:50%;margin-bottom:14px;border:3px solid #1a5c2a">
+            <img src="/logo-panier.png" alt="Logo Kapmaket" style="height:70px;width:70px;border-radius:50%;margin-bottom:14px;border:3px solid #1a5c2a">
             <h1 style="color:#1a5c2a;font-family:Poppins,sans-serif;margin-bottom:4px;font-size:1.3rem">Kapmaket</h1>
             <p style="color:#666;font-size:0.85rem;margin-bottom:24px">Espace Administrateur</p>
             <div id="step1">

@@ -734,3 +734,9 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
     0%, 100% { transform: scale(1); box-shadow: 0 8px 22px rgba(255,107,26,0.4); }
     50% { transform: scale(1.035); box-shadow: 0 10px 28px rgba(255,107,26,0.6); }
 }
+
+/* Texte réservé aux robots et lecteurs d'écran (titre principal, contenu des pages produit). */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+           clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+/* Lien vers la page du produit (utile aux robots) : garde l'apparence du nom du produit. */
+.card-lien { color: inherit; text-decoration: none; }
