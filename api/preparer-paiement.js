@@ -190,7 +190,11 @@ module.exports = async (req, res) => {
             const { data, error } = await supabase
                 .from('reservations').select('*').eq('utilisateur_id', user.id).order('created_at', { ascending: false });
             if (error) throw error;
-            return res.status(200).json({ success: true, commandes: (data || []).filter(r => !r.masquee_client) });
+            // Les champs internes (livreur, identifiants Telegram, drapeau de vérification)
+            // ne sont jamais renvoyés au client.
+            const publiques = (data || []).filter(r => !r.masquee_client)
+                .map(({ livreur_nom, livreur_telegram_id, telegram_message_id, paiement_a_verifier, ...reste }) => reste);
+            return res.status(200).json({ success: true, commandes: publiques });
         }
 
         let resa;

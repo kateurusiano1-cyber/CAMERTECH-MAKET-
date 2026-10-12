@@ -24,6 +24,8 @@
 const { createClient } = require('@supabase/supabase-js');
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
 const { envoyerPushUtilisateur } = require('./_lib/envoyerPush');
+const { synchroniserStatut } = require('./_lib/telegram');
+const CONFIG = require('../config.js');
 
 const TABLE_REELLE = { bannieres: 'bannières' }; // nom réel de la table en base
 
@@ -142,6 +144,16 @@ module.exports = async (req, res) => {
                     try { await envoyerPushUtilisateur(supabase, data.utilisateur_id, { ...msg, url: '/' }); }
                     catch (e) { console.error('Erreur push statut:', e.message); }
                 }
+            }
+            // Garde le message du groupe Telegram à jour quand l'admin termine ou
+            // annule une commande depuis le tableau de bord (jamais bloquant).
+            if (data && (data.statut === 'livre' || data.statut === 'annule')) {
+                try {
+                    if (data.statut === 'livre' && data.etape_livraison !== 'livree') {
+                        await supabase.from('reservations').update({ etape_livraison: 'livree', livre_le: new Date().toISOString() }).eq('id', id);
+                    }
+                    await synchroniserStatut(data, CONFIG.ZONES_COUVERTES);
+                } catch (e) { console.error('Synchro Telegram:', e.message); }
             }
             return res.status(200).json({ data });
         }

@@ -13,9 +13,14 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { envoyerPushUtilisateur, envoyerPushAdmins } = require('./_lib/envoyerPush');
+const { notifierCommandePayee, notifierPaiementAVerifier } = require('./_lib/telegram');
 const CONFIG = require('../config.js');
 
 module.exports = async (req, res) => {
+    // Webhook Telegram (boutons du groupe) : même fonction, autre adresse, pour rester
+    // sous la limite de 12 fonctions de Vercel Hobby. Chargé seulement si besoin.
+    if (req.query?.canal === 'telegram') return require('./_lib/telegramWebhook')(req, res);
+
     res.setHeader('Content-Type', 'application/json');
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -62,6 +67,19 @@ module.exports = async (req, res) => {
             // exactement au montant réel de la commande en base.
             if (!montantRecu || Math.round(montantRecu) !== Math.round(resa.total)) {
                 console.error(`⚠️ ALERTE écart de montant sur ${orderId} : reçu=${montantRecu} attendu=${resa.total} — commande NON validée automatiquement`);
+                // Prévient l'équipe (groupe Telegram + notification) au lieu de
+                // laisser l'incident seulement dans les journaux. Une seule
+                // alerte par commande (les doublons du webhook sont ignorés).
+                if (!resa.paiement_a_verifier) {
+                    await Promise.allSettled([
+                        notifierPaiementAVerifier(supabase, resa, { montantRecu, refFournisseur }),
+                        envoyerPushAdmins(supabase, {
+                            titre: '⚠️ Paiement à vérifier',
+                            corps: `${resa.code} — attendu ${Math.round(resa.total)} F, reçu ${montantRecu ? Math.round(montantRecu) + ' F' : 'inconnu'}`,
+                            url: '/admin-cmr2025'
+                        })
+                    ]);
+                }
                 return res.status(200).json({ received: true, warning: 'amount_mismatch' });
             }
             // Date limite de retrait (7 jours), uniquement pour les commandes
@@ -78,6 +96,10 @@ module.exports = async (req, res) => {
             // (Envoi automatique de la facture par email désactivé pour
             // l'instant — reste disponible via le bouton de téléchargement
             // côté client et côté admin.)
+            // Alerte du groupe Telegram (admins + livreurs), lancée en même temps
+            // que les notifications push ci-dessous pour ne rien ralentir.
+            const promesseTelegram = notifierCommandePayee(supabase, resa, { retrait: estRetraitAgence, dateLimiteRetrait })
+                .catch((e) => { console.error('Erreur alerte Telegram:', e.message); return false; });
             try {
                 await envoyerPushUtilisateur(supabase, resa.utilisateur_id, {
                     titre: '✅ Commande validée !',
@@ -96,6 +118,7 @@ module.exports = async (req, res) => {
                     url: '/admin-cmr2025'
                 });
             } catch (e) { console.error('Erreur push admins:', e.message); }
+            await promesseTelegram;
             // Crédit des points de fidélité (1 point / 1000 FCFA), jamais
             // pour un achat invité (pas de compte = pas d'historique de
             // points, comme déjà documenté). Ne bloque jamais la validation

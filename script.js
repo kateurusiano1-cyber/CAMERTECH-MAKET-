@@ -1581,6 +1581,7 @@ function chatWidgetAjouterBulle(texte, type) {
     bulle.textContent = texte;
     zone.appendChild(bulle);
     zone.scrollTop = zone.scrollHeight;
+    return bulle;
 }
 
 function chatWidgetAfficherSuggestions() {
@@ -1598,26 +1599,98 @@ function chatWidgetAfficherSuggestions() {
     zone.scrollTop = zone.scrollHeight;
 }
 
-function chatWidgetPoserQuestion(texteAffiche, itemTrouve) {
+// Mémoire courte de la conversation (envoyée à l'assistant pour qu'il comprenne les suites de questions).
+const chatWidgetHistorique = [];
+let chatWidgetOccupe = false;
+
+function chatWidgetLienWhatsApp(texteMessage, libelle) {
+    const zone = $('chat-widget-messages');
+    const lien = document.createElement('a');
+    lien.href = `https://wa.me/${CONFIG.WA1}?text=${encodeURIComponent(texteMessage)}`;
+    lien.target = '_blank';
+    lien.rel = 'noopener';
+    lien.className = 'cw-suggestion-btn';
+    lien.style.display = 'block';
+    lien.style.textAlign = 'center';
+    lien.style.textDecoration = 'none';
+    lien.textContent = libelle || '📱 Continuer sur WhatsApp';
+    zone.appendChild(lien);
+    zone.scrollTop = zone.scrollHeight;
+}
+
+// Résumé prêt à envoyer à l'équipe : le client n'a pas à tout réexpliquer.
+function chatWidgetResume() {
+    const lignes = chatWidgetHistorique.slice(-6).map(t => (t.role === 'user' ? 'Client : ' : 'Assistant : ') + t.texte);
+    return ('Bonjour Kapmaket, je viens de l\'assistant du site. Voici notre échange :\n' + lignes.join('\n')).slice(0, 900);
+}
+
+function chatWidgetAfficherProduits(cartes) {
+    const zone = $('chat-widget-messages');
+    (cartes || []).forEach(p => {
+        const a = document.createElement('a');
+        a.className = 'cw-produit';
+        a.href = p.url;
+        const nom = document.createElement('span');
+        nom.className = 'cw-produit-nom';
+        nom.textContent = p.nom;
+        const prix = document.createElement('span');
+        prix.className = 'cw-produit-prix';
+        prix.textContent = fmt(p.prix) + ' FCFA' + (p.enStock ? '' : ' · indisponible');
+        a.appendChild(nom);
+        a.appendChild(prix);
+        zone.appendChild(a);
+    });
+    zone.scrollTop = zone.scrollHeight;
+}
+
+// Appelle l'assistant (Gemini, côté serveur). En cas de souci : réponse de la FAQ si on en a une, sinon WhatsApp.
+async function chatWidgetDemanderIA(texte, itemFaq) {
+    chatWidgetOccupe = true;
+    const bulle = chatWidgetAjouterBulle('…', 'bot');
+    const secours = () => {
+        if (itemFaq) { bulle.textContent = itemFaq.reponse; chatWidgetHistorique.push({ role: 'bot', texte: itemFaq.reponse }); return; }
+        bulle.textContent = "Je n'ai pas de réponse toute prête pour ça — le plus simple, c'est de nous écrire directement 👇";
+        chatWidgetLienWhatsApp(chatWidgetResume());
+    };
+    try {
+        const ctrl = new AbortController();
+        const minuteur = setTimeout(() => ctrl.abort(), 14000);
+        const r = await fetch('/api/recherche-photo?mode=assistant', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: texte, historique: chatWidgetHistorique.slice(-7, -1) }),
+            signal: ctrl.signal
+        });
+        clearTimeout(minuteur);
+        const j = await r.json().catch(() => ({}));
+        if (!j.reponse) { secours(); return; }
+        bulle.textContent = j.reponse;
+        chatWidgetHistorique.push({ role: 'bot', texte: j.reponse });
+        if (j.repli) { chatWidgetLienWhatsApp(chatWidgetResume()); return; }
+        chatWidgetAfficherProduits(j.produits);
+        if (j.humain) chatWidgetLienWhatsApp(chatWidgetResume(), '📱 Parler à l\'équipe sur WhatsApp');
+    } catch (e) {
+        secours();
+    } finally {
+        chatWidgetOccupe = false;
+        const zone = $('chat-widget-messages');
+        zone.scrollTop = zone.scrollHeight;
+    }
+}
+
+// itemTrouve : réponse de la FAQ (bouton de suggestion ou mot-clé reconnu). Sinon : l'assistant.
+function chatWidgetPoserQuestion(texteAffiche, itemTrouve, forcerIA) {
+    if (chatWidgetOccupe) return;
     chatWidgetAjouterBulle(texteAffiche, 'user');
-    setTimeout(() => {
-        if (itemTrouve) {
+    chatWidgetHistorique.push({ role: 'user', texte: texteAffiche });
+    if (itemTrouve && !forcerIA) {
+        setTimeout(() => {
             chatWidgetAjouterBulle(itemTrouve.reponse, 'bot');
-        } else {
-            chatWidgetAjouterBulle("Je n'ai pas de réponse toute prête pour ça — le plus simple, c'est de nous écrire directement 👇", 'bot');
-            const zone = $('chat-widget-messages');
-            const lien = document.createElement('a');
-            lien.href = `https://wa.me/${CONFIG.WA1}?text=${encodeURIComponent(texteAffiche)}`;
-            lien.target = '_blank';
-            lien.className = 'cw-suggestion-btn';
-            lien.style.display = 'block';
-            lien.style.textAlign = 'center';
-            lien.style.textDecoration = 'none';
-            lien.textContent = '📱 Continuer sur WhatsApp';
-            zone.appendChild(lien);
-            zone.scrollTop = zone.scrollHeight;
-        }
-    }, 350);
+            chatWidgetHistorique.push({ role: 'bot', texte: itemTrouve.reponse });
+        }, 350);
+        return;
+    }
+    chatWidgetDemanderIA(texteAffiche, itemTrouve);
 }
 
 function setupChatWidget() {
@@ -1639,7 +1712,11 @@ function setupChatWidget() {
         const texte = input.value.trim();
         if (!texte) return;
         input.value = '';
-        chatWidgetPoserQuestion(texte, chatWidgetTrouverReponse(texte));
+        const trouve = chatWidgetTrouverReponse(texte);
+        const nbMots = texte.split(/\s+/).length;
+        // Question courte reconnue par la FAQ : réponse instantanée et gratuite.
+        // Phrase longue ou non reconnue : l'assistant (qui connaît le catalogue).
+        chatWidgetPoserQuestion(texte, trouve, nbMots > 7);
     };
     $('chat-widget-send').onclick = envoyer;
     $('chat-widget-input').onkeydown = e => { if (e.key === 'Enter') envoyer(); };
@@ -4256,7 +4333,7 @@ function renderCmdsAdmin(data) {
             <td style="padding:10px;color:#888;font-size:0.78rem">📍${r.zone_livraison||'—'}</td>
             <td style="padding:10px;font-weight:600">${fmt(r.total)} F</td>
             <td style="padding:10px;color:#888;font-size:0.75rem">${new Date(r.created_at).toLocaleDateString('fr-FR')} à ${new Date(r.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</td>
-            <td style="padding:10px"><span style="padding:3px 10px;border-radius:8px;font-size:0.7rem;font-weight:700;background:${r.statut==='en attente'?'#fff8f0':r.statut==='valide'?'#f0fff4':'#fff0f0'};color:${r.statut==='en attente'?'#E8792E':r.statut==='valide'?'#3FA66B':'#D9534F'}">${r.statut}</span></td>
+            <td style="padding:10px"><span style="padding:3px 10px;border-radius:8px;font-size:0.7rem;font-weight:700;background:${r.statut==='en attente'?'#fff8f0':r.statut==='valide'?'#f0fff4':'#fff0f0'};color:${r.statut==='en attente'?'#E8792E':r.statut==='valide'?'#3FA66B':'#D9534F'}>${r.statut}</span>${r.paiement_a_verifier ? '<br><span style="color:#D9534F;font-size:0.7rem;font-weight:700">⚠️ paiement à vérifier</span>' : ''}${r.livreur_nom ? '<br><span style="color:#888;font-size:0.7rem">🚚 ' + echapperHtml(r.livreur_nom) + ({pris:' (a pris)',en_route:' (en route)',probleme:' (problème)',livree:' (livré)'}[r.etape_livraison] || '') + '</span>' : ''}</td>
             <td style="padding:10px"><select onchange="changerStatutAdmin('${r.id}',this.value)" style="background:#f4f6f4;color:#1a1a1a;border:1px solid #eef0ee;border-radius:6px;padding:5px;font-size:0.75rem">
                 <option value="">Changer...</option>
                 <option value="en attente">⏳ En attente</option>

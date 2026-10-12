@@ -10,6 +10,10 @@ const { circuitOuvert, signalerEchec, signalerSucces } = require('./_lib/circuit
 const { tropDeTentatives, signalerEchecTentative } = require('./_lib/rateLimit');
 
 module.exports = async (req, res) => {
+    // Assistant IA de la bulle d'aide : même fonction, autre adresse, pour rester sous la
+    // limite de 12 fonctions de Vercel Hobby. Chargé seulement si besoin.
+    if (req.query?.mode === 'assistant') return require('./_lib/assistantHandler')(req, res);
+
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Content-Type', 'application/json');

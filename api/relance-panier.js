@@ -24,9 +24,9 @@ module.exports = async (req, res) => {
         const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
         const seuil = new Date(Date.now() - 60 * 1000).toISOString(); // plus d'1 minute
 
-        const { data: paniers, error } = await supabase
+        let { data: paniers, error } = await supabase
             .from('reservations')
-            .select('id, code, total, utilisateur_id')
+            .select('*')
             .eq('statut', 'paiement_en_cours')
             .eq('relance_envoyee', false)
             .not('utilisateur_id', 'is', null)
@@ -36,9 +36,16 @@ module.exports = async (req, res) => {
         if (error) throw error;
         if (!paniers?.length) return res.status(200).json({ traitees: 0 });
 
+        // Un paiement dont le montant ne correspondait pas est « à vérifier » :
+        // le client a peut-être DÉJÀ payé, on ne lui demande donc surtout pas
+        // de repayer. On marque quand même la relance comme traitée pour que
+        // ces commandes ne bloquent pas la file (limite de 50 par passage).
+        const aVerifier = paniers.filter((p) => p.paiement_a_verifier);
+        paniers = paniers.filter((p) => !p.paiement_a_verifier);
+
         // Envoi des notifications en parallèle (au lieu de séquentiel) — plus
         // rapide et une notification lente/en échec ne bloque pas les autres.
-        const idsTraites = [];
+        const idsTraites = aVerifier.map((p) => p.id);
         const resultats = await Promise.allSettled(paniers.map(async (p) => {
             await envoyerPushUtilisateur(supabase, p.utilisateur_id, {
                 titre: '👀 Tu as oublié quelque chose',
@@ -66,7 +73,7 @@ module.exports = async (req, res) => {
             if (errUpdate) console.error('Erreur marquage relance_envoyee:', errUpdate.message);
         }
 
-        return res.status(200).json({ traitees: paniers.length });
+        return res.status(200).json({ traitees: paniers.length, ignorees_a_verifier: aVerifier.length });
     } catch (e) {
         console.error('Erreur relance-panier:', e.message);
         return res.status(500).json({ error: 'Erreur serveur' });
