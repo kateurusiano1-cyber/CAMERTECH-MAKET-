@@ -1603,6 +1603,30 @@ function chatWidgetAfficherSuggestions() {
 const chatWidgetHistorique = [];
 let chatWidgetOccupe = false;
 
+// Raccourcis proposés à l'ouverture : ils lancent directement une conversation de conseil.
+const CW_ACCUEIL_PUCES = [
+    { libelle: '📱 Un téléphone', question: 'Je cherche un téléphone' },
+    { libelle: '🔌 Chargeur / batterie', question: 'Je cherche un chargeur ou une batterie externe' },
+    { libelle: '🎧 Écouteurs', question: 'Je cherche des écouteurs' },
+    { libelle: '🔥 Les promos', question: 'Quelles sont vos promos en ce moment ?' }
+];
+
+// Puces de réponse rapide (celles de l'accueil, ou celles proposées par l'assistant après chaque réponse).
+function chatWidgetAfficherPuces(liste) {
+    const zone = $('chat-widget-messages');
+    const bloc = document.createElement('div');
+    bloc.className = 'cw-suggestions';
+    liste.forEach(item => {
+        const btn = document.createElement('button');
+        btn.className = 'cw-suggestion-btn';
+        btn.textContent = item.libelle;
+        btn.onclick = () => { bloc.remove(); chatWidgetPoserQuestion(item.question, null, true); };
+        bloc.appendChild(btn);
+    });
+    zone.appendChild(bloc);
+    zone.scrollTop = zone.scrollHeight;
+}
+
 function chatWidgetLienWhatsApp(texteMessage, libelle) {
     const zone = $('chat-widget-messages');
     const lien = document.createElement('a');
@@ -1630,35 +1654,51 @@ function chatWidgetAfficherProduits(cartes) {
         const a = document.createElement('a');
         a.className = 'cw-produit';
         a.href = p.url;
+        if (p.image) {
+            const img = document.createElement('img');
+            img.className = 'cw-produit-img';
+            img.src = p.image;
+            img.alt = '';
+            img.loading = 'lazy';
+            a.appendChild(img);
+        }
+        const texte = document.createElement('span');
+        texte.className = 'cw-produit-texte';
         const nom = document.createElement('span');
         nom.className = 'cw-produit-nom';
         nom.textContent = p.nom;
         const prix = document.createElement('span');
         prix.className = 'cw-produit-prix';
         prix.textContent = fmt(p.prix) + ' FCFA' + (p.enStock ? '' : ' · indisponible');
-        a.appendChild(nom);
-        a.appendChild(prix);
+        const cta = document.createElement('span');
+        cta.className = 'cw-produit-cta';
+        cta.textContent = 'Voir le produit →';
+        texte.appendChild(nom);
+        texte.appendChild(prix);
+        texte.appendChild(cta);
+        a.appendChild(texte);
         zone.appendChild(a);
     });
     zone.scrollTop = zone.scrollHeight;
 }
 
-// Appelle l'assistant (Gemini, côté serveur). En cas de souci : réponse de la FAQ si on en a une, sinon WhatsApp.
-async function chatWidgetDemanderIA(texte, itemFaq) {
+// Appelle l'assistant (Gemini, côté serveur). En cas de souci : on le dit franchement,
+// et on propose la FAQ et WhatsApp (jamais une réponse de FAQ à côté de la plaque).
+async function chatWidgetDemanderIA(texte) {
     chatWidgetOccupe = true;
     const bulle = chatWidgetAjouterBulle('…', 'bot');
     const secours = () => {
-        if (itemFaq) { bulle.textContent = itemFaq.reponse; chatWidgetHistorique.push({ role: 'bot', texte: itemFaq.reponse }); return; }
-        bulle.textContent = "Je n'ai pas de réponse toute prête pour ça — le plus simple, c'est de nous écrire directement 👇";
+        bulle.textContent = "Oups, je n'arrive pas à répondre pour l'instant 😕 Tu peux choisir une question ci-dessous ou nous écrire directement :";
+        chatWidgetAfficherSuggestions();
         chatWidgetLienWhatsApp(chatWidgetResume());
     };
     try {
         const ctrl = new AbortController();
-        const minuteur = setTimeout(() => ctrl.abort(), 14000);
+        const minuteur = setTimeout(() => ctrl.abort(), 20000);
         const r = await fetch('/api/recherche-photo?mode=assistant', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: texte, historique: chatWidgetHistorique.slice(-7, -1) }),
+            body: JSON.stringify({ message: texte, historique: chatWidgetHistorique.slice(-9, -1) }),
             signal: ctrl.signal
         });
         clearTimeout(minuteur);
@@ -1669,6 +1709,7 @@ async function chatWidgetDemanderIA(texte, itemFaq) {
         if (j.repli) { chatWidgetLienWhatsApp(chatWidgetResume()); return; }
         chatWidgetAfficherProduits(j.produits);
         if (j.humain) chatWidgetLienWhatsApp(chatWidgetResume(), '📱 Parler à l\'équipe sur WhatsApp');
+        if (j.suggestions && j.suggestions.length) chatWidgetAfficherPuces(j.suggestions.map(s => ({ libelle: s, question: s })));
     } catch (e) {
         secours();
     } finally {
@@ -1678,7 +1719,7 @@ async function chatWidgetDemanderIA(texte, itemFaq) {
     }
 }
 
-// itemTrouve : réponse de la FAQ (bouton de suggestion ou mot-clé reconnu). Sinon : l'assistant.
+// itemTrouve : réponse de la FAQ (bouton de la liste de questions). forcerIA : l'assistant répond.
 function chatWidgetPoserQuestion(texteAffiche, itemTrouve, forcerIA) {
     if (chatWidgetOccupe) return;
     chatWidgetAjouterBulle(texteAffiche, 'user');
@@ -1690,7 +1731,51 @@ function chatWidgetPoserQuestion(texteAffiche, itemTrouve, forcerIA) {
         }, 350);
         return;
     }
-    chatWidgetDemanderIA(texteAffiche, itemTrouve);
+    chatWidgetDemanderIA(texteAffiche);
+}
+
+// Invitation discrète pour un nouveau visiteur : une seule fois par semaine, jamais si elle a été refusée.
+function chatWidgetInvitationFermer() {
+    const bloc = document.getElementById('chat-invite');
+    if (bloc) bloc.remove();
+    try { localStorage.setItem('kap_invite_assistant', String(Date.now())); } catch (e) { /* navigation privée : on ignore */ }
+}
+function chatWidgetInvitation() {
+    try {
+        const vu = Number(localStorage.getItem('kap_invite_assistant'));
+        if (vu && Date.now() - vu < 7 * 24 * 3600 * 1000) return;
+    } catch (e) { /* on affiche quand même */ }
+    setTimeout(() => {
+        const panel = $('chat-widget-panel');
+        if (!panel || panel.style.display === 'flex' || document.getElementById('chat-invite')) return;
+        const bloc = document.createElement('div');
+        bloc.id = 'chat-invite';
+        bloc.setAttribute('role', 'dialog');
+        bloc.setAttribute('aria-label', 'Invitation à utiliser l\'assistant');
+        const titre = document.createElement('div');
+        titre.className = 'ci-titre';
+        titre.textContent = '👋 Besoin d\'aide pour choisir ?';
+        const sous = document.createElement('div');
+        sous.className = 'ci-sous';
+        sous.textContent = 'Laisse-toi accompagner par notre assistant : dis-lui ce que tu cherches, il te propose ce qu\'on a en stock.';
+        const rang = document.createElement('div');
+        rang.className = 'ci-boutons';
+        const oui = document.createElement('button');
+        oui.className = 'ci-oui';
+        oui.textContent = 'Oui, aide-moi';
+        oui.onclick = () => { chatWidgetInvitationFermer(); $('chat-widget-btn').click(); };
+        const non = document.createElement('button');
+        non.className = 'ci-non';
+        non.textContent = 'Non merci';
+        non.onclick = chatWidgetInvitationFermer;
+        rang.appendChild(oui);
+        rang.appendChild(non);
+        bloc.appendChild(titre);
+        bloc.appendChild(sous);
+        bloc.appendChild(rang);
+        document.body.appendChild(bloc);
+        setTimeout(() => { if (document.getElementById('chat-invite')) chatWidgetInvitationFermer(); }, 25000);
+    }, 8000);
 }
 
 function setupChatWidget() {
@@ -1698,10 +1783,12 @@ function setupChatWidget() {
     $('chat-widget-btn').onclick = () => {
         const panel = $('chat-widget-panel');
         const ouvert = panel.style.display === 'flex';
+        chatWidgetInvitationFermer();
         panel.style.display = ouvert ? 'none' : 'flex';
         if (!ouvert && !dejaOuvert) {
             dejaOuvert = true;
-            chatWidgetAjouterBulle("👋 Salut ! Je suis l'assistant Kapmaket. Choisis une question ci-dessous, ou tape la tienne :", 'bot');
+            chatWidgetAjouterBulle("👋 Salut ! Je suis l'assistant Kapmaket. Dis-moi ce que tu cherches et je te propose ce qu'on a en stock. Tu peux aussi poser une question sur la livraison, le paiement, la commande…", 'bot');
+            chatWidgetAfficherPuces(CW_ACCUEIL_PUCES);
             chatWidgetAfficherSuggestions();
         }
     };
@@ -1712,14 +1799,13 @@ function setupChatWidget() {
         const texte = input.value.trim();
         if (!texte) return;
         input.value = '';
-        const trouve = chatWidgetTrouverReponse(texte);
-        const nbMots = texte.split(/\s+/).length;
-        // Question courte reconnue par la FAQ : réponse instantanée et gratuite.
-        // Phrase longue ou non reconnue : l'assistant (qui connaît le catalogue).
-        chatWidgetPoserQuestion(texte, trouve, nbMots > 7);
+        // Tout ce que le visiteur tape va à l'assistant (qui connaît le catalogue ET les règles
+        // de la boutique). La FAQ à mots-clés ne sert plus que pour la liste de questions toutes faites.
+        chatWidgetPoserQuestion(texte, null, true);
     };
     $('chat-widget-send').onclick = envoyer;
     $('chat-widget-input').onkeydown = e => { if (e.key === 'Enter') envoyer(); };
+    chatWidgetInvitation();
 }
 
 
