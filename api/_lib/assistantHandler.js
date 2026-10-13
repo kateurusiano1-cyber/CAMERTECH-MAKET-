@@ -33,6 +33,10 @@ const crypto = require('crypto');
 const CONFIG = require('../../config.js');
 
 const MODELE = process.env.GEMINI_MODEL_ASSISTANT || 'gemini-3.6-flash';
+// Modèles de secours, essayés dans l'ordre quand le principal répond « 503 : forte demande » (ou 429, 500, 404).
+// Modifiable sans toucher au code : variable Vercel GEMINI_MODELES_SECOURS (noms séparés par des virgules).
+const MODELES_SECOURS = (process.env.GEMINI_MODELES_SECOURS || 'gemini-3.5-flash-lite,gemini-2.5-flash').split(',').map((m) => m.trim()).filter(Boolean);
+const listeModeles = () => [MODELE, ...MODELES_SECOURS.filter((m) => m !== MODELE)];
 const SERVICE_CIRCUIT = 'gemini-assistant';
 const MAX_PAR_HEURE_ET_VISITEUR = 25;
 const PLAFOND_JOUR = Number(process.env.ASSISTANT_PLAFOND_JOUR) || 500;
@@ -125,7 +129,8 @@ ${contexte}`;
 // Compteur simple par clé, sur la table login_attempts déjà utilisée côté serveur.
 async function compter(supabase, cle, maximum) {
     try {
-        const { data } = await supabase.from('login_attempts').select('tentatives').eq('cle', cle).maybeSingle();
+        const { data, error } = await supabase.from('login_attempts').select('tentatives').eq('cle', cle).maybeSingle();
+        if (error) { console.error('Assistant [limite] table login_attempts indisponible (limites inactives) :', error.message); return true; }
         const n = (data?.tentatives || 0) + 1;
         await supabase.from('login_attempts').upsert({ cle, tentatives: n, bloque_jusqu: null, updated_at: new Date().toISOString() });
         return n <= maximum;
@@ -145,25 +150,38 @@ async function appelerGemini(texteInstructions, contents) {
         { maxOutputTokens: 4096 }
     ];
     const debut = Date.now();
-    let dernier = { ok: false, status: 0, data: {} };
-    for (const generationConfig of configs) {
-        const reste = 9000 - (Date.now() - debut);
-        if (reste < 1500) break; // la fonction Vercel a un délai limité
-        const controle = new AbortController();
-        const minuteur = setTimeout(() => controle.abort(), reste);
-        try {
-            const r = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${MODELE}:generateContent?key=${(process.env.GEMINI_API_KEY || '').trim()}`,
-                {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controle.signal,
-                    body: JSON.stringify({ systemInstruction: { parts: [{ text: texteInstructions }] }, contents, generationConfig })
-                }
-            );
-            const data = await r.json().catch(() => ({}));
-            dernier = { ok: r.ok, status: r.status, data };
-            if (r.ok || r.status !== 400) break;
-            console.error('Assistant [Gemini] 400 avec ce réglage, essai suivant :', data.error?.message);
-        } finally { clearTimeout(minuteur); }
+    const essais = [];
+    let dernier = { ok: false, status: 0, data: {}, modele: null, essais };
+    for (const modele of listeModeles()) {
+        let surcharge = false;
+        for (const generationConfig of configs) {
+            const reste = 9000 - (Date.now() - debut);
+            if (reste < 1500) return { ...dernier, essais }; // la fonction Vercel a un délai limité
+            const controle = new AbortController();
+            const minuteur = setTimeout(() => controle.abort(), reste);
+            try {
+                const r = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent?key=${(process.env.GEMINI_API_KEY || '').trim()}`,
+                    {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controle.signal,
+                        body: JSON.stringify({ systemInstruction: { parts: [{ text: texteInstructions }] }, contents, generationConfig })
+                    }
+                );
+                const data = await r.json().catch(() => ({}));
+                dernier = { ok: r.ok, status: r.status, data, modele, essais };
+                essais.push(modele + ':' + r.status);
+                if (r.ok) return dernier;
+                if (r.status === 400) { console.error('Assistant [Gemini] 400 (' + modele + '), réglage suivant :', data.error?.message); continue; }
+                if ([429, 500, 502, 503, 504, 404].includes(r.status)) { console.error('Assistant [Gemini] ' + r.status + ' (' + modele + ') → modèle suivant :', data.error?.message); surcharge = true; }
+                break; // 401/403 (clé) ou surcharge : inutile d'essayer d'autres réglages de ce modèle
+            } catch (e) {
+                essais.push(modele + ':' + (e.name === 'AbortError' ? 'délai' : 'réseau'));
+                dernier = { ok: false, status: 0, data: { error: { message: e.message } }, modele, essais };
+                surcharge = true;
+                break;
+            } finally { clearTimeout(minuteur); }
+        }
+        if (!surcharge) break; // erreur qui ne vient pas d'une surcharge : un autre modèle ne changera rien
     }
     return dernier;
 }
@@ -178,14 +196,23 @@ async function diagnostic(req, res) {
     const valides = [process.env.RELANCE_PANIER_SECRET, process.env.DIAG_KEY].filter(Boolean);
     if (!cle || !valides.some((v) => egal(v.trim(), cle))) return res.status(403).json({ error: 'Clé de diagnostic invalide' });
 
-    const r = { version: 'v4', modele: MODELE, generateur_charge: generateurCharge, gemini: {}, catalogue: {}, base: {}, telegram: {} };
+    const r = { version: 'v5', modele: MODELE, generateur_charge: generateurCharge, gemini: {}, catalogue: {}, base: {}, telegram: {} };
     r.gemini.cle_presente = !!process.env.GEMINI_API_KEY;
-    try {
-        const t = await appelerGemini('Réponds uniquement par le mot OK.', [{ role: 'user', parts: [{ text: 'test' }] }]);
-        r.gemini.http = t.status; r.gemini.ok = t.ok;
-        r.gemini.message_erreur = t.ok ? null : (t.data?.error?.message || '(aucun)');
-        r.gemini.reponse = t.ok ? ((t.data?.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text).join('').slice(0, 40) || '(vide — finishReason ' + t.data?.candidates?.[0]?.finishReason + ')') : null;
-    } catch (e) { r.gemini.ok = false; r.gemini.message_erreur = e.message; }
+    // Chaque modèle est testé séparément (en parallèle) : on voit lequel répond en ce moment.
+    const tester = async (modele) => {
+        const c = new AbortController(); const m = setTimeout(() => c.abort(), 7000);
+        try {
+            const rr = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent?key=${(process.env.GEMINI_API_KEY || '').trim()}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: c.signal,
+                body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Réponds uniquement par le mot OK.' }] }], generationConfig: { maxOutputTokens: 200 } })
+            });
+            const d = await rr.json().catch(() => ({}));
+            const texte = (d?.candidates?.[0]?.content?.parts || []).filter((p) => p && !p.thought && p.text).map((p) => p.text).join('').trim().slice(0, 30);
+            return { modele, http: rr.status, ok: rr.ok, reponse: rr.ok ? (texte || '(vide)') : null, message_erreur: rr.ok ? null : (d?.error?.message || '(aucun)').slice(0, 160) };
+        } catch (e) { return { modele, ok: false, message_erreur: e.name === 'AbortError' ? 'pas de réponse en 7 s' : e.message }; }
+        finally { clearTimeout(m); }
+    };
+    r.gemini.modeles = await Promise.all(listeModeles().map(tester));
 
     let supabase = null;
     try {
@@ -196,7 +223,8 @@ async function diagnostic(req, res) {
     try {
         const { error } = await supabase.from('login_attempts').select('cle').limit(1);
         r.base.table_login_attempts = error ? 'ERREUR : ' + error.message : 'ok';
-        r.base.disjoncteur = JSON.stringify(await circuitOuvert(supabase, SERVICE_CIRCUIT));
+        const { error: errCircuit } = await supabase.from('circuit_breaker').select('service').limit(1);
+        r.base.table_circuit_breaker = errCircuit ? 'ERREUR : ' + errCircuit.message : 'ok';
     } catch (e) { r.base.erreur = e.message; }
 
     const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
@@ -262,9 +290,10 @@ module.exports = async (req, res) => {
         const resultat = await appelerGemini(instructions(contexte), [...historique, { role: 'user', parts: [{ text: message }] }]);
         if (!resultat.ok) {
             await signalerEchec(supabase, SERVICE_CIRCUIT).catch(() => {});
-            console.error('Assistant [Gemini] HTTP', resultat.status, ':', resultat.data?.error?.message || '(pas de message)');
+            console.error('Assistant [Gemini] échec — essais :', (resultat.essais || []).join(', '), '— dernier message :', resultat.data?.error?.message || '(aucun)');
             return repli(res, "Je n'arrive pas à répondre à l'instant. Écris-nous sur WhatsApp 👇");
         }
+        if (resultat.modele !== MODELE) console.error('Assistant : réponse obtenue avec le modèle de secours', resultat.modele, '(essais :', resultat.essais.join(', ') + ')');
         const candidat = resultat.data?.candidates?.[0];
         // On assemble le texte (hors « pensées » du modèle) : avec les modèles qui réfléchissent, la réponse n'est pas toujours dans parts[0].
         const texte = (candidat?.content?.parts || []).filter((p) => p && typeof p.text === 'string' && !p.thought).map((p) => p.text).join('');
