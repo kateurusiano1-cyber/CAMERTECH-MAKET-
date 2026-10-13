@@ -35,9 +35,22 @@ const CONFIG = require('../../config.js');
 const MODELE = process.env.GEMINI_MODEL_ASSISTANT || 'gemini-3.6-flash';
 // Modèles de secours, essayés dans l'ordre quand le principal répond « 503 : forte demande » (ou 429, 500, 404).
 // Modifiable sans toucher au code : variable Vercel GEMINI_MODELES_SECOURS (noms séparés par des virgules).
-const MODELES_SECOURS = (process.env.GEMINI_MODELES_SECOURS || 'gemini-3.5-flash-lite,gemini-2.5-flash').split(',').map((m) => m.trim()).filter(Boolean);
-const listeModeles = () => [MODELE, ...MODELES_SECOURS.filter((m) => m !== MODELE)];
+const MODELES_SECOURS = (process.env.GEMINI_MODELES_SECOURS || 'gemini-3.5-flash-lite,gemini-3.8-flash').split(',').map((m) => m.trim()).filter(Boolean);
+const tousLesModeles = () => [MODELE, ...MODELES_SECOURS.filter((m) => m !== MODELE)];
+// Un modèle qui vient de répondre « surchargé » (503...) est mis de côté 90 secondes (dans cette instance du serveur) :
+// les questions suivantes passent directement au modèle qui marche, sans perdre une seconde à retenter.
+const misDeCote = {};
+const MISE_DE_COTE_MS = 90 * 1000;
+function listeModeles() {
+    const tous = tousLesModeles();
+    const actifs = tous.filter((m) => !(misDeCote[m] > Date.now()));
+    return actifs.length ? actifs : tous; // si tous sont mis de côté, on les réessaie tous
+}
 const SERVICE_CIRCUIT = 'gemini-assistant';
+// Disjoncteur volontairement léger : un échec = les 3 modèles ont tous échoué. Après 6 échecs de suite, pause d'1 minute
+// seulement (le réglage standard du site, 5 échecs puis 5 minutes, était trop sévère pour un chat visible des clients).
+const DISJONCTEUR_MAX_ECHECS = 6;
+const DISJONCTEUR_PAUSE_MINUTES = 1;
 const MAX_PAR_HEURE_ET_VISITEUR = 25;
 const PLAFOND_JOUR = Number(process.env.ASSISTANT_PLAFOND_JOUR) || 500;
 const MAX_PRODUITS_ENVOYES = 220;
@@ -172,12 +185,13 @@ async function appelerGemini(texteInstructions, contents) {
                 essais.push(modele + ':' + r.status);
                 if (r.ok) return dernier;
                 if (r.status === 400) { console.error('Assistant [Gemini] 400 (' + modele + '), réglage suivant :', data.error?.message); continue; }
-                if ([429, 500, 502, 503, 504, 404].includes(r.status)) { console.error('Assistant [Gemini] ' + r.status + ' (' + modele + ') → modèle suivant :', data.error?.message); surcharge = true; }
+                if ([429, 500, 502, 503, 504, 404].includes(r.status)) { misDeCote[modele] = Date.now() + MISE_DE_COTE_MS; console.error('Assistant [Gemini] ' + r.status + ' (' + modele + ') → modèle suivant :', data.error?.message); surcharge = true; }
                 break; // 401/403 (clé) ou surcharge : inutile d'essayer d'autres réglages de ce modèle
             } catch (e) {
                 essais.push(modele + ':' + (e.name === 'AbortError' ? 'délai' : 'réseau'));
                 dernier = { ok: false, status: 0, data: { error: { message: e.message } }, modele, essais };
                 surcharge = true;
+                misDeCote[modele] = Date.now() + MISE_DE_COTE_MS;
                 break;
             } finally { clearTimeout(minuteur); }
         }
@@ -196,7 +210,7 @@ async function diagnostic(req, res) {
     const valides = [process.env.RELANCE_PANIER_SECRET, process.env.DIAG_KEY].filter(Boolean);
     if (!cle || !valides.some((v) => egal(v.trim(), cle))) return res.status(403).json({ error: 'Clé de diagnostic invalide' });
 
-    const r = { version: 'v5', modele: MODELE, generateur_charge: generateurCharge, gemini: {}, catalogue: {}, base: {}, telegram: {} };
+    const r = { version: 'v6', modele: MODELE, generateur_charge: generateurCharge, gemini: {}, catalogue: {}, base: {}, telegram: {} };
     r.gemini.cle_presente = !!process.env.GEMINI_API_KEY;
     // Chaque modèle est testé séparément (en parallèle) : on voit lequel répond en ce moment.
     const tester = async (modele) => {
@@ -212,7 +226,7 @@ async function diagnostic(req, res) {
         } catch (e) { return { modele, ok: false, message_erreur: e.name === 'AbortError' ? 'pas de réponse en 7 s' : e.message }; }
         finally { clearTimeout(m); }
     };
-    r.gemini.modeles = await Promise.all(listeModeles().map(tester));
+    r.gemini.modeles = await Promise.all(tousLesModeles().map(tester));
 
     let supabase = null;
     try {
@@ -225,6 +239,10 @@ async function diagnostic(req, res) {
         r.base.table_login_attempts = error ? 'ERREUR : ' + error.message : 'ok';
         const { error: errCircuit } = await supabase.from('circuit_breaker').select('service').limit(1);
         r.base.table_circuit_breaker = errCircuit ? 'ERREUR : ' + errCircuit.message : 'ok';
+        const { data: ligneCircuit } = await supabase.from('circuit_breaker').select('echecs, ouvert_jusqu').eq('service', SERVICE_CIRCUIT).maybeSingle();
+        r.base.disjoncteur_assistant = ligneCircuit
+            ? { echecs: ligneCircuit.echecs, en_pause_jusqu: ligneCircuit.ouvert_jusqu, en_pause_maintenant: !!(ligneCircuit.ouvert_jusqu && new Date(ligneCircuit.ouvert_jusqu) > new Date()) }
+            : 'jamais déclenché';
     } catch (e) { r.base.erreur = e.message; }
 
     const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
@@ -289,7 +307,7 @@ module.exports = async (req, res) => {
 
         const resultat = await appelerGemini(instructions(contexte), [...historique, { role: 'user', parts: [{ text: message }] }]);
         if (!resultat.ok) {
-            await signalerEchec(supabase, SERVICE_CIRCUIT).catch(() => {});
+            await signalerEchec(supabase, SERVICE_CIRCUIT, DISJONCTEUR_MAX_ECHECS, DISJONCTEUR_PAUSE_MINUTES).catch(() => {});
             console.error('Assistant [Gemini] échec — essais :', (resultat.essais || []).join(', '), '— dernier message :', resultat.data?.error?.message || '(aucun)');
             return repli(res, "Je n'arrive pas à répondre à l'instant. Écris-nous sur WhatsApp 👇");
         }
