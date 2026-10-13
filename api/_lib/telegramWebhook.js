@@ -144,7 +144,16 @@ async function traiterTexte(supabase, message, cfg) {
     if (cmd === '/id') {
         return T.repondreTexte(chatId, `Identifiant de cette discussion : <code>${T.echapper(chatId)}</code>`);
     }
-    if (!cfg || String(chatId) !== cfg.chatId) return; // le reste est réservé au groupe
+    // Le reste est réservé au groupe configuré. Au lieu de rester muet (on ne saurait pas pourquoi),
+    // le robot dit ce qui ne va pas — sans rien révéler sur les commandes.
+    if (['/aide', '/start', '/encours'].includes(cmd)) {
+        if (!cfg) return T.repondreTexte(chatId, '⚠️ Le site ne connaît pas encore le groupe : la variable <b>TELEGRAM_CHAT_ID</b> est absente ou n\'est pas encore prise en compte. Ajoute-la dans Vercel, puis fais un <b>Redeploy</b>.');
+        if (String(chatId) !== cfg.chatId) {
+            const fin = (x) => '…' + String(x).slice(-4);
+            return T.repondreTexte(chatId, `⚠️ Ce groupe (identifiant ${fin(chatId)}) n'est pas celui enregistré sur le site (${fin(cfg.chatId)}). Corrige <b>TELEGRAM_CHAT_ID</b> dans Vercel (avec le signe moins, sans espace), puis fais un <b>Redeploy</b>.`);
+        }
+    }
+    if (!cfg || String(chatId) !== cfg.chatId) return;
 
     if (cmd === '/aide' || cmd === '/start') {
         return T.repondreTexte(chatId, [
@@ -178,7 +187,7 @@ module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' });
 
-    if (!secretValide(req.headers['x-telegram-bot-api-secret-token'], process.env.TELEGRAM_WEBHOOK_SECRET)) {
+    if (!secretValide(req.headers['x-telegram-bot-api-secret-token'], (process.env.TELEGRAM_WEBHOOK_SECRET || '').trim())) {
         return res.status(401).json({ error: 'Non autorisé' });
     }
 

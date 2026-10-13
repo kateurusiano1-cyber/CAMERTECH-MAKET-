@@ -13,9 +13,10 @@
 const API = 'https://api.telegram.org';
 
 function configurer() {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = process.env.TELEGRAM_CHAT_ID;
-    return token && chatId ? { token, chatId: String(chatId) } : null;
+    // trim() : un espace ou un retour à la ligne collé par erreur dans Vercel ne doit pas tout casser.
+    const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+    const chatId = (process.env.TELEGRAM_CHAT_ID || '').trim();
+    return token && chatId ? { token, chatId } : null;
 }
 
 const echapper = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -82,14 +83,14 @@ async function modifierMessage(messageId, texte, boutons) {
 }
 
 async function repondreBouton(callbackId, texte, alerte) {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
     if (!token) return;
     try { await appel(token, 'answerCallbackQuery', { callback_query_id: callbackId, text: texte || '', show_alert: !!alerte }, 3000); }
     catch (e) { console.error('Telegram answerCallbackQuery :', e.message); }
 }
 
 async function repondreTexte(chatId, texte) {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
     if (!token) return;
     try { await appel(token, 'sendMessage', { chat_id: chatId, text: texte, parse_mode: 'HTML', disable_web_page_preview: true }, 3500); }
     catch (e) { console.error('Telegram réponse :', e.message); }

@@ -1687,8 +1687,9 @@ function chatWidgetAfficherProduits(cartes) {
 async function chatWidgetDemanderIA(texte) {
     chatWidgetOccupe = true;
     const bulle = chatWidgetAjouterBulle('…', 'bot');
+    let refPanne = 'réseau';
     const secours = () => {
-        bulle.textContent = "Oups, je n'arrive pas à répondre pour l'instant 😕 Tu peux choisir une question ci-dessous ou nous écrire directement :";
+        bulle.textContent = "Oups, je n'arrive pas à répondre pour l'instant 😕 (réf. " + refPanne + ") Tu peux choisir une question ci-dessous ou nous écrire directement :";
         chatWidgetAfficherSuggestions();
         chatWidgetLienWhatsApp(chatWidgetResume());
     };
@@ -1702,6 +1703,7 @@ async function chatWidgetDemanderIA(texte) {
             signal: ctrl.signal
         });
         clearTimeout(minuteur);
+        refPanne = 'HTTP ' + r.status;
         const j = await r.json().catch(() => ({}));
         if (!j.reponse) { secours(); return; }
         bulle.textContent = j.reponse;

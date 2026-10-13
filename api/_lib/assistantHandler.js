@@ -16,7 +16,20 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { circuitOuvert, signalerEchec, signalerSucces } = require('./circuitBreaker');
-const { slugProduit, prixAffiche } = require('../../scripts/generer-pages.js');
+let slugProduit, prixAffiche, generateurCharge = true;
+try {
+    ({ slugProduit, prixAffiche } = require('../../scripts/generer-pages.js'));
+} catch (e) {
+    // Même calcul que scripts/generer-pages.js, recopié pour que l'assistant reste utilisable
+    // même si ce fichier n'est pas embarqué par Vercel.
+    generateurCharge = false;
+    console.error('Assistant : scripts/generer-pages.js introuvable, calcul local utilisé :', e.message);
+    const sansAccent = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const prixCharme = (prix) => { const p = Math.round(prix || 0); return (p > 0 && p % 100 === 0) ? p - 1 : p; };
+    prixAffiche = (p) => prixCharme((p.promo_active || p.flash_active) && p.promo_prix ? p.promo_prix : p.resale_price);
+    slugProduit = (p) => sansAccent(p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) + '-' + String(p.id).replace(/-/g, '').slice(0, 8);
+}
+const crypto = require('crypto');
 const CONFIG = require('../../config.js');
 
 const MODELE = process.env.GEMINI_MODEL_ASSISTANT || 'gemini-3.6-flash';
@@ -111,16 +124,100 @@ ${contexte}`;
 
 // Compteur simple par clé, sur la table login_attempts déjà utilisée côté serveur.
 async function compter(supabase, cle, maximum) {
-    const { data } = await supabase.from('login_attempts').select('tentatives').eq('cle', cle).maybeSingle();
-    const n = (data?.tentatives || 0) + 1;
-    await supabase.from('login_attempts').upsert({ cle, tentatives: n, bloque_jusqu: null, updated_at: new Date().toISOString() });
-    return n <= maximum;
+    try {
+        const { data } = await supabase.from('login_attempts').select('tentatives').eq('cle', cle).maybeSingle();
+        const n = (data?.tentatives || 0) + 1;
+        await supabase.from('login_attempts').upsert({ cle, tentatives: n, bloque_jusqu: null, updated_at: new Date().toISOString() });
+        return n <= maximum;
+    } catch (e) {
+        console.error('Assistant [limite] compteur indisponible, requête autorisée :', e.message);
+        return true;
+    }
+}
+
+// Appel à Gemini avec trois jeux de réglages : on passe au suivant si Google répond « 400 » (réglage non
+// accepté par ce modèle). Réflexion courte (rapide et économique) et marge de sortie large : sur les modèles
+// qui réfléchissent, la réflexion compte dans la limite de sortie et une limite trop basse donnait des réponses vides.
+async function appelerGemini(texteInstructions, contents) {
+    const configs = [
+        { responseMimeType: 'application/json', maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: 'low' } },
+        { responseMimeType: 'application/json', maxOutputTokens: 4096 },
+        { maxOutputTokens: 4096 }
+    ];
+    const debut = Date.now();
+    let dernier = { ok: false, status: 0, data: {} };
+    for (const generationConfig of configs) {
+        const reste = 9000 - (Date.now() - debut);
+        if (reste < 1500) break; // la fonction Vercel a un délai limité
+        const controle = new AbortController();
+        const minuteur = setTimeout(() => controle.abort(), reste);
+        try {
+            const r = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${MODELE}:generateContent?key=${(process.env.GEMINI_API_KEY || '').trim()}`,
+                {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controle.signal,
+                    body: JSON.stringify({ systemInstruction: { parts: [{ text: texteInstructions }] }, contents, generationConfig })
+                }
+            );
+            const data = await r.json().catch(() => ({}));
+            dernier = { ok: r.ok, status: r.status, data };
+            if (r.ok || r.status !== 400) break;
+            console.error('Assistant [Gemini] 400 avec ce réglage, essai suivant :', data.error?.message);
+        } finally { clearTimeout(minuteur); }
+    }
+    return dernier;
+}
+
+const egal = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
+
+// Diagnostic : GET /api/recherche-photo?mode=assistant&diag=<clé>. Clé = la valeur de RELANCE_PANIER_SECRET
+// (la même que dans votre tâche cron-job.org) ou de DIAG_KEY si vous la créez. Aucun secret n'est renvoyé.
+async function diagnostic(req, res) {
+    res.setHeader('Content-Type', 'application/json');
+    const cle = String(req.query?.diag || '');
+    const valides = [process.env.RELANCE_PANIER_SECRET, process.env.DIAG_KEY].filter(Boolean);
+    if (!cle || !valides.some((v) => egal(v.trim(), cle))) return res.status(403).json({ error: 'Clé de diagnostic invalide' });
+
+    const r = { version: 'v4', modele: MODELE, generateur_charge: generateurCharge, gemini: {}, catalogue: {}, base: {}, telegram: {} };
+    r.gemini.cle_presente = !!process.env.GEMINI_API_KEY;
+    try {
+        const t = await appelerGemini('Réponds uniquement par le mot OK.', [{ role: 'user', parts: [{ text: 'test' }] }]);
+        r.gemini.http = t.status; r.gemini.ok = t.ok;
+        r.gemini.message_erreur = t.ok ? null : (t.data?.error?.message || '(aucun)');
+        r.gemini.reponse = t.ok ? ((t.data?.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text).join('').slice(0, 40) || '(vide — finishReason ' + t.data?.candidates?.[0]?.finishReason + ')') : null;
+    } catch (e) { r.gemini.ok = false; r.gemini.message_erreur = e.message; }
+
+    let supabase = null;
+    try {
+        supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+        const produits = await lireCatalogue(supabase);
+        r.catalogue = { produits: produits.length, en_stock: produits.filter(enStock).length, caracteres_envoyes_a_l_ia: catalogueTexte(produits).length, exemple_lien: produits[0] ? '/produit/' + slugProduit(produits[0]) + '/' : null };
+    } catch (e) { r.catalogue.erreur = e.message; }
+    try {
+        const { error } = await supabase.from('login_attempts').select('cle').limit(1);
+        r.base.table_login_attempts = error ? 'ERREUR : ' + error.message : 'ok';
+        r.base.disjoncteur = JSON.stringify(await circuitOuvert(supabase, SERVICE_CIRCUIT));
+    } catch (e) { r.base.erreur = e.message; }
+
+    const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+    const chat = (process.env.TELEGRAM_CHAT_ID || '').trim();
+    r.telegram = { token_present: !!token, chat_id_present: !!chat, chat_id_fin: chat ? '…' + chat.slice(-4) : null, secret_present: !!(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim() };
+    if (token) {
+        try {
+            const me = await (await fetch(`https://api.telegram.org/bot${token}/getMe`)).json();
+            r.telegram.robot = me.ok ? '@' + me.result.username : 'ERREUR : ' + me.description;
+            const wh = await (await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)).json();
+            r.telegram.webhook = wh.ok ? { url: wh.result.url || '(aucun !)', messages_en_attente: wh.result.pending_update_count, derniere_erreur: wh.result.last_error_message || null } : 'ERREUR : ' + wh.description;
+        } catch (e) { r.telegram.erreur = e.message; }
+    }
+    return res.status(200).json(r);
 }
 
 const repli = (res, message, statut = 200) => res.status(statut).json({ repli: true, reponse: message });
 
 module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
+    if (req.method === 'GET' && req.query && req.query.diag !== undefined) return diagnostic(req, res);
     if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' });
 
     const origine = req.headers.origin;
@@ -155,45 +252,31 @@ module.exports = async (req, res) => {
             supabase.from('login_attempts').delete().like('cle', 'assistant:%').lt('updated_at', limite).then(() => {}, () => {});
         }
 
-        const circuit = await circuitOuvert(supabase, SERVICE_CIRCUIT);
+        let circuit = { ouvert: false };
+        try { circuit = await circuitOuvert(supabase, SERVICE_CIRCUIT); } catch (e) { console.error('Assistant [disjoncteur] indisponible, ignoré :', e.message); }
         if (circuit.ouvert) return repli(res, "L'assistant est en pause un instant. Écris-nous sur WhatsApp 👇");
 
         const produits = await lireCatalogue(supabase);
         const contexte = `INFORMATIONS DE LA BOUTIQUE\n- ${politiques()}\n\nCATÉGORIES\n- ${resumeCategories(produits)}\n\nCATALOGUE COMPLET (une ligne par produit : id | nom | catégorie | prix | disponibilité | début de description)\n${catalogueTexte(produits) || '(catalogue vide)'}`;
 
-        const controle = new AbortController();
-        const minuteur = setTimeout(() => controle.abort(), 12000);
-        let reponseIA;
-        try {
-            reponseIA = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${MODELE}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: controle.signal,
-                    body: JSON.stringify({
-                        systemInstruction: { parts: [{ text: instructions(contexte) }] },
-                        // Pas de « temperature » : retirée par Google sur les modèles Gemini 3 et suivants.
-                        contents: [...historique, { role: 'user', parts: [{ text: message }] }],
-                        generationConfig: { maxOutputTokens: 700, responseMimeType: 'application/json' }
-                    })
-                }
-            );
-        } finally { clearTimeout(minuteur); }
-
-        const data = await reponseIA.json().catch(() => ({}));
-        if (!reponseIA.ok) {
-            await signalerEchec(supabase, SERVICE_CIRCUIT);
-            console.error('Assistant — erreur Gemini :', data.error?.message || reponseIA.status);
+        const resultat = await appelerGemini(instructions(contexte), [...historique, { role: 'user', parts: [{ text: message }] }]);
+        if (!resultat.ok) {
+            await signalerEchec(supabase, SERVICE_CIRCUIT).catch(() => {});
+            console.error('Assistant [Gemini] HTTP', resultat.status, ':', resultat.data?.error?.message || '(pas de message)');
             return repli(res, "Je n'arrive pas à répondre à l'instant. Écris-nous sur WhatsApp 👇");
         }
-
-        const texte = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const candidat = resultat.data?.candidates?.[0];
+        // On assemble le texte (hors « pensées » du modèle) : avec les modèles qui réfléchissent, la réponse n'est pas toujours dans parts[0].
+        const texte = (candidat?.content?.parts || []).filter((p) => p && typeof p.text === 'string' && !p.thought).map((p) => p.text).join('');
+        if (!texte) {
+            console.error('Assistant [Gemini] réponse vide — finishReason :', candidat?.finishReason, '— blocage :', resultat.data?.promptFeedback?.blockReason);
+            return repli(res, "Je n'ai pas bien compris, peux-tu reformuler ? Ou écris-nous sur WhatsApp 👇");
+        }
         let analyse = null;
-        try { analyse = JSON.parse(texte.replace(/```json|```/g, '').trim()); } catch (e) { /* réponse non JSON : traitée ci-dessous */ }
-        await signalerSucces(supabase, SERVICE_CIRCUIT);
+        try { analyse = JSON.parse(texte.replace(/```json|```/g, '').trim()); } catch (e) { console.error('Assistant [Gemini] réponse non JSON (finishReason ' + candidat?.finishReason + ')'); }
+        await signalerSucces(supabase, SERVICE_CIRCUIT).catch(() => {});
 
-        const reponse = String((analyse && analyse.reponse) || (analyse ? '' : texte)).trim().slice(0, 800);
+        const reponse = String((analyse && analyse.reponse) || (analyse || /^\s*[\[{]/.test(texte) ? '' : texte)).trim().slice(0, 800);
         if (!reponse) return repli(res, "Je n'ai pas bien compris, peux-tu reformuler ? Ou écris-nous sur WhatsApp 👇");
 
         // Seuls des produits réellement présents dans le catalogue peuvent être proposés.
