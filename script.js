@@ -743,6 +743,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.fbOnAuthStateChanged(window.firebaseAuth, (fbUser) => {
         if (!fbUser && currentUser) {
             arreterEcoutePanier();
+            chatWidgetEffacerMemoire(); // la discussion de l'assistant s'arrête avec la session
             currentUser = null;
             localStorage.removeItem('cmkt_user');
             $('user-zone').style.display = 'none';
@@ -1219,6 +1220,7 @@ function setupAuth() {
     $('btn-logout').onclick = () => {
         window.fbSignOut(window.firebaseAuth).catch(()=>{});
         arreterEcoutePanier();
+        chatWidgetEffacerMemoire(); // la discussion de l'assistant s'arrête avec la session
         currentUser = null;
         localStorage.removeItem('cmkt_user');
         $('user-zone').style.display = 'none';
@@ -1522,97 +1524,74 @@ function ouvrirCompositionFlashCombo() {
 }
 
 
-// ===== WIDGET D'AIDE (FAQ automatique, 100% côté client, aucun appel serveur) =====
-const FAQ_DATA = [
-    { motsCles: ['commander','commande','acheter','passer commande'],
-      question: 'Comment passer une commande ?',
-      reponse: "Ajoute les produits qui t'intéressent au panier (icône 🛒), choisis ta zone de livraison, puis clique sur \"Payer maintenant\". Pas besoin de compte : tu peux commander directement avec juste ton nom et ton téléphone." },
-    { motsCles: ['payer','paiement','mobile money','momo','carte','virement','usdt','crypto'],
-      question: 'Quels sont les moyens de paiement ?',
-      reponse: "Tu peux payer par Mobile Money (MTN/Orange), carte bancaire (Visa/Mastercard), virement bancaire, ou en cryptomonnaie (USDT) — le paiement est géré par iKeePay, sécurisé." },
-    { motsCles: ['compte','inscription','invité','sans compte'],
-      question: 'Puis-je commander sans créer de compte ?',
-      reponse: "Oui ! Au moment de payer, indique juste ton nom et ton téléphone si tu ne veux pas créer de compte. Tu recevras un code pour suivre ta commande. Créer un compte permet en plus de garder un historique et des points de fidélité." },
-    { motsCles: ['livraison','livrer','zone','quartier','délai'],
-      question: 'Comment fonctionne la livraison ?',
-      reponse: "Livraison à domicile (1000 FCFA) dans les quartiers couverts de Douala. Pour les autres quartiers, le retrait en agence est gratuit. La zone se choisit au moment de valider ton panier." },
-    { motsCles: ['flash combo','kit','combo','pack'],
-      question: "C'est quoi le Flash Combo ?",
-      reponse: "Le Flash Combo (bandeau ⚡ en haut du site) te permet de composer un kit — un produit principal + des accessoires au choix — à un prix forfaitaire très réduit par rapport à l'achat séparé. Clique sur le bandeau pour composer le tien." },
-    { motsCles: ['code promo','réduction','promo','coupon'],
-      question: 'Comment utiliser un code promo ?',
-      reponse: "Dans ton panier, il y a un champ \"Code promo\" — tape ton code et clique sur \"Appliquer\" pour voir la réduction avant de payer. Un code promo ne se cumule pas avec un Flash Combo." },
-    { motsCles: ['réserver','réservation','sans payer','plus tard'],
-      question: 'Comment réserver sans payer tout de suite ?',
-      reponse: "Dans ton panier, choisis \"📌 Réserver ma commande\" au lieu de payer. Tes articles sont mis de côté avec un code — tu les retrouveras dans \"Mes Commandes\" (ou en gardant le code si tu n'as pas de compte) pour payer quand tu veux." },
-    { motsCles: ['suivre','suivi','statut','où est ma commande'],
-      question: 'Comment suivre ma commande ?',
-      reponse: "Menu ☰ → \"Suivi de commande\", puis entre ton code de commande (format CMT-XXXXXXXXXX). Ça marche avec ou sans compte." },
-    { motsCles: ['original','copie','authentique','qualité','faux'],
-      question: 'Les produits sont-ils originaux ou des copies ?',
-      reponse: "Ça dépend du produit — certains sont des copies, des copies certifiées, ou des originaux, et c'est indiqué sur chaque fiche produit (le prix varie en conséquence). Plus de détails dans notre Politique de confidentialité, en bas de page." },
-    { motsCles: ['retour','rembourser','remboursement','échange','défectueux'],
-      question: 'Comment faire un retour ou une réclamation ?',
-      reponse: "Depuis \"Mes Commandes\", ouvre la commande concernée et utilise le bouton de demande de retour en expliquant le motif — l'équipe te recontacte rapidement. Un compte est nécessaire pour cette fonctionnalité." },
-    { motsCles: ['application','app','installer','pwa'],
-      question: "Comment installer l'application ?",
-      reponse: "Menu ☰ → \"📲 Télécharger l'app\" (ou le bouton dans l'en-tête). Ça installe un raccourci sur ton téléphone, sans passer par un store — gratuit et léger." },
-    { motsCles: ['contact','whatsapp','joindre','téléphone','appeler'],
-      question: 'Comment vous contacter ?',
-      reponse: "Par WhatsApp au 699 781 160 ou 653 756 167 — les liens sont en bas de chaque page et sur chaque fiche produit." },
+// ===== ASSISTANT D'AIDE (conseiller IA) =====
+// Toutes les réponses viennent de l'assistant (Gemini, côté serveur), qui connaît le catalogue en direct et les
+// règles de la boutique. Il n'y a plus de questions-réponses écrites d'avance.
+// La discussion est mémorisée dans le navigateur : jusqu'à la déconnexion pour un membre, 24 h pour un visiteur.
+
+const chatWidgetHistorique = [];   // ce que l'assistant relit à chaque question : { role, texte }
+let chatWidgetJournal = [];        // ce qui s'affiche, rejouable après un rechargement
+let chatWidgetOccupe = false;
+
+// Raccourcis proposés à l'ouverture : ils lancent directement une conversation avec l'assistant.
+const CW_ACCUEIL_PUCES = [
+    { libelle: '📱 Un téléphone', question: 'Je cherche un téléphone' },
+    { libelle: '🔌 Chargeur / batterie', question: 'Je cherche un chargeur ou une batterie externe' },
+    { libelle: '🎧 Écouteurs', question: 'Je cherche des écouteurs' },
+    { libelle: '🔥 Les promos', question: 'Quelles sont vos promos en ce moment ?' },
+    { libelle: '🚚 Livraison', question: 'Comment fonctionne la livraison ?' },
+    { libelle: '💳 Paiement', question: 'Comment je peux payer ma commande ?' },
+    { libelle: '📦 Suivre ma commande', question: 'Comment suivre ma commande ?' }
 ];
 
-const chatWidgetNorm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// ----- Mémoire de la discussion -----
+const CW_MEMOIRE_VISITEUR_MS = 24 * 3600 * 1000;
+const CW_MEMOIRE_MEMBRE_MS = 30 * 24 * 3600 * 1000;
+const chatWidgetEstMembre = () => typeof currentUser !== 'undefined' && !!currentUser && !!currentUser.id;
+const chatWidgetCle = () => 'kap_chat_' + (chatWidgetEstMembre() ? currentUser.id : 'invite');
 
-function chatWidgetTrouverReponse(texte) {
-    const t = chatWidgetNorm(texte);
-    let meilleur = null, meilleurScore = 0;
-    for (const item of FAQ_DATA) {
-        const score = item.motsCles.reduce((s, mc) => s + (t.includes(chatWidgetNorm(mc)) ? mc.length : 0), 0);
-        if (score > meilleurScore) { meilleurScore = score; meilleur = item; }
-    }
-    return meilleurScore > 0 ? meilleur : null;
+function chatWidgetSauver() {
+    try {
+        localStorage.setItem(chatWidgetCle(), JSON.stringify({
+            t: Date.now(), membre: chatWidgetEstMembre(),
+            j: chatWidgetJournal.slice(-80), h: chatWidgetHistorique.slice(-14)
+        }));
+    } catch (e) { /* stockage plein ou navigation privée : la discussion reste visible mais ne sera pas retrouvée */ }
 }
+function chatWidgetCharger() {
+    try {
+        const brut = localStorage.getItem(chatWidgetCle());
+        if (!brut) return null;
+        const o = JSON.parse(brut);
+        const limite = o.membre ? CW_MEMOIRE_MEMBRE_MS : CW_MEMOIRE_VISITEUR_MS;
+        if (!o.t || Date.now() - o.t > limite || !Array.isArray(o.j)) { localStorage.removeItem(chatWidgetCle()); return null; }
+        return o;
+    } catch (e) { return null; }
+}
+// Appelée à la déconnexion (et par le bouton ↺ « Nouvelle discussion ») : efface la mémoire ET l'écran.
+function chatWidgetEffacerMemoire() {
+    try { localStorage.removeItem(chatWidgetCle()); localStorage.removeItem('kap_chat_invite'); } catch (e) { /* on ignore */ }
+    chatWidgetJournal = [];
+    chatWidgetHistorique.length = 0;
+    const zone = $('chat-widget-messages');
+    if (zone) zone.textContent = '';
+}
+function chatWidgetNoter(evenement) { chatWidgetJournal.push(evenement); chatWidgetSauver(); }
 
-function chatWidgetAjouterBulle(texte, type) {
+// ----- Affichage (le paramètre « rejeu » sert à reconstituer l'écran sans re-mémoriser) -----
+function chatWidgetAjouterBulle(texte, type, rejeu) {
     const zone = $('chat-widget-messages');
     const bulle = document.createElement('div');
     bulle.className = 'cw-bulle ' + (type === 'user' ? 'cw-user' : 'cw-bot');
     bulle.textContent = texte;
     zone.appendChild(bulle);
     zone.scrollTop = zone.scrollHeight;
+    if (!rejeu) chatWidgetNoter({ k: type === 'user' ? 'user' : 'bot', t: texte });
     return bulle;
 }
 
-function chatWidgetAfficherSuggestions() {
-    const zone = $('chat-widget-messages');
-    const bloc = document.createElement('div');
-    bloc.className = 'cw-suggestions';
-    FAQ_DATA.forEach(item => {
-        const btn = document.createElement('button');
-        btn.className = 'cw-suggestion-btn';
-        btn.textContent = item.question;
-        btn.onclick = () => chatWidgetPoserQuestion(item.question, item);
-        bloc.appendChild(btn);
-    });
-    zone.appendChild(bloc);
-    zone.scrollTop = zone.scrollHeight;
-}
-
-// Mémoire courte de la conversation (envoyée à l'assistant pour qu'il comprenne les suites de questions).
-const chatWidgetHistorique = [];
-let chatWidgetOccupe = false;
-
-// Raccourcis proposés à l'ouverture : ils lancent directement une conversation de conseil.
-const CW_ACCUEIL_PUCES = [
-    { libelle: '📱 Un téléphone', question: 'Je cherche un téléphone' },
-    { libelle: '🔌 Chargeur / batterie', question: 'Je cherche un chargeur ou une batterie externe' },
-    { libelle: '🎧 Écouteurs', question: 'Je cherche des écouteurs' },
-    { libelle: '🔥 Les promos', question: 'Quelles sont vos promos en ce moment ?' }
-];
-
 // Puces de réponse rapide (celles de l'accueil, ou celles proposées par l'assistant après chaque réponse).
-function chatWidgetAfficherPuces(liste) {
+function chatWidgetAfficherPuces(liste, rejeu) {
     const zone = $('chat-widget-messages');
     const bloc = document.createElement('div');
     bloc.className = 'cw-suggestions';
@@ -1620,14 +1599,19 @@ function chatWidgetAfficherPuces(liste) {
         const btn = document.createElement('button');
         btn.className = 'cw-suggestion-btn';
         btn.textContent = item.libelle;
-        btn.onclick = () => { bloc.remove(); chatWidgetPoserQuestion(item.question, null, true); };
+        btn.onclick = () => {
+            bloc.remove();
+            chatWidgetJournal = chatWidgetJournal.filter(e => e.k !== 'puces');
+            chatWidgetPoserQuestion(item.question);
+        };
         bloc.appendChild(btn);
     });
     zone.appendChild(bloc);
     zone.scrollTop = zone.scrollHeight;
+    if (!rejeu) chatWidgetNoter({ k: 'puces', l: liste });
 }
 
-function chatWidgetLienWhatsApp(texteMessage, libelle) {
+function chatWidgetLienWhatsApp(texteMessage, libelle, rejeu) {
     const zone = $('chat-widget-messages');
     const lien = document.createElement('a');
     lien.href = `https://wa.me/${CONFIG.WA1}?text=${encodeURIComponent(texteMessage)}`;
@@ -1640,6 +1624,7 @@ function chatWidgetLienWhatsApp(texteMessage, libelle) {
     lien.textContent = libelle || '📱 Continuer sur WhatsApp';
     zone.appendChild(lien);
     zone.scrollTop = zone.scrollHeight;
+    if (!rejeu) chatWidgetNoter({ k: 'wa', t: texteMessage, l: libelle || '' });
 }
 
 // Résumé prêt à envoyer à l'équipe : le client n'a pas à tout réexpliquer.
@@ -1648,7 +1633,7 @@ function chatWidgetResume() {
     return ('Bonjour Kapmaket, je viens de l\'assistant du site. Voici notre échange :\n' + lignes.join('\n')).slice(0, 900);
 }
 
-function chatWidgetAfficherProduits(cartes) {
+function chatWidgetAfficherProduits(cartes, rejeu) {
     const zone = $('chat-widget-messages');
     (cartes || []).forEach(p => {
         const a = document.createElement('a');
@@ -1680,17 +1665,40 @@ function chatWidgetAfficherProduits(cartes) {
         zone.appendChild(a);
     });
     zone.scrollTop = zone.scrollHeight;
+    if (!rejeu && cartes && cartes.length) chatWidgetNoter({ k: 'cartes', c: cartes });
 }
 
-// Appelle l'assistant (Gemini, côté serveur). En cas de souci : on le dit franchement,
-// et on propose la FAQ et WhatsApp (jamais une réponse de FAQ à côté de la plaque).
+function chatWidgetRejouer(journal) {
+    journal.forEach((e, i) => {
+        if (e.k === 'user' || e.k === 'bot') chatWidgetAjouterBulle(e.t, e.k, true);
+        else if (e.k === 'cartes') chatWidgetAfficherProduits(e.c, true);
+        else if (e.k === 'wa') chatWidgetLienWhatsApp(e.t, e.l, true);
+        else if (e.k === 'puces' && i === journal.length - 1) chatWidgetAfficherPuces(e.l, true); // seulement si c'est la dernière chose affichée
+    });
+}
+
+// Ouverture : on retrouve la discussion en cours, sinon message d'accueil + raccourcis.
+function chatWidgetAccueil() {
+    const memoire = chatWidgetCharger();
+    if (memoire && memoire.j.length) {
+        chatWidgetJournal = memoire.j;
+        (memoire.h || []).forEach(t => chatWidgetHistorique.push(t));
+        chatWidgetRejouer(chatWidgetJournal);
+        return;
+    }
+    chatWidgetAjouterBulle("👋 Salut ! Je suis l'assistant Kapmaket. Dis-moi ce que tu cherches et je te propose ce qu'on a en stock. Tu peux aussi me poser une question sur la livraison, le paiement ou ta commande.", 'bot');
+    chatWidgetAfficherPuces(CW_ACCUEIL_PUCES);
+}
+
+// ----- Appel à l'assistant (Gemini, côté serveur) -----
 async function chatWidgetDemanderIA(texte) {
     chatWidgetOccupe = true;
-    const bulle = chatWidgetAjouterBulle('…', 'bot');
+    const bulle = chatWidgetAjouterBulle('…', 'bot', true); // simple indicateur : pas mémorisé
     let refPanne = 'réseau';
     const secours = () => {
-        bulle.textContent = "Oups, je n'arrive pas à répondre pour l'instant 😕 (réf. " + refPanne + ") Tu peux choisir une question ci-dessous ou nous écrire directement :";
-        chatWidgetAfficherSuggestions();
+        const msg = "Oups, je n'arrive pas à répondre pour l'instant 😕 (réf. " + refPanne + ") Écris-nous directement, on te répond vite :";
+        bulle.textContent = msg;
+        chatWidgetNoter({ k: 'bot', t: msg });
         chatWidgetLienWhatsApp(chatWidgetResume());
     };
     try {
@@ -1708,6 +1716,7 @@ async function chatWidgetDemanderIA(texte) {
         if (!j.reponse) { secours(); return; }
         bulle.textContent = j.reponse;
         chatWidgetHistorique.push({ role: 'bot', texte: j.reponse });
+        chatWidgetNoter({ k: 'bot', t: j.reponse });
         if (j.repli) { chatWidgetLienWhatsApp(chatWidgetResume()); return; }
         chatWidgetAfficherProduits(j.produits);
         if (j.humain) chatWidgetLienWhatsApp(chatWidgetResume(), '📱 Parler à l\'équipe sur WhatsApp');
@@ -1721,18 +1730,10 @@ async function chatWidgetDemanderIA(texte) {
     }
 }
 
-// itemTrouve : réponse de la FAQ (bouton de la liste de questions). forcerIA : l'assistant répond.
-function chatWidgetPoserQuestion(texteAffiche, itemTrouve, forcerIA) {
+function chatWidgetPoserQuestion(texteAffiche) {
     if (chatWidgetOccupe) return;
+    chatWidgetHistorique.push({ role: 'user', texte: texteAffiche }); // avant l'affichage : la mémoire sauvegardée est complète
     chatWidgetAjouterBulle(texteAffiche, 'user');
-    chatWidgetHistorique.push({ role: 'user', texte: texteAffiche });
-    if (itemTrouve && !forcerIA) {
-        setTimeout(() => {
-            chatWidgetAjouterBulle(itemTrouve.reponse, 'bot');
-            chatWidgetHistorique.push({ role: 'bot', texte: itemTrouve.reponse });
-        }, 350);
-        return;
-    }
     chatWidgetDemanderIA(texteAffiche);
 }
 
@@ -1781,29 +1782,48 @@ function chatWidgetInvitation() {
 }
 
 function setupChatWidget() {
-    let dejaOuvert = false;
-    $('chat-widget-btn').onclick = () => {
-        const panel = $('chat-widget-panel');
-        const ouvert = panel.style.display === 'flex';
-        chatWidgetInvitationFermer();
-        panel.style.display = ouvert ? 'none' : 'flex';
-        if (!ouvert && !dejaOuvert) {
-            dejaOuvert = true;
-            chatWidgetAjouterBulle("👋 Salut ! Je suis l'assistant Kapmaket. Dis-moi ce que tu cherches et je te propose ce qu'on a en stock. Tu peux aussi poser une question sur la livraison, le paiement, la commande…", 'bot');
-            chatWidgetAfficherPuces(CW_ACCUEIL_PUCES);
-            chatWidgetAfficherSuggestions();
+    // En-tête : bouton « Nouvelle discussion » et sous-titre à jour (sans toucher à index.html).
+    const entete = $('chat-widget-header'), fermer = $('chat-widget-close');
+    if (entete && fermer && entete.insertBefore && !$('chat-widget-reset')) {
+        const sous = entete.children && entete.children[0] && entete.children[0].children && entete.children[0].children[1];
+        if (sous) sous.textContent = 'Je connais tout le catalogue';
+        const groupe = document.createElement('div');
+        groupe.style.cssText = 'display:flex;gap:8px;align-items:center';
+        const reset = document.createElement('button');
+        reset.id = 'chat-widget-reset';
+        reset.textContent = '↺';
+        reset.title = 'Nouvelle discussion';
+        reset.setAttribute('aria-label', 'Nouvelle discussion');
+        reset.onclick = () => { chatWidgetEffacerMemoire(); chatWidgetAccueil(); };
+        entete.insertBefore(groupe, fermer);
+        groupe.appendChild(reset);
+        groupe.appendChild(fermer);
+    }
+
+    const basculer = (ouvrir) => {
+        $('chat-widget-panel').style.display = ouvrir ? 'flex' : 'none';
+        if (document.body.classList) document.body.classList.toggle('cw-ouvert', ouvrir); // mobile : la page derrière ne défile pas
+        const zone = $('chat-widget-messages');
+        if (ouvrir && zone.children.length === 0) chatWidgetAccueil();
+        if (ouvrir) {
+            zone.scrollTop = zone.scrollHeight;
+            const grand = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(min-width: 700px)').matches;
+            const champ = $('chat-widget-input');
+            if (grand && champ && champ.focus) champ.focus();
         }
     };
-    $('chat-widget-close').onclick = () => { $('chat-widget-panel').style.display = 'none'; };
+    $('chat-widget-btn').onclick = () => {
+        chatWidgetInvitationFermer();
+        basculer($('chat-widget-panel').style.display !== 'flex');
+    };
+    $('chat-widget-close').onclick = () => basculer(false);
 
     const envoyer = () => {
         const input = $('chat-widget-input');
         const texte = input.value.trim();
         if (!texte) return;
         input.value = '';
-        // Tout ce que le visiteur tape va à l'assistant (qui connaît le catalogue ET les règles
-        // de la boutique). La FAQ à mots-clés ne sert plus que pour la liste de questions toutes faites.
-        chatWidgetPoserQuestion(texte, null, true);
+        chatWidgetPoserQuestion(texte);
     };
     $('chat-widget-send').onclick = envoyer;
     $('chat-widget-input').onkeydown = e => { if (e.key === 'Enter') envoyer(); };

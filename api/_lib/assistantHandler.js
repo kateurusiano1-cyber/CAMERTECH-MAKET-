@@ -12,7 +12,7 @@
 // propose alors la FAQ et WhatsApp).
 //
 // Version du modèle : variable Vercel GEMINI_MODEL_ASSISTANT (ex. gemini-3.8-flash).
-// Sans variable : gemini-3.6-flash, le modèle déjà utilisé par les outils admin.
+// Sans variable : gemini-3.5-flash-lite (le plus rapide) ; secours : gemini-3.6-flash puis gemini-3.8-flash.
 
 const { createClient } = require('@supabase/supabase-js');
 const { circuitOuvert, signalerEchec, signalerSucces } = require('./circuitBreaker');
@@ -32,14 +32,15 @@ try {
 const crypto = require('crypto');
 const CONFIG = require('../../config.js');
 
-const MODELE = process.env.GEMINI_MODEL_ASSISTANT || 'gemini-3.6-flash';
+const MODELE = process.env.GEMINI_MODEL_ASSISTANT || 'gemini-3.5-flash-lite'; // rapide et disponible lors des tests ; 3.6 était surchargé
 // Modèles de secours, essayés dans l'ordre quand le principal répond « 503 : forte demande » (ou 429, 500, 404).
 // Modifiable sans toucher au code : variable Vercel GEMINI_MODELES_SECOURS (noms séparés par des virgules).
-const MODELES_SECOURS = (process.env.GEMINI_MODELES_SECOURS || 'gemini-3.5-flash-lite,gemini-3.8-flash').split(',').map((m) => m.trim()).filter(Boolean);
+const MODELES_SECOURS = (process.env.GEMINI_MODELES_SECOURS || 'gemini-3.6-flash,gemini-3.8-flash').split(',').map((m) => m.trim()).filter(Boolean);
 const tousLesModeles = () => [MODELE, ...MODELES_SECOURS.filter((m) => m !== MODELE)];
 // Un modèle qui vient de répondre « surchargé » (503...) est mis de côté 90 secondes (dans cette instance du serveur) :
 // les questions suivantes passent directement au modèle qui marche, sans perdre une seconde à retenter.
 const misDeCote = {};
+const reglageRetenu = {}; // modèle -> indice du réglage accepté (inutile de retester ceux que Google a refusés)
 const MISE_DE_COTE_MS = 90 * 1000;
 function listeModeles() {
     const tous = tousLesModeles();
@@ -77,10 +78,15 @@ function politiques() {
 
 const net = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
 
+const CACHE_CATALOGUE_MS = 5 * 60 * 1000;
+const CACHE_REPONSE_MS = 10 * 60 * 1000;
+const cacheReponses = new Map(); // première question normalisée -> { le, catalogueLe, corps }
+const cleNorm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
 // Catalogue en mémoire pendant 5 minutes (instance « chaude ») pour ménager la base.
 let cache = { le: 0, produits: [] };
 async function lireCatalogue(supabase) {
-    if (Date.now() - cache.le < 5 * 60 * 1000 && cache.produits.length) return cache.produits;
+    if (Date.now() - cache.le < CACHE_CATALOGUE_MS && cache.produits.length) return cache.produits;
     const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false }).limit(400);
     if (error) throw error;
     cache = { le: Date.now(), produits: data || [] };
@@ -167,7 +173,8 @@ async function appelerGemini(texteInstructions, contents) {
     let dernier = { ok: false, status: 0, data: {}, modele: null, essais };
     for (const modele of listeModeles()) {
         let surcharge = false;
-        for (const generationConfig of configs) {
+        for (let ci = reglageRetenu[modele] || 0; ci < configs.length; ci++) {
+            const generationConfig = configs[ci];
             const reste = 9000 - (Date.now() - debut);
             if (reste < 1500) return { ...dernier, essais }; // la fonction Vercel a un délai limité
             const controle = new AbortController();
@@ -183,7 +190,7 @@ async function appelerGemini(texteInstructions, contents) {
                 const data = await r.json().catch(() => ({}));
                 dernier = { ok: r.ok, status: r.status, data, modele, essais };
                 essais.push(modele + ':' + r.status);
-                if (r.ok) return dernier;
+                if (r.ok) { reglageRetenu[modele] = ci; return dernier; }
                 if (r.status === 400) { console.error('Assistant [Gemini] 400 (' + modele + '), réglage suivant :', data.error?.message); continue; }
                 if ([429, 500, 502, 503, 504, 404].includes(r.status)) { misDeCote[modele] = Date.now() + MISE_DE_COTE_MS; console.error('Assistant [Gemini] ' + r.status + ' (' + modele + ') → modèle suivant :', data.error?.message); surcharge = true; }
                 break; // 401/403 (clé) ou surcharge : inutile d'essayer d'autres réglages de ce modèle
@@ -210,7 +217,7 @@ async function diagnostic(req, res) {
     const valides = [process.env.RELANCE_PANIER_SECRET, process.env.DIAG_KEY].filter(Boolean);
     if (!cle || !valides.some((v) => egal(v.trim(), cle))) return res.status(403).json({ error: 'Clé de diagnostic invalide' });
 
-    const r = { version: 'v6', modele: MODELE, generateur_charge: generateurCharge, gemini: {}, catalogue: {}, base: {}, telegram: {} };
+    const r = { version: 'v7', modele: MODELE, generateur_charge: generateurCharge, gemini: {}, catalogue: {}, base: {}, telegram: {} };
     r.gemini.cle_presente = !!process.env.GEMINI_API_KEY;
     // Chaque modèle est testé séparément (en parallèle) : on voit lequel répond en ce moment.
     const tester = async (modele) => {
@@ -286,21 +293,27 @@ module.exports = async (req, res) => {
         const maintenant = new Date().toISOString();
         const cleHeure = `assistant:${ip}:${maintenant.slice(0, 13)}`;
         const cleJour = `assistant:jour:${maintenant.slice(0, 10)}`;
-        if (!(await compter(supabase, cleHeure, MAX_PAR_HEURE_ET_VISITEUR))) {
-            return repli(res, 'Tu as posé beaucoup de questions : pour la suite, le plus simple est de nous écrire sur WhatsApp 👇');
-        }
-        if (!(await compter(supabase, cleJour, PLAFOND_JOUR))) {
-            return repli(res, "L'assistant a atteint sa limite pour aujourd'hui. Écris-nous sur WhatsApp 👇");
-        }
+        // Compteurs et disjoncteur vérifiés EN MÊME TEMPS (au lieu de 5 appels à la base, les uns après les autres).
+        const [okHeure, okJour, circuit] = await Promise.all([
+            compter(supabase, cleHeure, MAX_PAR_HEURE_ET_VISITEUR),
+            compter(supabase, cleJour, PLAFOND_JOUR),
+            circuitOuvert(supabase, SERVICE_CIRCUIT).catch((e) => { console.error('Assistant [disjoncteur] indisponible, ignoré :', e.message); return { ouvert: false }; })
+        ]);
+        if (!okHeure) return repli(res, 'Tu as posé beaucoup de questions : pour la suite, le plus simple est de nous écrire sur WhatsApp 👇');
+        if (!okJour) return repli(res, "L'assistant a atteint sa limite pour aujourd'hui. Écris-nous sur WhatsApp 👇");
+        if (circuit.ouvert) return repli(res, "L'assistant est en pause un instant. Écris-nous sur WhatsApp 👇");
         // Ménage occasionnel des anciens compteurs (1 appel sur 40).
         if (Math.random() < 0.025) {
             const limite = new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString();
             supabase.from('login_attempts').delete().like('cle', 'assistant:%').lt('updated_at', limite).then(() => {}, () => {});
         }
 
-        let circuit = { ouvert: false };
-        try { circuit = await circuitOuvert(supabase, SERVICE_CIRCUIT); } catch (e) { console.error('Assistant [disjoncteur] indisponible, ignoré :', e.message); }
-        if (circuit.ouvert) return repli(res, "L'assistant est en pause un instant. Écris-nous sur WhatsApp 👇");
+        // Réponse déjà calculée pour la même première question (ex. les raccourcis de l'accueil) tant que le catalogue n'a pas changé.
+        const cleReponse = historique.length === 0 ? cleNorm(message) : null;
+        const memo = cleReponse && cacheReponses.get(cleReponse);
+        if (memo && memo.catalogueLe === cache.le && Date.now() - cache.le < CACHE_CATALOGUE_MS && Date.now() - memo.le < CACHE_REPONSE_MS) {
+            return res.status(200).json(memo.corps);
+        }
 
         const produits = await lireCatalogue(supabase);
         const contexte = `INFORMATIONS DE LA BOUTIQUE\n- ${politiques()}\n\nCATÉGORIES\n- ${resumeCategories(produits)}\n\nCATALOGUE COMPLET (une ligne par produit : id | nom | catégorie | prix | disponibilité | début de description)\n${catalogueTexte(produits) || '(catalogue vide)'}`;
@@ -337,7 +350,12 @@ module.exports = async (req, res) => {
         const suggestions = (Array.isArray(analyse?.suggestions) ? analyse.suggestions : [])
             .map((s) => net(s, 40)).filter(Boolean).slice(0, 3);
 
-        return res.status(200).json({ reponse, produits: cartes, suggestions, humain: analyse?.passer_a_humain === true });
+        const corps = { reponse, produits: cartes, suggestions, humain: analyse?.passer_a_humain === true };
+        if (cleReponse) {
+            if (cacheReponses.size > 100) cacheReponses.clear();
+            cacheReponses.set(cleReponse, { le: Date.now(), catalogueLe: cache.le, corps });
+        }
+        return res.status(200).json(corps);
     } catch (e) {
         console.error('Erreur assistant :', e.message);
         return repli(res, "Je n'arrive pas à répondre à l'instant. Écris-nous sur WhatsApp 👇");

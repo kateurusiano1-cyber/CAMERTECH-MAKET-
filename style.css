@@ -174,7 +174,7 @@ input:checked + .toggle-thumb:before { transform: translateX(20px); }
 
 #chat-widget-panel {
     position: fixed; bottom: 88px; right: 20px; z-index: 500;
-    width: min(360px, 92vw); height: min(500px, 70vh);
+    width: min(560px, 70vw); height: min(78vh, 760px);
     background: var(--card); border-radius: 18px;
     box-shadow: 0 14px 40px rgba(0,0,0,0.25);
     display: flex; flex-direction: column; overflow: hidden;
@@ -186,7 +186,8 @@ input:checked + .toggle-thumb:before { transform: translateX(20px); }
     color: white; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;
     font-family: var(--font-title);
 }
-#chat-widget-close { background: rgba(255,255,255,0.2); border: none; color: white; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; }
+#chat-widget-close, #chat-widget-reset { background: rgba(255,255,255,0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 0.95rem; line-height: 1; }
+#chat-widget-close:hover, #chat-widget-reset:hover { background: rgba(255,255,255,0.35); }
 #chat-widget-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--bg); }
 .cw-bulle { max-width: 84%; padding: 10px 13px; border-radius: 14px; font-size: 0.85rem; line-height: 1.45; }
 .cw-bot { background: var(--card); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
@@ -219,7 +220,6 @@ input:checked + .toggle-thumb:before { transform: translateX(20px); }
 #chat-invite .ci-non { background: transparent; color: var(--text); border: 1.5px solid rgba(128,128,128,0.4); }
 @media (max-width: 480px) {
     #chat-widget-btn { bottom: 14px; right: 14px; width: 50px; height: 50px; font-size: 1.3rem; }
-    #chat-widget-panel { bottom: 72px; right: 10px; width: 94vw; height: 68vh; }
 }
 
 #toast-conteneur {
@@ -756,3 +756,19 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
            clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 /* Lien vers la page du produit (utile aux robots) : garde l'apparence du nom du produit. */
 .card-lien { color: inherit; text-decoration: none; }
+
+/* Fenêtre de l'assistant : grande sur ordinateur (près de la moitié de l'écran), plein écran sur téléphone. */
+@media (min-width: 1024px) {
+    #chat-widget-panel { width: min(46vw, 780px); height: min(84vh, 900px); }
+    .cw-bulle { font-size: 0.95rem; }
+    #chat-widget-input { font-size: 0.95rem; padding: 12px 16px; }
+    #chat-widget-send { width: 42px; height: 42px; }
+}
+@media (max-width: 699px) {
+    #chat-widget-panel { inset: 0; width: 100%; height: 100vh; height: 100dvh; border-radius: 0; animation: none; }
+    #chat-widget-header { padding-top: calc(14px + env(safe-area-inset-top, 0px)); }
+    #chat-widget-input-row { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+    #chat-widget-input { font-size: 16px; } /* 16 px : évite le zoom automatique sur iPhone */
+    .cw-bulle { font-size: 0.95rem; max-width: 88%; }
+    body.cw-ouvert { overflow: hidden; }
+}
