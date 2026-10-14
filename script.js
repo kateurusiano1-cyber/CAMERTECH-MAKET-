@@ -1140,7 +1140,7 @@ function setupAuth() {
         if (cred) {
             try {
                 const r = await creerOuChargerProfil(cred.user);
-                if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); chatWidgetBienvenue(); }
+                if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
                 else if (!r.pending) { err.textContent = '❌ Profil introuvable : ' + (r.error?.message || r.error || 'contacte le support'); }
             } catch (e) {
                 // Connexion réussie mais un problème est survenu juste après : un rechargement
@@ -1158,7 +1158,7 @@ function setupAuth() {
         try {
             const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
             const r = await creerOuChargerProfil(cred.user);
-            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); chatWidgetBienvenue(); }
+            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
             else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
         } catch (e) {
             err.textContent = '❌ ' + traduireErreurFirebase(e);
@@ -1173,7 +1173,7 @@ function setupAuth() {
         try {
             const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
             const r = await creerOuChargerProfil(cred.user);
-            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); chatWidgetBienvenue(); }
+            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
             else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
         } catch (e) {
             err.textContent = '❌ ' + traduireErreurFirebase(e);
@@ -1186,7 +1186,7 @@ function setupAuth() {
         if (tel.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
         if (!$('tel-manquant-politique').checked) { err.textContent = I18N[currentLang].err_politique_requise; return; }
         const r = await creerOuChargerProfil(pendingFbUser, { telephone: tel, politiqueAcceptee: true });
-        if (r.ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); chatWidgetBienvenue(); }
+        if (r.ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); }
         else { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
     };
 
@@ -1209,7 +1209,7 @@ function setupAuth() {
             const cred = await window.fbCreateUserWithEmail(window.firebaseAuth, email, mdp);
             const r = await creerOuChargerProfil(cred.user, { nom, telephone: tel, politiqueAcceptee: true });
             $('btn-register').textContent = 'Créer mon compte';
-            if (r.ok) { closeOverlay('auth-overlay'); chatWidgetBienvenue(); }
+            if (r.ok) { closeOverlay('auth-overlay'); }
             else { err.textContent = '❌ Compte créé mais profil non enregistré : ' + (r.error?.message || 'contacte le support'); }
         } catch (e) {
             $('btn-register').textContent = 'Créer mon compte';
@@ -1732,18 +1732,35 @@ async function chatWidgetDemanderIA(texte) {
 
 function chatWidgetPoserQuestion(texteAffiche) {
     if (chatWidgetOccupe) return;
+    cwEcrire('kap_assistant_utilise', 1); // elle a découvert l'assistant : l'invitation s'arrête
     chatWidgetHistorique.push({ role: 'user', texte: texteAffiche }); // avant l'affichage : la mémoire sauvegardée est complète
     chatWidgetAjouterBulle(texteAffiche, 'user');
     chatWidgetDemanderIA(texteAffiche);
 }
 
-// Invitation de l'assistant : un petit message au-dessus du bouton 💬.
-//  - nouveau visiteur : une fois par semaine, jamais si elle a été refusée (chatWidgetInvitation) ;
-//  - à CHAQUE connexion : message de bienvenue personnalisé, sans cette limite (chatWidgetBienvenue).
-function chatWidgetInvitationFermer() {
+// Invitation de l'assistant : un petit message au-dessus du bouton 💬, pour que le visiteur découvre qu'il a un assistant.
+// Elle revient à CHAQUE VISITE (retour sur le site après 30 minutes d'absence), pendant 30 jours à partir de son premier
+// affichage, avec un texte différent d'une visite à l'autre. Elle s'arrête :
+//   - dès que la personne a posé une question à l'assistant (elle l'a découvert) ;
+//   - après 3 refus (« Non merci » / « Plus tard ») ;
+//   - jamais dans l'espace administrateur.
+const CW_INVITATION_JOURS = 30;                  // durée pendant laquelle elle revient (modifiable ici)
+const CW_INVITATION_ECART_MS = 30 * 60 * 1000;   // 2 affichages à moins de 30 min = la même visite
+const CW_INVITATION_REFUS_MAX = 3;
+const cwLire = (cle) => { try { return Number(localStorage.getItem(cle)) || 0; } catch (e) { return 0; } };
+const cwEcrire = (cle, valeur) => { try { localStorage.setItem(cle, String(valeur)); } catch (e) { /* navigation privée : on ignore */ } };
+const chatWidgetEstPageAdmin = () => window.location.pathname.replace(/\//g, '') === 'admin-cmr2025';
+
+const CW_INVITATIONS = [
+    (p) => ({ titre: p ? '👋 ' + p + ', besoin d\'aide pour choisir ?' : '👋 Besoin d\'aide pour choisir ?', sous: 'Laisse-toi accompagner par notre assistant : dis-lui ce que tu cherches, il te propose ce qu\'on a en stock.', oui: 'Oui, aide-moi', non: 'Non merci' }),
+    () => ({ titre: '💬 Une question ? Demande-moi tout', sous: 'Produits, livraison, paiement, suivi de commande : notre assistant connaît tout le site. Laisse-toi guider.', oui: 'Je pose ma question', non: 'Plus tard' }),
+    () => ({ titre: '🔎 Tu ne trouves pas ce que tu cherches ?', sous: 'Dis-le à notre assistant : il cherche dans tout le catalogue pour toi et te propose les produits disponibles.', oui: 'Essayer l\'assistant', non: 'Non merci' })
+];
+
+function chatWidgetInvitationFermer(refus) {
     const bloc = document.getElementById('chat-invite');
     if (bloc) bloc.remove();
-    try { localStorage.setItem('kap_invite_assistant', String(Date.now())); } catch (e) { /* navigation privée : on ignore */ }
+    if (refus) cwEcrire('kap_invite_refus', cwLire('kap_invite_refus') + 1);
 }
 function chatWidgetInvitationAfficher({ titre, sous, oui, non }) {
     const panel = $('chat-widget-panel');
@@ -1769,7 +1786,7 @@ function chatWidgetInvitationAfficher({ titre, sous, oui, non }) {
     const bNon = document.createElement('button');
     bNon.className = 'ci-non';
     bNon.textContent = non;
-    bNon.onclick = chatWidgetInvitationFermer;
+    bNon.onclick = () => chatWidgetInvitationFermer(true);
     rang.appendChild(bOui);
     rang.appendChild(bNon);
     bloc.appendChild(t);
@@ -1778,25 +1795,29 @@ function chatWidgetInvitationAfficher({ titre, sous, oui, non }) {
     document.body.appendChild(bloc);
     setTimeout(() => { if (document.getElementById('chat-invite')) chatWidgetInvitationFermer(); }, 25000);
 }
-function chatWidgetInvitation() {
-    try {
-        const vu = Number(localStorage.getItem('kap_invite_assistant'));
-        if (vu && Date.now() - vu < 7 * 24 * 3600 * 1000) return;
-    } catch (e) { /* on affiche quand même */ }
-    setTimeout(() => chatWidgetInvitationAfficher({
-        titre: '👋 Besoin d\'aide pour choisir ?',
-        sous: 'Laisse-toi accompagner par notre assistant : dis-lui ce que tu cherches, il te propose ce qu\'on a en stock.',
-        oui: 'Oui, aide-moi', non: 'Non merci'
-    }), 8000);
+function chatWidgetInvitationAutorisee() {
+    if (chatWidgetEstPageAdmin()) return false;
+    if (cwLire('kap_assistant_utilise')) return false;
+    if (cwLire('kap_invite_refus') >= CW_INVITATION_REFUS_MAX) return false;
+    const maintenant = Date.now(), debut = cwLire('kap_invite_debut'), dernier = cwLire('kap_invite_dernier');
+    if (debut && maintenant - debut > CW_INVITATION_JOURS * 24 * 3600 * 1000) return false;
+    if (dernier && maintenant - dernier < CW_INVITATION_ECART_MS) return false;
+    return true;
 }
-// Appelée après chaque connexion réussie (e-mail, Google, inscription).
-function chatWidgetBienvenue() {
-    const prenom = (typeof currentUser !== 'undefined' && currentUser && currentUser.nom ? String(currentUser.nom).trim().split(/\s+/)[0] : '');
-    setTimeout(() => chatWidgetInvitationAfficher({
-        titre: prenom ? '👋 Bienvenue ' + prenom + ' !' : '👋 Bienvenue !',
-        sous: 'Tu peux tout demander à notre assistant : produits, livraison, paiement, suivi de commande… Laisse-toi guider.',
-        oui: 'Oui, guide-moi', non: 'Plus tard'
-    }), 1500);
+function chatWidgetInvitation() {
+    if (!chatWidgetInvitationAutorisee()) return;
+    setTimeout(() => {
+        if (!chatWidgetInvitationAutorisee()) return; // la situation a pu changer pendant l'attente
+        const nb = cwLire('kap_invite_nb');
+        const prenom = (typeof currentUser !== 'undefined' && currentUser && currentUser.nom) ? String(currentUser.nom).trim().split(/\s+/)[0] : '';
+        chatWidgetInvitationAfficher(CW_INVITATIONS[nb % CW_INVITATIONS.length](prenom));
+        if (document.getElementById('chat-invite')) { // affichée pour de bon (le chat n'était pas déjà ouvert)
+            const maintenant = Date.now();
+            if (!cwLire('kap_invite_debut')) cwEcrire('kap_invite_debut', maintenant);
+            cwEcrire('kap_invite_dernier', maintenant);
+            cwEcrire('kap_invite_nb', nb + 1);
+        }
+    }, 6000);
 }
 
 
