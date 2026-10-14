@@ -1140,7 +1140,7 @@ function setupAuth() {
         if (cred) {
             try {
                 const r = await creerOuChargerProfil(cred.user);
-                if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+                if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); chatWidgetBienvenue(); }
                 else if (!r.pending) { err.textContent = '❌ Profil introuvable : ' + (r.error?.message || r.error || 'contacte le support'); }
             } catch (e) {
                 // Connexion réussie mais un problème est survenu juste après : un rechargement
@@ -1158,7 +1158,7 @@ function setupAuth() {
         try {
             const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
             const r = await creerOuChargerProfil(cred.user);
-            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); chatWidgetBienvenue(); }
             else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
         } catch (e) {
             err.textContent = '❌ ' + traduireErreurFirebase(e);
@@ -1173,7 +1173,7 @@ function setupAuth() {
         try {
             const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
             const r = await creerOuChargerProfil(cred.user);
-            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); chatWidgetBienvenue(); }
             else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
         } catch (e) {
             err.textContent = '❌ ' + traduireErreurFirebase(e);
@@ -1186,7 +1186,7 @@ function setupAuth() {
         if (tel.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
         if (!$('tel-manquant-politique').checked) { err.textContent = I18N[currentLang].err_politique_requise; return; }
         const r = await creerOuChargerProfil(pendingFbUser, { telephone: tel, politiqueAcceptee: true });
-        if (r.ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); }
+        if (r.ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); chatWidgetBienvenue(); }
         else { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
     };
 
@@ -1209,7 +1209,7 @@ function setupAuth() {
             const cred = await window.fbCreateUserWithEmail(window.firebaseAuth, email, mdp);
             const r = await creerOuChargerProfil(cred.user, { nom, telephone: tel, politiqueAcceptee: true });
             $('btn-register').textContent = 'Créer mon compte';
-            if (r.ok) { closeOverlay('auth-overlay'); }
+            if (r.ok) { closeOverlay('auth-overlay'); chatWidgetBienvenue(); }
             else { err.textContent = '❌ Compte créé mais profil non enregistré : ' + (r.error?.message || 'contacte le support'); }
         } catch (e) {
             $('btn-register').textContent = 'Créer mon compte';
@@ -1686,7 +1686,7 @@ function chatWidgetAccueil() {
         chatWidgetRejouer(chatWidgetJournal);
         return;
     }
-    chatWidgetAjouterBulle("👋 Salut ! Je suis l'assistant Kapmaket. Dis-moi ce que tu cherches et je te propose ce qu'on a en stock. Tu peux aussi me poser une question sur la livraison, le paiement ou ta commande.", 'bot');
+    chatWidgetAjouterBulle("👋 Salut ! Je suis l'assistant Kapmaket. Dis-moi ce que tu cherches et je te propose ce qu'on a en stock. Tu peux aussi me poser une question sur la livraison, le paiement ou ta commande. Tes questions, sans ton nom ni ton numéro, nous aident à améliorer la boutique.", 'bot');
     chatWidgetAfficherPuces(CW_ACCUEIL_PUCES);
 }
 
@@ -1707,7 +1707,7 @@ async function chatWidgetDemanderIA(texte) {
         const r = await fetch('/api/recherche-photo?mode=assistant', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: texte, historique: chatWidgetHistorique.slice(-9, -1) }),
+            body: JSON.stringify({ message: texte, historique: chatWidgetHistorique.slice(-9, -1), session: typeof visiteurId !== 'undefined' ? visiteurId : '' }),
             signal: ctrl.signal
         });
         clearTimeout(minuteur);
@@ -1737,49 +1737,68 @@ function chatWidgetPoserQuestion(texteAffiche) {
     chatWidgetDemanderIA(texteAffiche);
 }
 
-// Invitation discrète pour un nouveau visiteur : une seule fois par semaine, jamais si elle a été refusée.
+// Invitation de l'assistant : un petit message au-dessus du bouton 💬.
+//  - nouveau visiteur : une fois par semaine, jamais si elle a été refusée (chatWidgetInvitation) ;
+//  - à CHAQUE connexion : message de bienvenue personnalisé, sans cette limite (chatWidgetBienvenue).
 function chatWidgetInvitationFermer() {
     const bloc = document.getElementById('chat-invite');
     if (bloc) bloc.remove();
     try { localStorage.setItem('kap_invite_assistant', String(Date.now())); } catch (e) { /* navigation privée : on ignore */ }
+}
+function chatWidgetInvitationAfficher({ titre, sous, oui, non }) {
+    const panel = $('chat-widget-panel');
+    if (!panel || panel.style.display === 'flex') return;
+    const ancien = document.getElementById('chat-invite');
+    if (ancien) ancien.remove();
+    const bloc = document.createElement('div');
+    bloc.id = 'chat-invite';
+    bloc.setAttribute('role', 'dialog');
+    bloc.setAttribute('aria-label', 'Invitation à utiliser l\'assistant');
+    const t = document.createElement('div');
+    t.className = 'ci-titre';
+    t.textContent = titre;
+    const st = document.createElement('div');
+    st.className = 'ci-sous';
+    st.textContent = sous;
+    const rang = document.createElement('div');
+    rang.className = 'ci-boutons';
+    const bOui = document.createElement('button');
+    bOui.className = 'ci-oui';
+    bOui.textContent = oui;
+    bOui.onclick = () => { chatWidgetInvitationFermer(); $('chat-widget-btn').click(); };
+    const bNon = document.createElement('button');
+    bNon.className = 'ci-non';
+    bNon.textContent = non;
+    bNon.onclick = chatWidgetInvitationFermer;
+    rang.appendChild(bOui);
+    rang.appendChild(bNon);
+    bloc.appendChild(t);
+    bloc.appendChild(st);
+    bloc.appendChild(rang);
+    document.body.appendChild(bloc);
+    setTimeout(() => { if (document.getElementById('chat-invite')) chatWidgetInvitationFermer(); }, 25000);
 }
 function chatWidgetInvitation() {
     try {
         const vu = Number(localStorage.getItem('kap_invite_assistant'));
         if (vu && Date.now() - vu < 7 * 24 * 3600 * 1000) return;
     } catch (e) { /* on affiche quand même */ }
-    setTimeout(() => {
-        const panel = $('chat-widget-panel');
-        if (!panel || panel.style.display === 'flex' || document.getElementById('chat-invite')) return;
-        const bloc = document.createElement('div');
-        bloc.id = 'chat-invite';
-        bloc.setAttribute('role', 'dialog');
-        bloc.setAttribute('aria-label', 'Invitation à utiliser l\'assistant');
-        const titre = document.createElement('div');
-        titre.className = 'ci-titre';
-        titre.textContent = '👋 Besoin d\'aide pour choisir ?';
-        const sous = document.createElement('div');
-        sous.className = 'ci-sous';
-        sous.textContent = 'Laisse-toi accompagner par notre assistant : dis-lui ce que tu cherches, il te propose ce qu\'on a en stock.';
-        const rang = document.createElement('div');
-        rang.className = 'ci-boutons';
-        const oui = document.createElement('button');
-        oui.className = 'ci-oui';
-        oui.textContent = 'Oui, aide-moi';
-        oui.onclick = () => { chatWidgetInvitationFermer(); $('chat-widget-btn').click(); };
-        const non = document.createElement('button');
-        non.className = 'ci-non';
-        non.textContent = 'Non merci';
-        non.onclick = chatWidgetInvitationFermer;
-        rang.appendChild(oui);
-        rang.appendChild(non);
-        bloc.appendChild(titre);
-        bloc.appendChild(sous);
-        bloc.appendChild(rang);
-        document.body.appendChild(bloc);
-        setTimeout(() => { if (document.getElementById('chat-invite')) chatWidgetInvitationFermer(); }, 25000);
-    }, 8000);
+    setTimeout(() => chatWidgetInvitationAfficher({
+        titre: '👋 Besoin d\'aide pour choisir ?',
+        sous: 'Laisse-toi accompagner par notre assistant : dis-lui ce que tu cherches, il te propose ce qu\'on a en stock.',
+        oui: 'Oui, aide-moi', non: 'Non merci'
+    }), 8000);
 }
+// Appelée après chaque connexion réussie (e-mail, Google, inscription).
+function chatWidgetBienvenue() {
+    const prenom = (typeof currentUser !== 'undefined' && currentUser && currentUser.nom ? String(currentUser.nom).trim().split(/\s+/)[0] : '');
+    setTimeout(() => chatWidgetInvitationAfficher({
+        titre: prenom ? '👋 Bienvenue ' + prenom + ' !' : '👋 Bienvenue !',
+        sous: 'Tu peux tout demander à notre assistant : produits, livraison, paiement, suivi de commande… Laisse-toi guider.',
+        oui: 'Oui, guide-moi', non: 'Plus tard'
+    }), 1500);
+}
+
 
 function setupChatWidget() {
     // En-tête : bouton « Nouvelle discussion » et sous-titre à jour (sans toucher à index.html).
@@ -3701,6 +3720,7 @@ async function afficherPanneauAdmin() {
                 <button onclick="showTab('tab-retours')" class="adm-tab" id="tb-retours">🔄 Retours</button>
                 <button onclick="showTab('tab-promo')" class="adm-tab" id="tb-promo">🏷️ Codes promo</button>
                 <button onclick="showTab('tab-visiteurs')" class="adm-tab" id="tb-visiteurs">👥 Visiteurs</button>
+                <button onclick="showTab('tab-demande');chargerDemande(30)" class="adm-tab" id="tb-demande">📈 Demande clients</button>
                 <button onclick="showTab('tab-combo')" class="adm-tab" id="tb-combo">⚡ Flash Combo</button>
                 <button onclick="window.location.href='/'" class="adm-tab">🏪 Site</button>
                 <button onclick="ouvrirPresentationTelechargement()" class="adm-tab" style="background:rgba(255,255,255,0.15)">📲 Installer l'app Admin</button>
@@ -4038,6 +4058,10 @@ async function afficherPanneauAdmin() {
         </div>
 
         <!-- VISITEURS -->
+        <div id="tab-demande" style="display:none">
+            <div id="demande-contenu" style="font-family:Inter,sans-serif"><p style="color:#888">Ouvrez l'onglet pour charger les statistiques…</p></div>
+        </div>
+
         <div id="tab-visiteurs" style="display:none">
             <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
                 <h2 style="font-size:1rem;margin-bottom:4px">👥 Visiteurs (${visiteurs.length})</h2>
@@ -4511,12 +4535,118 @@ window.telechargerFactureAdmin = async (code) => {
 };
 
 let adminTabActuel = 'tab-dash';
+// ===== DEMANDE CLIENTS (admin) =====
+// « Miroir de la demande » : ce que les clients demandent à l'assistant, tapent dans la recherche, regardent,
+// mettent au panier et achètent. Les calculs sont faits côté serveur (api/_lib/demandesStats.js).
+const DEMANDE_LIBELLES = {
+    telephone: 'Téléphones', chargeur: 'Chargeurs', batterie: 'Batteries externes', ecouteurs: 'Écouteurs', casque: 'Casques',
+    enceinte: 'Enceintes', accessoire: 'Accessoires', ordinateur: 'Ordinateurs', reseau: 'Réseau / Wi-Fi', gaming: 'Gaming',
+    electronique: 'Électronique', promo: 'Promos', livraison: 'Livraison', paiement: 'Paiement', commande: 'Suivi de commande',
+    retour: 'Retours', contact: 'Contact', autre: 'Autre'
+};
+const DEMANDE_NON_PRODUIT = ['livraison', 'paiement', 'commande', 'retour', 'contact', 'autre', 'promo'];
+const demandeLib = k => DEMANDE_LIBELLES[k] || k;
+function demandeVariation(v) {
+    if (v === null || v === undefined) return '<span style="color:#3FA66B;font-size:0.72rem"> · nouveau</span>';
+    if (v > 0) return `<span style="color:#3FA66B;font-size:0.72rem"> ▲ ${Number(v)} %</span>`;
+    if (v < 0) return `<span style="color:#D9534F;font-size:0.72rem"> ▼ ${Math.abs(Number(v))} %</span>`;
+    return '<span style="color:#888;font-size:0.72rem"> = stable</span>';
+}
+function demandeBarres(liste, libelle, couleur) {
+    if (!liste || !liste.length) return '<p style="color:#888;font-size:0.82rem;margin:0">Pas encore de données.</p>';
+    const max = Math.max(...liste.map(x => Number(x.n) || 0), 1);
+    return liste.map(x => `<div style="margin-bottom:9px">
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:0.82rem"><span>${echapperHtml(libelle(x))}</span><span style="white-space:nowrap"><b>${Number(x.n) || 0}</b>${x.variation !== undefined ? demandeVariation(x.variation) : ''}</span></div>
+        <div style="background:#f0f0f0;border-radius:6px;height:8px;margin-top:3px"><div style="background:${couleur};width:${Math.max(4, Math.round((Number(x.n) || 0) / max * 100))}%;height:8px;border-radius:6px"></div></div></div>`).join('');
+}
+const demandeCarte = (titre, contenu, note) => `<div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:20px;margin-bottom:16px">
+    <h3 style="font-size:0.95rem;margin:0 0 4px">${titre}</h3>${note ? `<p style="font-size:0.75rem;color:#888;margin:0 0 12px">${note}</p>` : '<div style="height:10px"></div>'}${contenu}</div>`;
+const demandeKpi = (valeur, libelle, extra) => `<div style="flex:1 1 130px;background:#f8faf8;border:1px solid #eef0ee;border-radius:12px;padding:12px">
+    <div style="font-size:1.35rem;font-weight:800">${valeur}</div><div style="font-size:0.74rem;color:#666">${libelle}</div>${extra || ''}</div>`;
+const demandeVar = (n, avant) => (avant > 0 ? Math.round((n - avant) / avant * 100) : null);
+
+function rendreDemande(s) {
+    const T = s.totaux || {}, A = s.assistant || {}, W = s.site || {};
+    const peuDeDonnees = (T.questions || 0) < 20;
+
+    // ---- À retenir : des phrases simples tirées des chiffres ----
+    const points = [];
+    const topProduit = (A.intentions || []).find(x => !DEMANDE_NON_PRODUIT.includes(x.intention));
+    if (topProduit) points.push(`Le plus demandé à l'assistant : <b>${echapperHtml(demandeLib(topProduit.intention))}</b> (${topProduit.n} fois${topProduit.variation === null ? ', nouveau' : topProduit.variation > 0 ? ', en hausse de ' + topProduit.variation + ' %' : topProduit.variation < 0 ? ', en baisse de ' + Math.abs(topProduit.variation) + ' %' : ''}).`);
+    if ((A.sans_produit || []).length) points.push(`💡 Demandes <b>sans produit chez vous</b> : ${A.sans_produit.slice(0, 3).map(x => '<b>' + echapperHtml(x.terme) + '</b> (×' + x.n + ')').join(', ')} — à étudier pour votre prochain stock.`);
+    const topSite = (W.produits || [])[0];
+    if (topSite) points.push(`Produit qui attire le plus : <b>${echapperHtml(topSite.nom)}</b> (${topSite.vues} vues, ${topSite.paniers} ajouts au panier, ${topSite.vendus} vendu(s)).`);
+    const regardes = (W.produits || []).filter(p => p.vues >= 10 && p.vendus === 0).slice(0, 2);
+    if (regardes.length) points.push(`👀 Beaucoup regardé mais jamais acheté : ${regardes.map(p => '<b>' + echapperHtml(p.nom) + '</b>').join(', ')} — prix, photos ou description à revoir ?`);
+    const bud = (A.budgets || [])[0];
+    if (bud && bud.mediane) points.push(`Budget typique pour <b>${echapperHtml(demandeLib(bud.intention))}</b> : environ <b>${fmt(bud.mediane)} FCFA</b> (${bud.n} demande(s)).`);
+    const frein = (A.intentions || []).filter(x => ['livraison', 'paiement'].includes(x.intention) && x.n >= 5);
+    if (frein.length) points.push(`Beaucoup de questions sur <b>${frein.map(x => echapperHtml(demandeLib(x.intention)).toLowerCase()).join(' et ')}</b> : c'est peut-être à mieux expliquer sur le site.`);
+    if (peuDeDonnees) points.unshift(`⚠️ Seulement ${T.questions || 0} question(s) à l'assistant sur la période : les tendances sont <b>indicatives</b>. Elles deviennent fiables après quelques semaines.`);
+
+    // ---- Heures ----
+    const heures = s.heures || new Array(24).fill(0);
+    const maxH = Math.max(...heures, 1);
+    const colonnes = heures.map((n, h) => `<div style="flex:1;text-align:center"><div style="height:60px;display:flex;align-items:flex-end"><div style="width:100%;background:${n === maxH && n > 0 ? '#E8792E' : '#9fd4b5'};height:${Math.max(2, Math.round(n / maxH * 100))}%;border-radius:3px 3px 0 0" title="${h} h : ${n}"></div></div><div style="font-size:0.58rem;color:#888">${h % 3 === 0 ? h : ''}</div></div>`).join('');
+
+    const lignesProduits = (W.produits || []).map(p => `<tr style="border-top:1px solid #f0f0f0">
+        <td style="padding:7px 4px;font-size:0.82rem">${echapperHtml(p.nom)}${p.vendus >= 3 ? ' <span title="Se vend bien">💰</span>' : ''}${p.vues >= 10 && p.vendus === 0 ? ' <span title="Beaucoup regardé, jamais acheté">👀</span>' : ''}</td>
+        <td style="text-align:right;padding:7px 4px;font-size:0.82rem">${p.vues}${demandeVariation(p.variation)}</td>
+        <td style="text-align:right;padding:7px 4px;font-size:0.82rem">${p.paniers}</td>
+        <td style="text-align:right;padding:7px 4px;font-size:0.82rem;font-weight:700">${p.vendus}</td></tr>`).join('');
+
+    const bouton = (j) => `<button onclick="chargerDemande(${j})" style="padding:7px 14px;border-radius:20px;border:1.5px solid ${s.jours === j ? '#0E7C4A' : '#ddd'};background:${s.jours === j ? '#0E7C4A' : '#fff'};color:${s.jours === j ? '#fff' : '#333'};font-weight:700;font-size:0.78rem;cursor:pointer">${j} jours</button>`;
+
+    const recentes = (s.questions_recentes || []).map(q => `<div style="padding:7px 0;border-top:1px solid #f0f0f0;font-size:0.8rem">
+        <span style="color:#888">${new Date(q.date).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span> — « ${echapperHtml(q.question || '')} »
+        ${q.intention ? `<span style="background:#eef6f0;border-radius:8px;padding:1px 7px;font-size:0.7rem;margin-left:4px">${echapperHtml(demandeLib(q.intention))}</span>` : ''}
+        ${q.trouve === false ? '<span style="color:#E8792E;font-size:0.72rem;margin-left:4px">❌ rien en catalogue</span>' : ''}</div>`).join('');
+
+    return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+            <div><h2 style="font-size:1.05rem;margin:0">📈 Ce que veulent vos clients</h2>
+            <p style="font-size:0.75rem;color:#888;margin:2px 0 0">Données anonymes (aucun nom ni numéro n'est enregistré). Comparaison avec la période précédente de même durée.</p></div>
+            <div style="display:flex;gap:6px">${bouton(7)}${bouton(30)}${bouton(90)}</div></div>
+        ${s.avertissement ? `<div style="background:#fff8f0;border:1px solid #f3c99d;border-radius:12px;padding:12px;margin-bottom:14px;font-size:0.82rem">⚠️ ${echapperHtml(s.avertissement)}</div>` : ''}
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+            ${demandeKpi(T.questions || 0, 'questions à l\'assistant', demandeVariation(demandeVar(T.questions || 0, T.questions_avant || 0)))}
+            ${demandeKpi(T.personnes || 0, 'personnes différentes')}
+            ${demandeKpi(T.recherches_barre || 0, 'recherches (barre du site)')}
+            ${demandeKpi(T.vues_produits || 0, 'fiches produit ouvertes')}
+            ${demandeKpi(T.ajouts_panier || 0, 'ajouts au panier')}
+            ${demandeKpi(T.commandes_payees || 0, 'commandes payées')}
+            ${demandeKpi((T.part_whatsapp || 0) + ' %', 'renvoyés vers WhatsApp')}</div>
+        ${demandeCarte('🎯 À retenir', points.length ? '<ul style="margin:0;padding-left:18px;font-size:0.85rem;line-height:1.6">' + points.map(p => '<li>' + p + '</li>').join('') + '</ul>' : '<p style="color:#888;font-size:0.82rem;margin:0">Pas encore assez de données.</p>')}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+            <div>${demandeCarte('💬 Ce qu\'ils demandent à l\'assistant', demandeBarres(A.intentions, x => demandeLib(x.intention), '#0E7C4A'), 'Par sujet, sur la période.')}
+                 ${demandeCarte('🔎 Produits cherchés (assistant)', demandeBarres(A.recherches, x => x.terme, '#2f80ed'), 'Mots-clés relevés par l\'assistant.')}
+                 ${demandeCarte('🧾 Budgets cités', (A.budgets || []).length ? '<table style="width:100%;border-collapse:collapse">' + A.budgets.map(b => `<tr style="border-top:1px solid #f0f0f0"><td style="padding:7px 4px;font-size:0.82rem">${echapperHtml(demandeLib(b.intention))} <span style="color:#888">(${b.n})</span></td><td style="text-align:right;font-size:0.82rem"><b>${fmt(b.mediane)}</b> FCFA <span style="color:#888">(de ${fmt(b.min)} à ${fmt(b.max)})</span></td></tr>`).join('') + '</table>' : '<p style="color:#888;font-size:0.82rem;margin:0">Pas encore de budget cité.</p>', 'Médiane = la valeur « du milieu ».')}
+                 ${demandeCarte('❌ Demandes sans produit chez vous', demandeBarres(A.sans_produit, x => x.terme, '#E8792E'), 'Ce que des clients cherchent et que votre catalogue n\'a pas : des idées de stock.')}</div>
+            <div>${demandeCarte('⌨️ Recherches dans la barre du site', demandeBarres(W.recherches_barre, x => x.terme, '#2f80ed'))}
+                 ${demandeCarte('🗂️ Catégories les plus ouvertes', demandeBarres(W.categories, x => x.categorie, '#9b59b6'))}
+                 ${demandeCarte('⏰ Heures des questions (heure de Douala)', `<div style="display:flex;gap:2px">${colonnes}</div>`)}</div></div>
+        ${demandeCarte('🛍️ Produits : regardés, mis au panier, vendus', lignesProduits ? `<table style="width:100%;border-collapse:collapse"><tr style="font-size:0.72rem;color:#888"><th style="text-align:left;padding:4px">Produit</th><th style="text-align:right;padding:4px">Vues</th><th style="text-align:right;padding:4px">Paniers</th><th style="text-align:right;padding:4px">Vendus</th></tr>${lignesProduits}</table>` : '<p style="color:#888;font-size:0.82rem;margin:0">Pas encore de données.</p>', '💰 se vend bien · 👀 beaucoup regardé mais jamais acheté.')}
+        ${demandeCarte('🗒️ Dernières questions (telles qu\'écrites par les clients)', recentes || '<p style="color:#888;font-size:0.82rem;margin:0">Aucune question pour le moment.</p>', 'Numéros, e-mails et codes de commande sont masqués. À lire pour comprendre les mots des clients.')}`;
+}
+
+window.chargerDemande = async (jours) => {
+    const zone = document.getElementById('demande-contenu');
+    if (!zone) return;
+    zone.innerHTML = '<p style="color:#888">Chargement des statistiques…</p>';
+    try {
+        const stats = await adminAction('demandes', 'stats', { payload: { jours: jours || 30 } });
+        zone.innerHTML = rendreDemande(stats);
+    } catch (e) {
+        zone.innerHTML = `<div style="background:#fff0f0;border-radius:12px;padding:14px;color:#D9534F;font-size:0.85rem">❌ ${echapperHtml(e.message || 'Erreur')}</div>`;
+    }
+};
+// ===== FIN DEMANDE CLIENTS =====
+
 window.showTab = id => {
     adminTabActuel = id;
-    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param','tab-retours','tab-promo','tab-visiteurs','tab-combo'].forEach(t=>{
+    ['tab-dash','tab-prods','tab-cmds','tab-users','tab-avis','tab-mktg','tab-param','tab-retours','tab-promo','tab-visiteurs','tab-demande','tab-combo'].forEach(t=>{
         const el=document.getElementById(t); if(el) el.style.display=t===id?'block':'none';
     });
-    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param','tb-retours','tb-promo','tb-visiteurs','tb-combo'].forEach(b=>{
+    ['tb-dash','tb-prods','tb-cmds','tb-users','tb-avis','tb-mktg','tb-param','tb-retours','tb-promo','tb-visiteurs','tb-demande','tb-combo'].forEach(b=>{
         const el=document.getElementById(b); if(el) el.classList.toggle('active', b==='tb-'+id.replace('tab-',''));
     });
 };

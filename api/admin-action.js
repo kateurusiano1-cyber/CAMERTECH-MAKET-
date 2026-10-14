@@ -25,6 +25,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
 const { envoyerPushUtilisateur } = require('./_lib/envoyerPush');
 const { synchroniserStatut } = require('./_lib/telegram');
+const { calculerStats } = require('./_lib/demandesStats');
 const CONFIG = require('../config.js');
 
 const TABLE_REELLE = { bannieres: 'bannières' }; // nom réel de la table en base
@@ -221,6 +222,32 @@ module.exports = async (req, res) => {
             const { error } = await supabase.from('codes_promo').delete().eq('id', id);
             if (error) throw error;
             return res.status(200).json({ ok: true });
+        }
+
+        // demandes : « miroir de la demande » — ce que les clients demandent, cherchent, regardent, achètent (lecture seule)
+        if (ressource === 'demandes' && action === 'stats') {
+            const jours = Math.min(90, Math.max(7, Number(payload && payload.jours) || 30));
+            const depuis = new Date(Date.now() - 2 * jours * 24 * 3600 * 1000).toISOString(); // période courante + période précédente
+            // Supabase renvoie au plus 1000 lignes par requête : on lit par tranches.
+            const lireTout = async (construire) => {
+                const sortie = [];
+                for (let debut = 0; debut < 20000; debut += 1000) {
+                    const { data, error } = await construire().range(debut, debut + 999);
+                    if (error) throw error;
+                    sortie.push(...(data || []));
+                    if (!data || data.length < 1000) break;
+                }
+                return sortie;
+            };
+            let avertissement = null;
+            const [demandes, evenements, reservations, produits] = await Promise.all([
+                lireTout(() => supabase.from('assistant_demandes').select('*').gte('created_at', depuis).order('created_at', { ascending: false }))
+                    .catch((e) => { avertissement = 'Les demandes à l\'assistant ne sont pas encore enregistrées (' + e.message + '). Exécutez le fichier 6-SQL-demandes-clients.sql dans Supabase.'; return []; }),
+                lireTout(() => supabase.from('visiteurs_evenements').select('type, cible, meta, created_at').in('type', ['recherche', 'produit_vu', 'panier_ajout', 'filtre_categorie']).gte('created_at', depuis).order('created_at', { ascending: false })).catch(() => []),
+                lireTout(() => supabase.from('reservations').select('items, statut, created_at').in('statut', ['valide', 'en attente', 'livre']).gte('created_at', depuis).order('created_at', { ascending: false })).catch(() => []),
+                supabase.from('products').select('id, name').then((r) => r.data || [], () => [])
+            ]);
+            return res.status(200).json({ ...calculerStats({ demandes, evenements, reservations, produits, jours }), avertissement });
         }
 
         if (ressource === 'visiteurs' && action === 'list') {
