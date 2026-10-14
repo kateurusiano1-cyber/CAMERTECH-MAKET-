@@ -772,3 +772,12 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
     .cw-bulle { font-size: 0.95rem; max-width: 88%; }
     body.cw-ouvert { overflow: hidden; }
 }
+
+/* Message de bienvenue (texte écrit par l'admin) : fenêtre centrée avec bouton OK. */
+.bv-overlay { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 20px; }
+@media (prefers-reduced-motion: no-preference) { .bv-overlay { animation: chatWidgetOuverture 0.25s ease; } }
+.bv-carte { background: var(--card); color: var(--text); width: min(440px, 100%); max-height: 88vh; overflow-y: auto; border-radius: 22px; padding: 28px 24px 22px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.35); display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.bv-logo { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 3px solid var(--orange); }
+.bv-texte { white-space: pre-line; font-size: 1.02rem; line-height: 1.55; word-break: break-word; }
+.bv-ok { width: 100%; padding: 14px; border: none; border-radius: 14px; background: var(--green); color: #fff; font-weight: 800; font-size: 1rem; cursor: pointer; font-family: var(--font-body); }
+body.bv-ouvert { overflow: hidden; }

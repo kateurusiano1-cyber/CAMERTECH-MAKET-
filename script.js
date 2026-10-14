@@ -815,6 +815,7 @@ async function chargerParametres() {
     try {
         const { data } = await db.from('parametres').select('*');
         if (!data) return;
+        bienvenueConfigurer(data);
         const slugToCat = Object.fromEntries(Object.entries(CAT_SLUGS).map(([k,v])=>[v,k]));
         data.forEach(({ cle, valeur }) => {
             if (!valeur) return;
@@ -826,8 +827,92 @@ async function chargerParametres() {
                 if (cat) CONFIG.CATEGORY_IMAGES[cat] = valeur;
             }
         });
+        afficherMessageBienvenue(false); // retour sur le site : message de bienvenue (si activé par l'admin)
     } catch (e) { console.error('Erreur chargement paramètres:', e); }
 }
+
+// ===== MESSAGE DE BIENVENUE =====
+// Texte rédigé par l'administrateur (onglet Paramètres), affiché dans une fenêtre avec un bouton « OK » :
+//   - à chaque retour sur le site (après 30 minutes d'absence) ;
+//   - à chaque connexion et à chaque création de compte (même s'il vient de s'afficher).
+// Le texte est affiché tel quel (jamais interprété comme du code) ; jamais dans l'espace administrateur.
+const BIENVENUE_ECART_MS = 30 * 60 * 1000;
+const BIENVENUE_MAX = 600;
+let bienvenueConfig = { actif: false, message: '' };
+const bvLire = (cle) => { try { return Number(localStorage.getItem(cle)) || 0; } catch (e) { return 0; } };
+const bvEcrire = (cle, valeur) => { try { localStorage.setItem(cle, String(valeur)); } catch (e) { /* navigation privée : on ignore */ } };
+
+function bienvenueConfigurer(lignes) {
+    const m = {};
+    (lignes || []).forEach(l => { if (l && l.cle) m[l.cle] = l.valeur; });
+    bienvenueConfig = { actif: m.bienvenue_actif === '1', message: String(m.bienvenue_message || '').trim().slice(0, BIENVENUE_MAX) };
+}
+function bienvenueFermer() {
+    const o = document.getElementById('bienvenue-overlay');
+    if (o) o.remove();
+    if (document.body.classList) document.body.classList.remove('bv-ouvert');
+}
+function bienvenueAfficher(texte) {
+    const ancien = document.getElementById('bienvenue-overlay');
+    if (ancien) ancien.remove();
+    const o = document.createElement('div');
+    o.id = 'bienvenue-overlay';
+    o.className = 'bv-overlay';
+    o.tabIndex = -1;
+    o.setAttribute('role', 'dialog');
+    o.setAttribute('aria-modal', 'true');
+    o.setAttribute('aria-label', 'Message de bienvenue');
+    o.onkeydown = e => { if (e.key === 'Escape') bienvenueFermer(); };
+    const carte = document.createElement('div');
+    carte.className = 'bv-carte';
+    const logo = document.createElement('img');
+    logo.className = 'bv-logo';
+    logo.src = '/logo.png';
+    logo.alt = 'Kapmaket';
+    logo.onerror = () => logo.remove();
+    const corps = document.createElement('div');
+    corps.className = 'bv-texte';
+    corps.textContent = texte; // textContent : le texte de l'admin ne peut jamais exécuter de code
+    const ok = document.createElement('button');
+    ok.className = 'bv-ok';
+    ok.textContent = 'OK';
+    ok.onclick = bienvenueFermer;
+    carte.appendChild(logo);
+    carte.appendChild(corps);
+    carte.appendChild(ok);
+    o.appendChild(carte);
+    document.body.appendChild(o);
+    if (document.body.classList) document.body.classList.add('bv-ouvert');
+    if (ok.focus) ok.focus();
+}
+function afficherMessageBienvenue(forcer) {
+    if (!bienvenueConfig.actif || !bienvenueConfig.message) return false;
+    if (window.location.pathname.replace(/\//g, '') === 'admin-cmr2025') return false;
+    if (document.getElementById('bienvenue-overlay')) return false;
+    const dernier = bvLire('kap_bienvenue_dernier');
+    if (!forcer && dernier && Date.now() - dernier < BIENVENUE_ECART_MS) return false;
+    bvEcrire('kap_bienvenue_dernier', Date.now());
+    bienvenueAfficher(bienvenueConfig.message);
+    return true;
+}
+// Lignes à enregistrer dans les paramètres (appelée par « Enregistrer les paramètres » de l'admin).
+function bienvenueLignes(actif, message) {
+    const m = String(message || '').trim().slice(0, BIENVENUE_MAX);
+    if (actif && !m) throw new Error('Écrivez le message de bienvenue avant de l\'activer.');
+    return [{ cle: 'bienvenue_actif', valeur: actif ? '1' : '0' }, { cle: 'bienvenue_message', valeur: m }];
+}
+// Aperçu dans l'admin : montre le texte tapé (même non enregistré, même désactivé).
+window.apercuBienvenue = () => {
+    const champ = document.getElementById('param-bienvenue-msg');
+    const texte = champ ? champ.value.trim().slice(0, BIENVENUE_MAX) : '';
+    if (!texte) {
+        const r = document.getElementById('param-res');
+        if (r) { r.style.color = '#D9534F'; r.textContent = 'Écrivez d\'abord un message pour voir l\'aperçu.'; }
+        return;
+    }
+    bienvenueAfficher(texte);
+};
+// ===== FIN MESSAGE DE BIENVENUE =====
 
 // ===== TRADUCTION (FR/EN) =====
 const I18N = {
@@ -1140,7 +1225,7 @@ function setupAuth() {
         if (cred) {
             try {
                 const r = await creerOuChargerProfil(cred.user);
-                if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+                if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); afficherMessageBienvenue(true); }
                 else if (!r.pending) { err.textContent = '❌ Profil introuvable : ' + (r.error?.message || r.error || 'contacte le support'); }
             } catch (e) {
                 // Connexion réussie mais un problème est survenu juste après : un rechargement
@@ -1158,7 +1243,7 @@ function setupAuth() {
         try {
             const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
             const r = await creerOuChargerProfil(cred.user);
-            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); afficherMessageBienvenue(true); }
             else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
         } catch (e) {
             err.textContent = '❌ ' + traduireErreurFirebase(e);
@@ -1173,7 +1258,7 @@ function setupAuth() {
         try {
             const cred = await window.fbSignInWithPopup(window.firebaseAuth, window.googleProvider);
             const r = await creerOuChargerProfil(cred.user);
-            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); }
+            if (r.ok) { closeOverlay('auth-overlay'); renderProducts(allProducts); afficherMessageBienvenue(true); }
             else if (!r.pending) { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
         } catch (e) {
             err.textContent = '❌ ' + traduireErreurFirebase(e);
@@ -1186,7 +1271,7 @@ function setupAuth() {
         if (tel.length !== 9) { err.textContent = '❌ Numéro invalide (9 chiffres)'; return; }
         if (!$('tel-manquant-politique').checked) { err.textContent = I18N[currentLang].err_politique_requise; return; }
         const r = await creerOuChargerProfil(pendingFbUser, { telephone: tel, politiqueAcceptee: true });
-        if (r.ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); }
+        if (r.ok) { closeOverlay('tel-manquant-overlay'); closeOverlay('auth-overlay'); renderProducts(allProducts); afficherMessageBienvenue(true); }
         else { err.textContent = '❌ ' + (r.error?.message || r.error || 'Erreur, réessaie'); }
     };
 
@@ -1209,7 +1294,7 @@ function setupAuth() {
             const cred = await window.fbCreateUserWithEmail(window.firebaseAuth, email, mdp);
             const r = await creerOuChargerProfil(cred.user, { nom, telephone: tel, politiqueAcceptee: true });
             $('btn-register').textContent = 'Créer mon compte';
-            if (r.ok) { closeOverlay('auth-overlay'); }
+            if (r.ok) { closeOverlay('auth-overlay'); afficherMessageBienvenue(true); }
             else { err.textContent = '❌ Compte créé mais profil non enregistré : ' + (r.error?.message || 'contacte le support'); }
         } catch (e) {
             $('btn-register').textContent = 'Créer mon compte';
@@ -1808,6 +1893,7 @@ function chatWidgetInvitation() {
     if (!chatWidgetInvitationAutorisee()) return;
     setTimeout(() => {
         if (!chatWidgetInvitationAutorisee()) return; // la situation a pu changer pendant l'attente
+        if (document.getElementById('bienvenue-overlay')) return; // le message de bienvenue est à l'écran : on ne l'encombre pas
         const nb = cwLire('kap_invite_nb');
         const prenom = (typeof currentUser !== 'undefined' && currentUser && currentUser.nom) ? String(currentUser.nom).trim().split(/\s+/)[0] : '';
         chatWidgetInvitationAfficher(CW_INVITATIONS[nb % CW_INVITATIONS.length](prenom));
@@ -4007,6 +4093,17 @@ async function afficherPanneauAdmin() {
                     </div>`).join('')}
                 </div>
             </div>
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
+                <h2 style="font-size:1rem;margin-bottom:6px">📢 Message de bienvenue (lancement)</h2>
+                <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Affiché dans une fenêtre avec un bouton « OK » : à chaque retour sur le site (après 30 min d'absence), à chaque connexion et à chaque création de compte. Vous écrivez seulement le texte.</p>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;font-weight:600;margin-bottom:10px;cursor:pointer"><input type="checkbox" id="param-bienvenue-actif" ${paramMap.bienvenue_actif === '1' ? 'checked' : ''}> Afficher ce message aux visiteurs</label>
+                <textarea id="param-bienvenue-msg" class="adm-input" rows="5" maxlength="600" style="width:100%;resize:vertical" placeholder="Ex : Merci d'être avec nous pour le lancement officiel de Kapmaket ! 🎉" oninput="document.getElementById('param-bienvenue-compteur').textContent=this.value.length+' / 600'">${echapperHtml(paramMap.bienvenue_message || '')}</textarea>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+                    <span id="param-bienvenue-compteur" style="font-size:0.75rem;color:#888">${(paramMap.bienvenue_message || '').length} / 600</span>
+                    <button type="button" onclick="apercuBienvenue()" style="background:#f0f7ff;color:#2f6fb5;border:1px solid #c5dcf5;padding:8px 14px;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer">👁️ Voir l'aperçu</button>
+                </div>
+                <p style="font-size:0.75rem;color:#888;margin-top:8px">Le texte s'affiche tel quel, retours à la ligne compris. Pensez à cliquer sur « Enregistrer les paramètres » ci-dessous.</p>
+            </div>
             <button onclick="sauvegarderParametres()" style="background:#1F6B3A;color:white;border:none;padding:12px 20px;border-radius:9px;font-weight:700;cursor:pointer">💾 Enregistrer les paramètres</button>
             <p id="param-res" style="min-height:18px;font-size:0.82rem;margin-top:8px"></p>
         </div>
@@ -4461,6 +4558,7 @@ window.sauvegarderParametres = async () => {
             { cle: 'agence_adresse', valeur: document.getElementById('param-adresse').value.trim() },
             { cle: 'agence_tel', valeur: document.getElementById('param-tel').value.trim() }
         ];
+        rows.push(...bienvenueLignes(document.getElementById('param-bienvenue-actif').checked, document.getElementById('param-bienvenue-msg').value));
         for (const slug of Object.values(CAT_SLUGS)) {
             if (paramCatFiles[slug]) {
                 const url = await uploadImage(paramCatFiles[slug]);
