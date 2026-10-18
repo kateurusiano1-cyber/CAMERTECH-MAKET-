@@ -247,6 +247,8 @@ module.exports = async (req, res) => {
                 lireTout(() => supabase.from('reservations').select('items, statut, created_at').in('statut', ['valide', 'en attente', 'livre']).gte('created_at', depuis).order('created_at', { ascending: false })).catch(() => []),
                 supabase.from('products').select('id, name').then((r) => r.data || [], () => [])
             ]);
+            // Effacement automatique : le journal anonyme des demandes n'est gardé que 12 mois (annoncé dans la politique de confidentialité).
+            try { await supabase.from('assistant_demandes').delete().lt('created_at', new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString()); } catch (e) { /* table absente : sans importance */ }
             return res.status(200).json({ ...calculerStats({ demandes, evenements, reservations, produits, jours }), avertissement });
         }
 

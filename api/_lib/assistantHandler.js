@@ -314,6 +314,9 @@ module.exports = async (req, res) => {
         if (Math.random() < 0.025) {
             const limite = new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString();
             supabase.from('login_attempts').delete().like('cle', 'assistant:%').lt('updated_at', limite).then(() => {}, () => {});
+            // La politique de confidentialité annonce 12 mois maximum pour le journal anonyme des demandes.
+            const limiteAn = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString();
+            supabase.from('assistant_demandes').delete().lt('created_at', limiteAn).then(() => {}, () => {});
         }
 
         // Réponse déjà calculée pour la même première question (ex. les raccourcis de l'accueil) tant que le catalogue n'a pas changé.

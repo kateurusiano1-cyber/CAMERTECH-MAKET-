@@ -942,7 +942,7 @@ const I18N = {
         titre_panier: '🛒 Mon Panier', label_zone: '📍 Zone de livraison', choisir_zone: '-- Choisir votre zone --',
         ph_note: 'Note pour la commande (optionnel)...', btn_payer: '💳 Payer maintenant (Mobile Money)',
         btn_reserver: '📋 Réserver (paiement à la livraison)',
-        txt_accepte_politique: 'J\'ai lu et j\'accepte la', lien_politique: 'politique de confidentialité',
+        txt_accepte_politique: 'J\'ai lu et j\'accepte la', lien_politique: 'politique de confidentialité', txt_et_les: 'et les', lien_cgu: 'conditions d\'utilisation', nav_cgu: '📜 Conditions d\'utilisation',
         err_politique_requise: '❌ Tu dois accepter la politique de confidentialité pour continuer'
     },
     en: {
@@ -971,7 +971,7 @@ const I18N = {
         titre_panier: '🛒 My Cart', label_zone: '📍 Delivery area', choisir_zone: '-- Choose your area --',
         ph_note: 'Note for the order (optional)...', btn_payer: '💳 Pay now (Mobile Money)',
         btn_reserver: '📋 Reserve (pay on pickup/delivery)',
-        txt_accepte_politique: 'I have read and accept the', lien_politique: 'privacy policy',
+        txt_accepte_politique: 'I have read and accept the', lien_politique: 'privacy policy', txt_et_les: 'and the', lien_cgu: 'terms of use', nav_cgu: '📜 Terms of use',
         err_politique_requise: '❌ You must accept the privacy policy to continue'
     }
 };
@@ -1054,6 +1054,7 @@ function setupSidebar() {
         else { notifier("Aucun Flash Combo actif pour le moment — reviens bientôt !", 'info'); }
     };
     $('sl-politique').onclick = () => { closeSidebar(); openOverlay('politique-overlay'); };
+    $('sl-cgu').onclick = () => { closeSidebar(); openOverlay('cgu-overlay'); };
     $('sl-promo').onclick = () => { closeSidebar(); renderProducts(allProducts.filter(p=>p.promo_active)); };
     $('sl-nouveautes').onclick = () => { closeSidebar(); renderProducts(allProducts.filter(p=>isNew(p.created_at))); };
     $('sl-meilleures').onclick = () => { closeSidebar(); afficherMeilleuresVentes(); };
@@ -1193,6 +1194,8 @@ function setupAuth() {
 
     $('lien-politique-reg').onclick = e => { e.preventDefault(); openOverlay('politique-overlay'); };
     $('lien-politique-tel').onclick = e => { e.preventDefault(); openOverlay('politique-overlay'); };
+    $('lien-cgu-reg').onclick = e => { e.preventDefault(); openOverlay('cgu-overlay'); };
+    $('lien-cgu-tel').onclick = e => { e.preventDefault(); openOverlay('cgu-overlay'); };
 
     $('atab-login').onclick = () => {
         $('atab-login').classList.add('active'); $('atab-reg').classList.remove('active');
@@ -1924,6 +1927,21 @@ function setupChatWidget() {
         entete.insertBefore(groupe, fermer);
         groupe.appendChild(reset);
         groupe.appendChild(fermer);
+    }
+
+    // Pied de fenêtre : transparence sur l'IA et lien vers la politique de confidentialité.
+    const rangSaisie = $('chat-widget-input-row');
+    if (rangSaisie && rangSaisie.parentNode && !$('chat-widget-pied')) {
+        const pied = document.createElement('div');
+        pied.id = 'chat-widget-pied';
+        pied.className = 'cw-pied';
+        pied.appendChild(document.createTextNode('🤖 Assistant virtuel (IA) : il peut se tromper, le prix final est celui du panier. '));
+        const lien = document.createElement('a');
+        lien.href = '#';
+        lien.textContent = 'Confidentialité';
+        lien.onclick = e => { e.preventDefault(); openOverlay('politique-overlay'); };
+        pied.appendChild(lien);
+        rangSaisie.parentNode.insertBefore(pied, rangSaisie);
     }
 
     const basculer = (ouvrir) => {

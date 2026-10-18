@@ -155,6 +155,7 @@
         <a class="sidebar-link" id="sl-retour" data-i18n="nav_retour">🔄 Politique de retour</a>
         <a class="sidebar-link" id="sl-telecharger-app" style="font-weight:700;color:var(--green)">📲 Télécharger l'app</a>
         <a class="sidebar-link" id="sl-politique" data-i18n="nav_politique">🔒 Politique de confidentialité</a>
+        <a class="sidebar-link" id="sl-cgu" data-i18n="nav_cgu">📜 Conditions d'utilisation</a>
         <a class="sidebar-link" href="https://wa.me/237699781160" target="_blank" data-i18n="nav_contact">📞 Nous contacter</a>
         <div class="sidebar-sep" data-i18n="sep_preferences">Préférences</div>
         <div class="sidebar-pref">
@@ -371,7 +372,7 @@
         <div class="footer-links">
             <a href="https://wa.me/237699781160" target="_blank">📱 699 781 160</a>
             <a href="https://wa.me/237653756167" target="_blank">📱 653 756 167</a>
-            <a href="#" onclick="event.preventDefault(); openOverlay('politique-overlay')" style="text-decoration:underline">Politique de confidentialité</a>
+            <a href="#" onclick="event.preventDefault(); openOverlay('politique-overlay')" style="text-decoration:underline">Politique de confidentialité</a> · <a href="#" onclick="event.preventDefault(); openOverlay('cgu-overlay')" style="text-decoration:underline">Conditions d'utilisation</a>
         </div>
     </div>
     <div class="footer-copy" data-i18n="footer_copy">© 2026 Kapmaket — Douala, Cameroun</div>
@@ -431,7 +432,7 @@
             <div class="pwd-wrap"><input type="password" id="reg-mdp2" placeholder="Confirmer mot de passe *" data-i18n-ph="ph_confirmer_mdp"><button type="button" class="pwd-toggle" data-target="reg-mdp2">👁</button></div>
             <label style="display:flex;align-items:flex-start;gap:8px;font-size:0.8rem;color:var(--text2);margin:10px 0;cursor:pointer;width:100%;box-sizing:border-box;text-align:left">
                 <input type="checkbox" id="reg-politique" style="width:16px;height:16px;margin-top:2px;flex-shrink:0">
-                <span style="flex:1"><span data-i18n="txt_accepte_politique">J'ai lu et j'accepte la</span> <a href="#" id="lien-politique-reg" data-i18n="lien_politique" style="color:var(--green);text-decoration:underline">politique de confidentialité</a> *</span>
+                <span style="flex:1"><span data-i18n="txt_accepte_politique">J'ai lu et j'accepte la</span> <a href="#" id="lien-politique-reg" data-i18n="lien_politique" style="color:var(--green);text-decoration:underline">politique de confidentialité</a> <span data-i18n="txt_et_les">et les</span> <a href="#" id="lien-cgu-reg" data-i18n="lien_cgu" style="color:var(--green);text-decoration:underline">conditions d'utilisation</a> *</span>
             </label>
             <button class="btn-green" id="btn-register" data-i18n="btn_creer_compte">Créer mon compte</button>
             <p class="form-err" id="reg-err"></p>
@@ -455,7 +456,7 @@
         <input type="tel" id="tel-manquant-input" placeholder="Téléphone (9 chiffres)" maxlength="9" data-i18n-ph="ph_tel">
         <label style="display:flex;align-items:flex-start;gap:8px;font-size:0.8rem;color:var(--text2);margin:10px 0;cursor:pointer;width:100%;box-sizing:border-box;text-align:left">
             <input type="checkbox" id="tel-manquant-politique" style="width:16px;height:16px;margin-top:2px;flex-shrink:0">
-            <span style="flex:1"><span data-i18n="txt_accepte_politique">J'ai lu et j'accepte la</span> <a href="#" id="lien-politique-tel" data-i18n="lien_politique" style="color:var(--green);text-decoration:underline">politique de confidentialité</a> *</span>
+            <span style="flex:1"><span data-i18n="txt_accepte_politique">J'ai lu et j'accepte la</span> <a href="#" id="lien-politique-tel" data-i18n="lien_politique" style="color:var(--green);text-decoration:underline">politique de confidentialité</a> <span data-i18n="txt_et_les">et les</span> <a href="#" id="lien-cgu-tel" data-i18n="lien_cgu" style="color:var(--green);text-decoration:underline">conditions d'utilisation</a> *</span>
         </label>
         <button class="btn-green" id="btn-tel-manquant-confirmer" data-i18n="btn_continuer">Continuer</button>
         <p class="form-err" id="tel-manquant-err"></p>
@@ -464,28 +465,155 @@
 
 <!-- MODAL POLITIQUE DE CONFIDENTIALITE -->
 <div class="modal-overlay" id="politique-overlay" style="display:none">
-    <div class="modal modal-auth" style="max-width:480px">
+    <div class="modal modal-auth" style="max-width:560px">
         <button class="modal-x" onclick="closeOverlay('politique-overlay')">✕</button>
         <h3>🔒 Politique de confidentialité</h3>
-        <div style="color:var(--text2);font-size:0.9rem;line-height:1.7;text-align:left;margin:12px 0;max-height:55vh;overflow-y:auto">
-            <p style="font-weight:700;margin-bottom:6px">📦 À propos des produits</p>
-            <p>Certains produits proposés sur Kapmaket sont des <strong>copies</strong>, des <strong>copies certifiées</strong>, ou des <strong>produits originaux</strong>. La différence entre ces catégories se traduit uniquement par le <strong>prix</strong>, qui varie selon la qualité du produit. Cette information est indiquée le plus clairement possible sur chaque fiche produit.</p>
-            <p>Les articles vendus <strong>sans nom de marque</strong> ne sont pas nécessairement des copies. Cependant, pour ce type d'article, les possibilités de remboursement sont plus limitées en cas de réclamation.</p>
+        <p class="legal-maj">Dernière mise à jour : 15 octobre 2026 · Version 2 (remplace les versions précédentes)</p>
+        <div class="legal-corps">
+            <div class="legal-resume">
+                <strong>En résumé</strong>
+                <ul>
+                    <li>Nous collectons ce qu'il faut pour traiter tes commandes, te livrer et faire fonctionner le site.</li>
+                    <li>Nous ne vendons jamais tes données et nous ne faisons pas de publicité ciblée.</li>
+                    <li>Si tu parles à notre <strong>assistant virtuel</strong>, tes messages sont envoyés à <strong>Google (Gemini)</strong> pour fabriquer la réponse. Ne lui donne jamais de mot de passe, de code reçu par SMS ni de numéro de carte.</li>
+                    <li>Pour livrer ta commande, ton <strong>nom, ton téléphone et le contenu de ta commande</strong> sont partagés avec notre équipe et nos livreurs dans une messagerie privée (Telegram).</li>
+                    <li>Tu peux demander à voir, corriger ou supprimer tes données à tout moment, sur WhatsApp.</li>
+                </ul>
+            </div>
 
-            <p style="font-weight:700;margin:16px 0 6px">🔐 Tes données personnelles</p>
-            <p><strong>Compte :</strong> nom, téléphone et email sont utilisés uniquement pour traiter tes commandes et te contacter à leur sujet. La connexion est gérée par Firebase (Google) — ton mot de passe n'est jamais stocké en clair par nous.</p>
-            <p><strong>Commandes et paiement :</strong> les articles achetés, l'adresse/zone de livraison et l'historique sont conservés le temps où ton compte existe. Le paiement mobile money est traité directement par iKeePay — nous ne stockons aucune donnée bancaire.</p>
-            <p><strong>Visite du site :</strong> même sans compte, un identifiant technique aléatoire (pas ton nom) est utilisé pour retenir ton panier et comprendre l'usage du site (pages vues, produits consultés) — jamais revendu ni partagé, consultable uniquement par l'équipe Kapmaket.</p>
-            <p><strong>Notifications :</strong> si tu les actives, elles servent uniquement à t'informer du statut de tes commandes.</p>
-            <p><strong>Tes droits :</strong> tu peux demander la suppression de ton compte et de tes données à tout moment en nous contactant via WhatsApp.</p>
+            <div class="legal-nouveau">
+                <strong>🆕 Ce qui change avec la mise à jour du 15 octobre 2026</strong>
+                <ul>
+                    <li><strong>Assistant virtuel (IA).</strong> Il répond à tes questions sur les produits, la livraison, le paiement et ta commande. Ce que tu lui écris est envoyé à Google (Gemini) avec notre catalogue et nos règles. Il peut se tromper : le prix et la disponibilité définitifs sont ceux du panier.</li>
+                    <li><strong>Statistiques de la demande.</strong> Pour savoir ce que les clients cherchent, nous enregistrons <strong>de façon anonyme</strong> les questions posées à l'assistant (voir le détail plus bas). Aucun nom, aucun numéro.</li>
+                    <li><strong>Livraison suivie par l'équipe.</strong> Quand une commande est payée, un message est envoyé dans un <strong>groupe Telegram privé</strong> réunissant l'équipe Kapmaket et les livreurs. Le livreur qui la prend est enregistré avec la commande, et tu peux recevoir une notification « en route » puis « livrée ».</li>
+                    <li><strong>Mémoire de la discussion.</strong> Ta conversation avec l'assistant est gardée dans ton navigateur (jusqu'à ta déconnexion si tu as un compte, 24 h sinon). Le bouton ↺ l'efface.</li>
+                    <li><strong>Messages d'accueil.</strong> Le site peut afficher un message de bienvenue écrit par l'équipe et t'inviter à essayer l'assistant. Pour ne pas te les répéter sans arrêt, ton navigateur garde de petits repères (dates d'affichage, refus).</li>
+                    <li><strong>Précision importante :</strong> lorsque tu es connecté(e), ton identifiant de visite est <strong>relié à ton compte</strong>. Ton activité sur le site (pages vues, produits consultés, recherches) peut donc être rattachée à toi.</li>
+                </ul>
+            </div>
 
-            <p style="font-weight:700;margin:16px 0 6px">⚡ Offres Flash Combo &amp; codes promo</p>
-            <p>Un Flash Combo doit être acheté <strong>en entier</strong> (produit principal + accessoires choisis) pour bénéficier du prix réduit — retirer un seul article du kit annule la réduction. Ces offres sont soumises au <strong>stock disponible</strong> et à la <strong>durée affichée</strong> sur le site.</p>
-            <p>Les codes promo et les offres Flash Combo <strong>ne sont pas cumulables</strong> : un code promo ne réduit jamais le prix déjà forfaitaire d'un kit.</p>
+            <h4>1. Qui est responsable de tes données ?</h4>
+            <p><strong>K.E.R TECH</strong>, qui exploite la boutique en ligne <strong>Kapmaket</strong> (Douala, PK14, Cameroun). Pour toute question ou demande : WhatsApp au <strong>699 781 160</strong> ou <strong>653 756 167</strong>.</p>
 
-            <p>En créant un compte, tu confirmes avoir lu et compris ces informations avant de passer commande.</p>
+            <h4>2. Quelles données, et pourquoi ?</h4>
+            <p><strong>👤 Ton compte.</strong> Nom, e-mail, téléphone, points de fidélité, date à laquelle tu as accepté nos règles. Si tu te connectes avec Google, Google nous transmet ton nom et ton e-mail. Ton mot de passe est géré par Firebase (Google) : nous ne le voyons jamais. <em>Pourquoi :</em> créer et sécuriser ton compte, te contacter au sujet de tes commandes, gérer la fidélité (1 point par 1 000 FCFA dépensés).</p>
+            <p><strong>📦 Tes commandes.</strong> Code de commande, articles, montant, zone de livraison ou retrait, note éventuelle, statut, dates, référence de paiement, nom du livreur, facture, demandes de retour (avec ton motif). <em>Pourquoi :</em> traiter et livrer ta commande, facturer, gérer les retours et réclamations, respecter nos obligations comptables.</p>
+            <p><strong>💳 Paiement.</strong> Il est traité par <strong>iKeePay</strong> (Mobile Money, carte, virement, USDT). Tu saisis tes informations de paiement chez iKeePay, pas chez nous. Nous recevons seulement la confirmation (statut, montant, référence) : <strong>nous ne stockons aucun numéro de carte ni code secret</strong>.</p>
+            <p><strong>⭐ Tes avis.</strong> Ton nom (celui de ton compte), ta note, ton commentaire et ta photo éventuelle peuvent être <strong>affichés publiquement</strong> sous le produit, après validation par l'équipe.</p>
+            <p><strong>🔔 Notifications.</strong> Si tu les actives, nous enregistrons l'identifiant technique de ton appareil, relié à ton compte, pour t'informer du statut de tes commandes. Tu peux les désactiver à tout moment dans ton navigateur.</p>
+            <p><strong>👀 Ta visite.</strong> Même sans compte : un identifiant aléatoire gardé dans ton navigateur, le type de navigateur et d'appareil, le site d'où tu viens, d'éventuels paramètres de campagne, les pages vues et leur durée, les produits consultés, les ajouts au panier, les mots que tu tapes dans la barre de recherche et les catégories que tu ouvres. <em>Pourquoi :</em> retenir ton panier, comprendre comment le site est utilisé, améliorer notre offre. Ces données ne servent jamais à de la publicité et ne sont pas revendues.</p>
+            <p><strong>🤖 Assistant virtuel.</strong> Ce que tu écris (400 caractères maximum par message) et les derniers échanges de la conversation sont envoyés à Google (Gemini) pour générer la réponse. De notre côté, un <strong>journal anonyme</strong> garde : la date, ta question « nettoyée » (<strong>numéros de téléphone, e-mails et codes de commande masqués</strong>, 200 caractères maximum), le sujet, le produit cherché, le budget cité s'il y en a un, les produits proposés, le fait d'avoir été orienté vers WhatsApp, et l'identifiant aléatoire de visite. <strong>Pas de nom, pas de numéro de téléphone.</strong> <em>Pourquoi :</em> savoir ce que les clients recherchent et quels produits manquent.</p>
+            <p><strong>📷 Recherche par photo.</strong> L'image que tu envoies est transmise à Google (Gemini) pour reconnaître l'article. Nous ne la conservons pas.</p>
+            <p><strong>💬 WhatsApp.</strong> Si tu nous écris, tes messages sont aussi traités par WhatsApp (Meta), selon ses propres règles.</p>
+
+            <h4>3. Ce qui est gardé dans ton navigateur</h4>
+            <p>Ta langue, ton thème, ton panier, les produits vus récemment, tes préférences d'affichage (catégories), l'identifiant de visite, ton profil connecté (pour te garder connecté(e)), ta conversation avec l'assistant et les repères d'invitation et de message de bienvenue. <strong>Ce ne sont pas des cookies publicitaires et nous n'utilisons aucun traceur publicitaire.</strong> Tu peux tout effacer en vidant les données du site dans ton navigateur (ton panier repartira alors de zéro).</p>
+            <p>Pour s'afficher, le site charge aussi des éléments externes : polices Google Fonts, bibliothèques jsDelivr et Firebase (Google). Ces services reçoivent ton adresse IP, comme pour n'importe quel site web.</p>
+
+            <h4>4. Qui peut voir tes données ?</h4>
+            <ul>
+                <li><strong>L'équipe Kapmaket</strong> (administrateurs).</li>
+                <li><strong>Les livreurs</strong>, via le groupe Telegram privé : code de commande, nom, téléphone, articles, montant payé, zone de livraison ou retrait, note éventuelle. Tous les membres du groupe voient ces messages ; Telegram traite aussi ces messages selon ses propres règles.</li>
+                <li><strong>Nos prestataires techniques</strong>, pour faire fonctionner le service : Google (connexion Firebase, assistant Gemini, polices), iKeePay (paiement), Supabase (base de données), Vercel (hébergement), Telegram (messagerie de l'équipe), jsDelivr (bibliothèques). Chacun applique ses propres règles de confidentialité.</li>
+                <li><strong>Les autorités</strong>, uniquement si la loi l'exige.</li>
+            </ul>
+            <p>Certains de ces prestataires ont leurs serveurs <strong>en dehors du Cameroun</strong> : tes données peuvent donc être traitées à l'étranger. <strong>Nous ne vendons pas tes données.</strong></p>
+
+            <h4>5. Combien de temps les gardons-nous ?</h4>
+            <ul>
+                <li><strong>Compte et commandes :</strong> tant que ton compte existe, puis le temps nécessaire à nos obligations légales et comptables (factures).</li>
+                <li><strong>Journal anonyme de l'assistant :</strong> 12 mois maximum, puis effacé automatiquement.</li>
+                <li><strong>Statistiques de visite :</strong> pas d'effacement automatique pour le moment ; elles sont gardées tant qu'elles servent à comprendre l'usage du site. Celles qui sont rattachées à ton compte sont effacées sur demande.</li>
+                <li><strong>Messages du groupe Telegram :</strong> ils restent dans ce groupe privé tant qu'il existe.</li>
+                <li><strong>Dans ton navigateur :</strong> jusqu'à ce que tu les effaces (la conversation avec l'assistant : jusqu'à ta déconnexion, ou 24 h sans compte).</li>
+            </ul>
+
+            <h4>6. Tes droits</h4>
+            <p>Tu peux demander à <strong>accéder</strong> à tes données, les <strong>corriger</strong>, les <strong>supprimer</strong>, t'<strong>opposer</strong> à un usage, ou retirer ton accord (par exemple pour les notifications). Écris-nous sur WhatsApp (699 781 160 ou 653 756 167) : nous répondons dans les meilleurs délais. La suppression de ton compte efface ton profil ; certaines informations de commande peuvent être gardées lorsque la loi nous y oblige (comptabilité). Les données <strong>anonymes</strong> (journal de l'assistant, statistiques) ne peuvent pas être reliées à toi : nous ne pouvons donc pas les retrouver individuellement.</p>
+            <p>Tu peux aussi saisir l'autorité camerounaise chargée de la protection des données personnelles. Cette politique s'inscrit dans le cadre de la loi n° 2024/017 du 23 décembre 2024 relative à la protection des données à caractère personnel.</p>
+
+            <h4>7. Sécurité</h4>
+            <p>Les échanges avec le site sont chiffrés (HTTPS) et l'accès à tes données est réservé à l'équipe, protégé par des mots de passe et des règles d'accès. Aucun système n'est infaillible : si un incident grave touchait tes données, nous t'en informerions.</p>
+
+            <h4>8. Mineurs</h4>
+            <p>Le site s'adresse aux personnes majeures, ou à celles qui commandent avec l'accord d'un parent ou tuteur.</p>
+
+            <h4>9. Changements</h4>
+            <p>Nous mettons cette politique à jour quand nos pratiques changent (nouvelle fonction, nouveau prestataire). La date en haut indique la dernière mise à jour, et les changements importants sont annoncés sur le site.</p>
+
+            <p style="margin-top:16px">En créant un compte, tu confirmes avoir lu cette politique et nos <a href="#" onclick="event.preventDefault(); closeOverlay('politique-overlay'); openOverlay('cgu-overlay')" style="color:var(--green);text-decoration:underline">conditions d'utilisation</a>.</p>
         </div>
         <button class="btn-green" onclick="closeOverlay('politique-overlay')">J'ai compris</button>
+    </div>
+</div>
+
+<!-- MODAL CONDITIONS D'UTILISATION ET DE VENTE -->
+<div class="modal-overlay" id="cgu-overlay" style="display:none">
+    <div class="modal modal-auth" style="max-width:560px">
+        <button class="modal-x" onclick="closeOverlay('cgu-overlay')">✕</button>
+        <h3>📜 Conditions d'utilisation et de vente</h3>
+        <p class="legal-maj">Dernière mise à jour : 15 octobre 2026 · Version 2 (remplace les versions précédentes)</p>
+        <div class="legal-corps">
+            <div class="legal-resume">
+                <strong>En résumé</strong>
+                <ul>
+                    <li>Le <strong>montant exact à payer</strong> est toujours affiché dans ton panier avant de payer. Il peut différer de 1 FCFA du prix affiché sur la fiche du produit (arrondi).</li>
+                    <li>Une commande n'est <strong>validée qu'après confirmation du paiement</strong>.</li>
+                    <li>Certains produits sont des <strong>copies</strong> ou des <strong>copies certifiées</strong> : c'est indiqué sur chaque fiche, et le prix en tient compte.</li>
+                    <li>Notre <strong>assistant virtuel</strong> est une IA : elle peut se tromper et ses conseils ne t'engagent pas à acheter.</li>
+                </ul>
+            </div>
+
+            <h4>1. Qui sommes-nous ?</h4>
+            <p>Le site Kapmaket est exploité par <strong>K.E.R TECH</strong> (Douala, PK14, Cameroun). Contact : WhatsApp 699 781 160 ou 653 756 167. En utilisant le site ou en passant commande, tu acceptes ces conditions ainsi que notre <a href="#" onclick="event.preventDefault(); closeOverlay('cgu-overlay'); openOverlay('politique-overlay')" style="color:var(--green);text-decoration:underline">politique de confidentialité</a>.</p>
+
+            <h4>2. Ton compte</h4>
+            <p>Tu peux parcourir le site sans compte, et réserver ou commander avec ton nom et ton téléphone. Un compte donne accès à l'historique, aux factures, aux retours, aux avis et aux points de fidélité. Les informations que tu donnes doivent être exactes. Garde ton mot de passe pour toi : tu es responsable de l'usage de ton compte. Le site s'adresse aux personnes majeures ou à celles qui commandent avec l'accord d'un parent ou tuteur.</p>
+
+            <h4>3. Les produits</h4>
+            <p>Certains produits sont des <strong>originaux</strong>, d'autres des <strong>copies certifiées</strong> ou des <strong>copies</strong>. La différence se traduit par le <strong>prix</strong>, qui varie selon la qualité ; elle est indiquée sur la fiche du produit. Les articles vendus <strong>sans nom de marque</strong> ne sont pas forcément des copies, mais leurs possibilités de remboursement sont plus limitées en cas de réclamation. Les photos et descriptions sont données à titre indicatif : en cas de doute, écris-nous avant d'acheter.</p>
+
+            <h4>4. Prix et paiement</h4>
+            <p>Les prix sont en <strong>FCFA</strong>. Pour des raisons d'affichage, un prix peut apparaître <strong>1 FCFA en dessous</strong> du montant réellement payé (par exemple 14 999 sur la fiche et 15 000 au paiement). Cette différence apparaît dans ton panier sur la ligne <strong>« Ajustement d'arrondi »</strong> : le montant exact à payer est celui du <strong>« Total à payer »</strong>, affiché avant que tu paies.</p>
+            <p>Le paiement se fait via <strong>iKeePay</strong> (Mobile Money, carte, virement, USDT). La commande est <strong>validée uniquement après confirmation du paiement</strong> par iKeePay. Si le montant reçu ne correspond pas à celui de ta commande, elle <strong>n'est pas validée automatiquement</strong> : l'équipe vérifie le paiement et te contacte. Dans ce cas, <strong>ne paie pas une deuxième fois</strong> avant de nous avoir écrit sur WhatsApp.</p>
+            <p>Tu peux aussi <strong>réserver sans payer</strong> : les articles sont mis de côté par l'équipe, mais la commande n'est confirmée qu'après paiement.</p>
+
+            <h4>5. Livraison et retrait</h4>
+            <p>La livraison à domicile coûte <strong>1 000 FCFA</strong> dans les quartiers de Douala proposés dans le panier au moment où tu choisis ta zone. Pour les autres zones, le <strong>retrait en agence est gratuit</strong> ; une commande à retirer doit l'être dans les <strong>7 jours</strong> suivant sa validation. <strong>Aucun délai de livraison précis n'est garanti.</strong> Tu peux suivre ta commande avec son code (menu « Suivi de commande ») : validée, en préparation, en route, livrée. Vérifie ton colis à la réception.</p>
+
+            <h4>6. Retours</h4>
+            <p>Tu as <strong>7 jours</strong> après réception pour demander un retour, selon les conditions de notre <a href="#" onclick="event.preventDefault(); closeOverlay('cgu-overlay'); openOverlay('retour-overlay')" style="color:var(--green);text-decoration:underline">politique de retour</a>.</p>
+
+            <h4>7. Promotions, Flash Combo et fidélité</h4>
+            <p>Un <strong>Flash Combo</strong> doit être acheté <strong>en entier</strong> (produit principal + accessoires choisis) pour bénéficier du prix réduit : retirer un article du kit annule la réduction. Ces offres dépendent du <strong>stock disponible</strong> et de la <strong>durée affichée</strong>. Les <strong>codes promo</strong> et les offres Flash Combo <strong>ne sont pas cumulables</strong>. Tu gagnes <strong>1 point de fidélité tous les 1 000 FCFA dépensés</strong>, dès qu'une commande est validée.</p>
+
+            <h4>8. Assistant virtuel (IA)</h4>
+            <ul>
+                <li>C'est un programme informatique, pas une personne. Il s'appuie sur notre catalogue et nos règles, mais <strong>il peut se tromper</strong>.</li>
+                <li>Le <strong>prix et la disponibilité qui comptent sont ceux affichés dans le panier</strong>, pas ceux cités dans la conversation.</li>
+                <li>Ses conseils ne sont pas une promesse ni une garantie, et ne t'obligent pas à acheter.</li>
+                <li>Ne lui donne <strong>jamais</strong> de mot de passe, de code reçu par SMS, de numéro de carte ou d'autres informations sensibles.</li>
+                <li>Pour une réclamation, un problème de paiement ou une demande précise, contacte l'équipe sur WhatsApp : l'assistant peut te donner le lien avec un résumé de votre échange.</li>
+                <li>Le traitement de tes messages est expliqué dans la politique de confidentialité.</li>
+            </ul>
+
+            <h4>9. Avis et contenus que tu publies</h4>
+            <p>Ton avis doit être honnête et respectueux (pas d'insultes, pas de publicité, pas d'informations personnelles sur d'autres personnes). Il est vérifié par l'équipe avant d'être affiché sous le produit, avec ton nom, et nous pouvons le refuser ou le retirer s'il ne respecte pas ces règles.</p>
+
+            <h4>10. Ce qui est interdit</h4>
+            <p>Fournir de fausses informations, usurper l'identité de quelqu'un, tenter d'accéder à des données ou à des espaces qui ne sont pas les tiens, perturber le site (par exemple par des envois automatiques massifs), détourner l'assistant, ou utiliser le site pour de la fraude. Nous pouvons suspendre ou supprimer un compte en cas d'abus.</p>
+
+            <h4>11. Propriété intellectuelle</h4>
+            <p>Le nom Kapmaket, le logo, les textes, les images et le design du site appartiennent à K.E.R TECH ou à leurs propriétaires. Tu ne peux pas les copier ou les réutiliser sans accord écrit.</p>
+
+            <h4>12. Responsabilité</h4>
+            <p>Nous faisons au mieux pour que le site fonctionne, mais nous ne pouvons pas garantir qu'il soit toujours disponible ni sans erreur. Nous ne sommes pas responsables des services extérieurs que nous utilisons (paiement, connexion, messagerie, hébergement) en cas de panne de leur côté, dans la limite de ce que la loi permet.</p>
+
+            <h4>13. Changements et droit applicable</h4>
+            <p>Nous pouvons modifier ces conditions ; la date en haut indique la dernière mise à jour et les changements importants sont annoncés sur le site. Ces conditions sont régies par le <strong>droit camerounais</strong>. En cas de désaccord, nous cherchons d'abord une solution à l'amiable avec toi, par WhatsApp.</p>
+        </div>
+        <button class="btn-green" onclick="closeOverlay('cgu-overlay')">J'ai compris</button>
     </div>
 </div>
 

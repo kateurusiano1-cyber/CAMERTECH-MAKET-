@@ -781,3 +781,16 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 .bv-texte { white-space: pre-line; font-size: 1.02rem; line-height: 1.55; word-break: break-word; }
 .bv-ok { width: 100%; padding: 14px; border: none; border-radius: 14px; background: var(--green); color: #fff; font-weight: 800; font-size: 1rem; cursor: pointer; font-family: var(--font-body); }
 body.bv-ouvert { overflow: hidden; }
+
+/* Textes juridiques (politique de confidentialité, conditions d'utilisation) */
+.legal-maj { font-size: 0.78rem; color: var(--text3); margin: 2px 0 0; }
+.legal-corps { color: var(--text2); font-size: 0.9rem; line-height: 1.7; text-align: left; margin: 12px 0; max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+.legal-corps h4 { font-size: 0.95rem; color: var(--text); margin: 18px 0 6px; }
+.legal-corps ul { margin: 6px 0 6px 18px; padding: 0; }
+.legal-corps li { margin-bottom: 5px; }
+.legal-corps p { margin: 0 0 9px; }
+.legal-resume { background: var(--bg); border: 1.5px solid var(--green); border-radius: 12px; padding: 12px 14px; margin: 6px 0 12px; }
+.legal-nouveau { background: rgba(232,121,46,0.10); border: 1.5px solid var(--orange); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; }
+.legal-resume ul, .legal-nouveau ul { margin-bottom: 0; }
+.cw-pied { font-size: 0.7rem; line-height: 1.35; color: var(--text3); text-align: center; padding: 6px 12px; border-top: 1px solid var(--border); }
+.cw-pied a { color: var(--green); text-decoration: underline; }
