@@ -2260,7 +2260,7 @@ function filtrerCat(cat) {
 
 // ===== MODE RECHERCHE =====
 // Pendant une recherche, slider / tuiles / catégories / Ventes Flash sont masqués (CSS : body.mode-recherche).
-function normRecherche(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ''); }
+function normRecherche(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-_.,'’\/]+/g, ''); }
 function filtrerParRecherche(liste, brut) {
     const q = normRecherche(brut);
     if (!q) return liste;

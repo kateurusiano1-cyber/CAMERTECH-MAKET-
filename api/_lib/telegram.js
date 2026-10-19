@@ -194,8 +194,8 @@ async function notifierPaiementAVerifier(supabase, resa, { montantRecu, refFourn
         `<b>${echapper(resa.code)}</b> — ${echapper(resa.nom_client || 'Client')}${resa.telephone ? ' · ' + echapper(resa.telephone) : ''}`,
         `Montant attendu : <b>${fmt(resa.total)} FCFA</b>`,
         `Montant reçu : <b>${montantRecu ? fmt(montantRecu) + ' FCFA' : 'inconnu'}</b>`,
-        refFournisseur ? `Référence iKeePay : ${echapper(refFournisseur)}` : '',
-        'La commande n\'est <b>PAS</b> validée. Vérifier dans iKeePay avant de préparer quoi que ce soit.'
+        refFournisseur ? `Référence de paiement : ${echapper(refFournisseur)}` : '',
+        'La commande n\'est <b>PAS</b> validée. Vérifier le paiement chez le prestataire de paiement avant de préparer quoi que ce soit.'
     ].filter(Boolean).join('\n');
     const msg = await envoyerMessage(texte);
     try {

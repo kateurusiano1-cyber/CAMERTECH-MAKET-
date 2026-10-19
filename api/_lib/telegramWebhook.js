@@ -147,10 +147,10 @@ async function traiterTexte(supabase, message, cfg) {
     // Le reste est réservé au groupe configuré. Au lieu de rester muet (on ne saurait pas pourquoi),
     // le robot dit ce qui ne va pas — sans rien révéler sur les commandes.
     if (['/aide', '/start', '/encours'].includes(cmd)) {
-        if (!cfg) return T.repondreTexte(chatId, '⚠️ Le site ne connaît pas encore le groupe : la variable <b>TELEGRAM_CHAT_ID</b> est absente ou n\'est pas encore prise en compte. Ajoute-la dans Vercel, puis fais un <b>Redeploy</b>.');
+        if (!cfg) { console.error('Telegram : TELEGRAM_CHAT_ID absente ou non prise en compte (message reçu du groupe ' + chatId + ')'); return T.repondreTexte(chatId, '⚠️ Ce robot est réservé à l\'équipe Kapmaket.'); }
         if (String(chatId) !== cfg.chatId) {
-            const fin = (x) => '…' + String(x).slice(-4);
-            return T.repondreTexte(chatId, `⚠️ Ce groupe (identifiant ${fin(chatId)}) n'est pas celui enregistré sur le site (${fin(cfg.chatId)}). Corrige <b>TELEGRAM_CHAT_ID</b> dans Vercel (avec le signe moins, sans espace), puis fais un <b>Redeploy</b>.`);
+            console.error('Telegram : message reçu d\'un groupe non enregistré (' + chatId + '), groupe attendu : ' + cfg.chatId + ' — vérifier TELEGRAM_CHAT_ID');
+            return T.repondreTexte(chatId, '⚠️ Ce robot est réservé à l\'équipe Kapmaket.');
         }
     }
     if (!cfg || String(chatId) !== cfg.chatId) return;
