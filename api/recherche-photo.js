@@ -36,6 +36,12 @@ module.exports = async (req, res) => {
 
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const { image, media_type } = body || {};
+        // Catalogue envoyé par le site (id, nom, catégorie) : l'IA choisit directement les produits qui ressemblent.
+        const nettoyer = s => String(s == null ? '' : s).replace(/[\r\n\t|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+        const catalogue = Array.isArray(body && body.catalogue)
+            ? body.catalogue.slice(0, 200).map(c => ({ id: nettoyer(c && c.id).slice(0, 64), n: nettoyer(c && c.n), c: nettoyer(c && c.c).slice(0, 30) })).filter(c => c.id && c.n)
+            : [];
+        const CATEGORIES = ['Téléphonie', 'Accessoires', 'Électronique', 'Réseau', 'Gaming', 'Autre'];
         if (!image) return res.status(400).json({ error: 'Image manquante' });
 
         if (!process.env.GEMINI_API_KEY) {
@@ -47,15 +53,19 @@ module.exports = async (req, res) => {
             return res.status(503).json({ error: `Recherche par photo temporairement indisponible, réessaie dans ${Math.ceil(circuit.retryAfterSeconds / 60)} min.` });
         }
 
-        const prompt = `Un client d'une boutique tech au Cameroun (Kapmaket) prend cette photo pour chercher un produit similaire dans le catalogue. Identifie de quel type de produit il s'agit. Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : {"category":"une seule valeur parmi : Téléphonie, Accessoires, Électronique, Réseau, Gaming, Autre","motscles":["2 à 5 mots-clés courts en français décrivant le produit, ex: écouteurs, bluetooth, chargeur, câble type-c"]}`;
+        const lignes = catalogue.map(c => `${c.id} | ${c.n}${c.c ? ' | ' + c.c : ''}`).join('\n');
+        const prompt = `Un client de Kapmaket (boutique tech au Cameroun) envoie la photo d'un article qu'il cherche. Identifie ce que montre la photo, puis trouve dans le catalogue ci-dessous les produits qui lui ressemblent le plus (même type d'article, même marque ou modèle si visible).
+${catalogue.length ? `CATALOGUE (format : id | nom | catégorie) :\n${lignes}\n` : ''}Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : {"produit":"nom court de l'article vu sur la photo, en français","category":"une seule valeur parmi : ${CATEGORIES.join(', ')}","motscles":["3 à 6 mots-clés courts au singulier, en français puis en anglais si utile, ex : écouteur, earbuds, bluetooth, oraimo"],"ids":[${catalogue.length ? "ids du catalogue, du plus ressemblant au moins ressemblant, 0 à 8 maximum, recopiés exactement comme dans la liste ; [] si aucun produit du catalogue ne ressemble" : ''}]}`;
 
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(15000),   // on répond proprement plutôt que de laisser la plateforme couper
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: media_type || 'image/jpeg', data: image } }] }]
+                    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: media_type || 'image/jpeg', data: image } }] }],
+                    generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
                 })
             }
         );
@@ -75,8 +85,21 @@ module.exports = async (req, res) => {
         catch (e) { await signalerEchec(supabase, 'gemini'); return res.status(500).json({ error: 'Résultat illisible, réessaie avec une autre photo' }); }
 
         await signalerSucces(supabase, 'gemini');
-        return res.status(200).json(parsed);
+        // On ne renvoie au navigateur que des valeurs vérifiées (ids du catalogue, catégorie connue, textes courts).
+        const brut = parsed && typeof parsed === 'object' ? parsed : {};
+        const idsValides = new Set(catalogue.map(c => c.id));
+        return res.status(200).json({
+            produit: nettoyer(brut.produit),
+            category: CATEGORIES.includes(brut.category) ? brut.category : 'Autre',
+            motscles: (Array.isArray(brut.motscles) ? brut.motscles : []).map(m => nettoyer(m).slice(0, 40)).filter(Boolean).slice(0, 8),
+            ids: (Array.isArray(brut.ids) ? brut.ids : []).map(x => String(x).trim()).filter(x => idsValides.has(x)).slice(0, 8)
+        });
     } catch (e) {
+        if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+            console.error('Erreur recherche-photo : le service IA a mis trop de temps à répondre');
+            try { await signalerEchec(supabase, 'gemini'); } catch (_) {}
+            return res.status(504).json({ error: 'La recherche prend trop de temps, réessaie dans un instant.' });
+        }
         console.error('Erreur recherche-photo:', e.message);
         try { await signalerEchec(supabase, 'gemini'); } catch (_) {}
         return res.status(500).json({ error: 'Erreur serveur' });

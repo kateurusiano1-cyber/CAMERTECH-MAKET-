@@ -2448,6 +2448,217 @@ function setupAutocomplete() {
     document.addEventListener('click', e => { if (!boite.hidden && !e.target.closest('.header-search-full')) fermer(); });
 }
 
+// ===== RECHERCHE PAR PHOTO : panneau dédié =====
+// Panneau qu'on peut quitter à tout moment (✕, Échap, clic à côté, Annuler). Étapes : choisir une image
+// (appareil photo ou galerie) → analyse (image réduite, 25 s maximum) → articles trouvés ou message d'aide.
+const phT = (fr, en) => currentLang === 'en' ? en : fr;
+function normMot(m) { let n = normRecherche(m); if (n.length > 3 && /[sx]$/.test(n)) n = n.slice(0, -1); return n; }   // « écouteurs » → « ecouteur »
+
+// Réduit la photo (800 px, JPEG) : de 3-8 Mo à ~100 Ko, donc envoi beaucoup plus rapide sur réseau mobile
+async function preparerImagePhoto(fichier) {
+    if (!fichier || !/^image\//.test(fichier.type || '')) throw new Error('format');
+    if (fichier.size > 25 * 1024 * 1024) throw new Error('trop-grande');
+    const url = URL.createObjectURL(fichier);
+    try {
+        const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('format')); i.src = url; });
+        const k = Math.min(1, 800 / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = c.toDataURL('image/jpeg', 0.75);
+        return { dataUrl, base64: dataUrl.split(',')[1] };
+    } finally { URL.revokeObjectURL(url); }
+}
+
+// Articles proposés : d'abord ceux que l'IA a choisis dans le catalogue, puis ceux qui partagent ses mots-clés
+function classerParPhoto(result) {
+    const parId = new Map(allProducts.map(p => [String(p.id), p]));
+    const direct = [];
+    (result.ids || []).forEach(i => { const p = parId.get(String(i)); if (p && !direct.includes(p)) direct.push(p); });
+    const mots = [...new Set((result.motscles || []).map(normMot).filter(m => m.length >= 3))];
+    const notes = [];
+    allProducts.forEach(p => {
+        if (direct.includes(p)) return;
+        const nom = normRecherche(p.name), cat = normRecherche(p.category), desc = normRecherche(p.description);
+        let score = 0;
+        mots.forEach(m => { if (nom.includes(m)) score += 3; else if (cat.includes(m) || desc.includes(m)) score += 1; });
+        if (score > 0) notes.push({ p, score });
+    });
+    notes.sort((a, b) => b.score - a.score);
+    let liste = direct.length ? direct.concat(notes.filter(x => x.score >= 3).map(x => x.p)) : notes.map(x => x.p);
+    liste = liste.slice(0, 8);
+    let parCategorie = false;
+    if (!liste.length && result.category && result.category !== 'Autre') {
+        liste = allProducts.filter(p => p.category === result.category).slice(0, 8);
+        parCategorie = liste.length > 0;
+    }
+    return { liste, parCategorie };
+}
+function appliquerResultatsPhoto(liste) {
+    $('search-bar').value = '';
+    _requeteRecherche = '';
+    currentCat = 'tous';
+    document.querySelectorAll('.cat-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === 'tous'));
+    majModeRecherche(true);
+    renderProducts(liste);
+    $('produits').scrollIntoView({ behavior: 'smooth' });
+}
+
+function ouvrirPanneauPhoto() {
+    if (document.getElementById('photo-panel')) return;
+    if (typeof fermerSuggestions === 'function') fermerSuggestions();
+    const T = phT;
+    const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+    const bouton = (txt, cls, fn) => { const b = el('button', cls, txt); b.type = 'button'; b.addEventListener('click', fn); return b; };
+    const ancienScroll = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const ov = el('div', 'photo-overlay'); ov.id = 'photo-panel';
+    ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-labelledby', 'photo-titre');
+    const feuille = el('div', 'photo-sheet');
+    const tete = el('div', 'photo-head');
+    const titre = el('h3', null, T('📷 Recherche par photo', '📷 Search by photo')); titre.id = 'photo-titre';
+    const btnX = bouton('✕', 'photo-x', () => fermer()); btnX.setAttribute('aria-label', T('Fermer', 'Close'));
+    tete.append(titre, btnX);
+    const corps = el('div', 'photo-body');
+    feuille.append(tete, corps); ov.append(feuille); document.body.append(ov);
+
+    const etat = { ctrl: null, jeton: 0, apercu: '', base64: '', timers: [] };
+    const raz = () => { etat.timers.forEach(clearTimeout); etat.timers = []; corps.replaceChildren(); };
+    function fermer() {
+        etat.jeton++; if (etat.ctrl) etat.ctrl.abort();
+        etat.timers.forEach(clearTimeout);
+        document.removeEventListener('keydown', surTouche); document.removeEventListener('paste', surColler);
+        document.body.style.overflow = ancienScroll; ov.remove();
+        const b = document.getElementById('btn-recherche-photo'); if (b) b.focus();
+    }
+    function surTouche(e) { if (e.key === 'Escape') fermer(); }
+    function surColler(e) {
+        const f = e.clipboardData && Array.from(e.clipboardData.files || []).find(x => /^image\//.test(x.type));
+        if (f) { e.preventDefault(); lancer(f); }
+    }
+    document.addEventListener('keydown', surTouche); document.addEventListener('paste', surColler);
+    ov.addEventListener('click', e => { if (e.target === ov) fermer(); });
+    ov.addEventListener('dragover', e => e.preventDefault());
+    ov.addEventListener('drop', e => {
+        e.preventDefault();
+        const f = Array.from((e.dataTransfer && e.dataTransfer.files) || []).find(x => /^image\//.test(x.type));
+        if (f) lancer(f);
+    });
+
+    function choisir() {
+        etat.jeton++; if (etat.ctrl) { etat.ctrl.abort(); etat.ctrl = null; }
+        raz();
+        corps.append(el('p', 'photo-intro', T("Montre-nous l'article que tu cherches : on te propose les produits qui lui ressemblent.", 'Show us the item you are looking for: we will suggest similar products.')));
+        const camera = el('input'); camera.type = 'file'; camera.accept = 'image/*'; camera.setAttribute('capture', 'environment'); camera.hidden = true;
+        const galerie = el('input'); galerie.type = 'file'; galerie.accept = 'image/*'; galerie.hidden = true;
+        camera.onchange = galerie.onchange = e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) lancer(f); };
+        const rang = el('div', 'photo-choix');
+        rang.append(bouton(T('📷 Prendre une photo', '📷 Take a photo'), 'photo-btn photo-btn-main', () => camera.click()),
+                    bouton(T('🖼️ Choisir une image', '🖼️ Choose an image'), 'photo-btn', () => galerie.click()));
+        corps.append(rang, camera, galerie);
+        corps.append(el('p', 'photo-astuce', T('💡 Un seul article, bien éclairé, sur fond uni : c’est plus précis.', '💡 One item, well lit, on a plain background: more accurate.')));
+        if (window.matchMedia && matchMedia('(hover: hover)').matches) corps.append(el('p', 'photo-astuce', T('Tu peux aussi glisser-déposer ou coller (Ctrl+V) une image ici.', 'You can also drag & drop or paste (Ctrl+V) an image here.')));
+    }
+    function analyse(texte) {
+        raz();
+        if (etat.apercu) { const im = el('img', 'photo-apercu'); im.src = etat.apercu; im.alt = ''; corps.append(im); }
+        corps.append(el('div', 'photo-spinner'));
+        const p = el('p', 'photo-etat', texte); p.setAttribute('aria-live', 'polite'); corps.append(p);
+        etat.timers.push(setTimeout(() => { p.textContent = T('Ça prend un peu plus de temps que d’habitude…', 'This is taking a bit longer than usual…'); }, 7000));
+        corps.append(bouton(T('Annuler', 'Cancel'), 'photo-btn photo-btn-sec', choisir));
+    }
+    function erreur(msg, reessayer) {
+        raz();
+        corps.append(el('div', 'photo-ico', '⚠️'), el('p', 'photo-etat', msg));
+        const rang = el('div', 'photo-choix');
+        if (reessayer && etat.base64) rang.append(bouton(T('Réessayer', 'Try again'), 'photo-btn photo-btn-main', () => envoyer(++etat.jeton)));
+        rang.append(bouton(T('Autre image', 'Another image'), 'photo-btn', choisir), bouton(T('Fermer', 'Close'), 'photo-btn photo-btn-sec', () => fermer()));
+        corps.append(rang);
+    }
+    function resultats(result) {
+        const { liste, parCategorie } = classerParPhoto(result);
+        raz();
+        const entete = el('div', 'photo-reco');
+        if (etat.apercu) { const im = el('img', 'photo-miniature'); im.src = etat.apercu; im.alt = ''; entete.append(im); }
+        const txt = el('div', 'photo-reco-txt');
+        txt.append(el('div', 'photo-reco-titre', result.produit ? T('Reconnu : ', 'Recognised: ') + result.produit : T('Voici ce qu’on a trouvé', 'Here is what we found')));
+        const chips = el('div', 'photo-chips');
+        (result.motscles || []).slice(0, 4).forEach(m => chips.append(el('span', 'photo-chip', m)));
+        txt.append(chips); entete.append(txt); corps.append(entete);
+        if (liste.length) {
+            corps.append(el('p', 'photo-note', parCategorie
+                ? T('Pas d’article identique : voici d’autres produits de la catégorie ', 'No identical item: here are other products in the category ') + catLabel(result.category)
+                : (en => en ? `${liste.length} similar product${liste.length > 1 ? 's' : ''}` : `${liste.length} produit${liste.length > 1 ? 's' : ''} ressemblant${liste.length > 1 ? 's' : ''}`)(currentLang === 'en')));
+            const ul = el('div', 'photo-liste');
+            liste.forEach(p => {
+                const it = el('div', 'photo-item'); it.setAttribute('role', 'button'); it.tabIndex = 0;
+                let im; if (p.image_url) { im = el('img', 'ss-img'); im.src = p.image_url; im.alt = ''; im.loading = 'lazy'; } else { im = el('span', 'ss-img ss-img-ph', '📦'); }
+                const main = el('span', 'ss-main');
+                main.append(el('span', 'ss-nom', texteProduit(p).name));
+                const sous = el('span', 'ss-sous'); sous.append(document.createTextNode(catLabel(p.category) + ' · '));
+                sous.append(p.quantity === 0 ? el('span', 'ss-indispo', T('Indisponible', 'Unavailable')) : el('span', 'ss-prix', fmt(getPrix(p)) + ' FCFA'));
+                main.append(sous);
+                const voir = el('span', 'photo-voir', T('Voir', 'View'));
+                it.append(im, main, voir);
+                const ouvrir = () => { fermer(); openModal(p.id); };
+                it.addEventListener('click', ouvrir);
+                it.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrir(); } });
+                ul.append(it);
+            });
+            corps.append(ul);
+        } else {
+            corps.append(el('p', 'photo-note', T('Aucun article du catalogue ne ressemble à cette photo pour le moment.', 'No catalogue item looks like this photo right now.')));
+        }
+        const rang = el('div', 'photo-choix');
+        if (liste.length) rang.append(bouton(T('Voir tout dans la liste', 'See all in the list'), 'photo-btn photo-btn-main', () => { appliquerResultatsPhoto(liste); fermer(); }));
+        rang.append(bouton(T('📷 Nouvelle photo', '📷 New photo'), 'photo-btn', choisir));
+        if (!liste.length) {
+            const wa = el('a', 'photo-btn photo-btn-main', T('💬 Demander sur WhatsApp', '💬 Ask on WhatsApp'));
+            wa.href = 'https://wa.me/' + CONFIG.WA1 + '?text=' + encodeURIComponent(T('Bonjour Kapmaket, je cherche un article comme celui-ci : ', 'Hello Kapmaket, I am looking for an item like this: ') + (result.produit || ''));
+            wa.target = '_blank'; wa.rel = 'noopener'; rang.append(wa);
+        }
+        corps.append(rang);
+    }
+    async function envoyer(jeton) {
+        analyse(T('Analyse de ta photo…', 'Analysing your photo…'));
+        const ctrl = new AbortController(); etat.ctrl = ctrl;
+        const minuteur = setTimeout(() => ctrl.abort(), 25000);
+        try {
+            const resp = await fetch('/api/recherche-photo', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+                body: JSON.stringify({ image: etat.base64, media_type: 'image/jpeg', catalogue: allProducts.slice(0, 200).map(p => ({ id: p.id, n: p.name, c: p.category })) })
+            });
+            let result = null; try { result = await resp.json(); } catch (e) {}
+            if (jeton !== etat.jeton) return;
+            if (!resp.ok || !result) {
+                const msg = resp.status === 413 ? T('Image trop lourde, essaie une autre photo.', 'Image too large, try another photo.')
+                    : (result && result.error) || T('Recherche impossible pour le moment.', 'Search unavailable right now.');
+                return erreur(msg, resp.status !== 429);
+            }
+            resultats(result);
+        } catch (e) {
+            if (jeton !== etat.jeton) return;   // annulée par le client
+            erreur(T('La recherche prend trop de temps (réseau lent ?). Réessaie.', 'The search is taking too long (slow network?). Try again.'), true);
+        } finally { clearTimeout(minuteur); if (etat.ctrl === ctrl) etat.ctrl = null; }
+    }
+    async function lancer(fichier) {
+        const jeton = ++etat.jeton;
+        if (etat.ctrl) { etat.ctrl.abort(); etat.ctrl = null; }
+        etat.apercu = ''; analyse(T('Préparation de l’image…', 'Preparing the image…'));
+        let img;
+        try { img = await preparerImagePhoto(fichier); }
+        catch (e) {
+            if (jeton !== etat.jeton) return;
+            return erreur(e.message === 'trop-grande' ? T('Cette image est trop lourde (25 Mo maximum).', 'This image is too large (25 MB maximum).') : T('Impossible de lire cette image. Essaie une photo JPG ou PNG.', 'Could not read this image. Try a JPG or PNG photo.'), false);
+        }
+        if (jeton !== etat.jeton) return;
+        etat.apercu = img.dataUrl; etat.base64 = img.base64;
+        envoyer(jeton);
+    }
+    choisir();
+    btnX.focus();
+}
+
 // ===== RECHERCHE =====
 function setupSearch() {
     setupAutocomplete();
@@ -2476,52 +2687,8 @@ function setupSearch() {
         }
     };
 
-    // Recherche par photo : ouvre l'appareil photo (autorisation caméra
-    // demandée par le navigateur/OS à ce moment précis, pas avant).
-    $('btn-recherche-photo').onclick = () => $('input-recherche-photo').click();
-    $('input-recherche-photo').onchange = async (e) => {
-        const fichier = e.target.files?.[0];
-        e.target.value = '';
-        if (!fichier) return;
-        const btn = $('btn-recherche-photo');
-        btn.textContent = '⏳'; btn.disabled = true;
-        try {
-            const base64 = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = reject;
-                reader.readAsDataURL(fichier);
-            });
-            const resp = await fetch('/api/recherche-photo', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: base64, media_type: fichier.type })
-            });
-            const result = await resp.json();
-            if (!resp.ok) { notifier('❌ ' + (result.error || 'Recherche impossible, réessaie.'), 'erreur'); return; }
-
-            const motscles = (result.motscles || []).map(norm);
-            let resultats = allProducts.filter(p => {
-                const texte = norm(p.name) + norm(p.description||'') + norm(p.category);
-                return motscles.some(m => texte.includes(m));
-            });
-            if (!resultats.length && result.category) {
-                resultats = allProducts.filter(p => p.category === result.category);
-            }
-            if (!resultats.length) { notifier('😕 Aucun produit similaire trouvé dans le catalogue.', 'info'); return; }
-
-            $('search-bar').value = '';
-            _requeteRecherche = '';
-            currentCat = 'tous';
-            document.querySelectorAll('.cat-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === 'tous'));
-            majModeRecherche(true);
-            renderProducts(resultats);
-            $('produits').scrollIntoView({behavior:'smooth'});
-        } catch (err) {
-            notifier('❌ Erreur lors de la recherche par photo.', 'erreur');
-        } finally {
-            btn.textContent = '📷'; btn.disabled = false;
-        }
-    };
+    // Recherche par photo : panneau dédié (appareil photo, galerie, glisser-déposer, résultats)
+    $('btn-recherche-photo').onclick = ouvrirPanneauPhoto;
 }
 
 // ===== PRODUITS =====
