@@ -6,7 +6,7 @@ Kapmaket vend des produits technologiques neufs à des particuliers au Cameroun,
 
 ## Informations clés
 - Zone de service : Douala et environs, Cameroun
-- Moyens de paiement (via iKeePay) :
+- Moyens de paiement (paiement en ligne sécurisé) :
   - Mobile Money (MTN Mobile Money, Orange Money)
   - Carte bancaire (Visa, Mastercard)
   - Virement bancaire

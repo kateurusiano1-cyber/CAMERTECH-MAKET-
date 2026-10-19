@@ -35,7 +35,8 @@ module.exports = async (req, res) => {
     const modeLot = body?.mode === 'lot';
 
     if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "Clé IA non configurée côté serveur (GEMINI_API_KEY manquante dans Vercel)" });
+      console.error('Configuration : GEMINI_API_KEY manquante');
+      return res.status(500).json({ error: "Service non configuré côté serveur" });
     }
 
     // Circuit breaker : si Gemini échoue/quota dépassé en boucle, on arrête de le solliciter un moment

@@ -40,7 +40,7 @@ function listeAdmins() {
 async function etape1(req, res, supabase) {
     const { id, mdp } = req.body || {};
     if (!id || !mdp) return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
-    if (!process.env.ADMIN_SESSION_SECRET) return res.status(500).json({ error: 'Configuration serveur incomplète (ADMIN_SESSION_SECRET manquant sur Vercel)' });
+    if (!process.env.ADMIN_SESSION_SECRET) { console.error('Configuration : ADMIN_SESSION_SECRET manquant'); return res.status(500).json({ error: 'Configuration serveur incomplète' }); }
 
     const cle = `admin-login:${id}`;
     const check = await tropDeTentatives(supabase, cle);
@@ -72,7 +72,7 @@ async function etape1(req, res, supabase) {
 async function etape2(req, res, supabase) {
     const { ticket, code } = req.body || {};
     if (!ticket || !code) return res.status(400).json({ error: 'Ticket et code requis' });
-    if (!process.env.ADMIN_SESSION_SECRET) return res.status(500).json({ error: 'Configuration serveur incomplète (ADMIN_SESSION_SECRET manquant sur Vercel)' });
+    if (!process.env.ADMIN_SESSION_SECRET) { console.error('Configuration : ADMIN_SESSION_SECRET manquant'); return res.status(500).json({ error: 'Configuration serveur incomplète' }); }
 
     const cle = `admin-otp:${ticket}`;
     const check = await tropDeTentatives(supabase, cle, 5, 15);

@@ -24,7 +24,8 @@ module.exports = async (req, res) => {
     if (produits.length > 30) produits = produits.slice(0, 30); // évite les requêtes trop lourdes
 
     if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "Clé IA non configurée côté serveur (GEMINI_API_KEY manquante dans Vercel)" });
+      console.error('Configuration : GEMINI_API_KEY manquante');
+      return res.status(500).json({ error: "Service non configuré côté serveur" });
     }
 
     // Circuit breaker partagé avec analyser-produit.js (même quota Gemini)

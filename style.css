@@ -794,3 +794,20 @@ body.bv-ouvert { overflow: hidden; }
 .legal-resume ul, .legal-nouveau ul { margin-bottom: 0; }
 .cw-pied { font-size: 0.7rem; line-height: 1.35; color: var(--text3); text-align: center; padding: 6px 12px; border-top: 1px solid var(--border); }
 .cw-pied a { color: var(--green); text-decoration: underline; }
+
+/* ===== MODE RECHERCHE =====
+   Pendant une recherche : on ne garde que le champ de recherche et les articles trouvés
+   (catégories, slider, tuiles et Ventes Flash disparaissent). */
+body.mode-recherche .cat-bar,
+body.mode-recherche #slider-wrap,
+body.mode-recherche #tuiles-grid,
+body.mode-recherche #flash-section { display: none !important; }
+.btn-fin-recherche { display: none; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 999px;
+    border: 1.5px solid var(--border); background: var(--card); color: var(--text); font-family: var(--font-body);
+    font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+body.mode-recherche .btn-fin-recherche { display: inline-flex; }
+.recherche-vide { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.recherche-vide-ico { font-size: 2.2rem; }
+.recherche-vide p { margin: 0; font-size: 0.85rem; }
+.btn-voir-tout { margin-top: 8px; padding: 10px 20px; border: none; border-radius: 999px; background: var(--green);
+    color: #fff; font-family: var(--font-body); font-weight: 700; cursor: pointer; }

@@ -343,7 +343,8 @@ module.exports = async (req, res) => {
         if (!resa.total || resa.total < 100) return res.status(400).json({ error: 'Montant de commande invalide' });
 
         if (!process.env.IKEEPAY_PUBLIC_KEY) {
-            return res.status(500).json({ error: 'Clé iKeePay manquante côté serveur (IKEEPAY_PUBLIC_KEY)' });
+            console.error('Configuration : IKEEPAY_PUBLIC_KEY manquante');
+            return res.status(500).json({ error: 'Paiement momentanément indisponible, réessaie plus tard ou écris-nous sur WhatsApp' });
         }
 
         return res.status(200).json({

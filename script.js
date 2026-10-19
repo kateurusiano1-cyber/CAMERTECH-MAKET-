@@ -271,6 +271,7 @@ function echapperHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }
 let selectedFile = null, selectedFilesAll = [], editingId = null, currentCat = "tous";
+let _requeteRecherche = '';   // texte tapé dans la barre de recherche (vide = pas de recherche en cours)
 let userZone = "", fraisLivraison = 0;
 let slideIndex = 0, slideTimer = null, totalSlides = 1;
 let selectedNote = 0, avisFile = null;
@@ -932,7 +933,7 @@ const I18N = {
         footer_sub: 'Votre boutique tech à Douala', footer_copy: '© {annee} Kapmaket — Douala, Cameroun',
         tab_connexion: 'Connexion', tab_inscription: 'Inscription', titre_connexion: '👤 Connexion',
         ph_email: 'Adresse email', ph_mdp: 'Mot de passe', btn_se_connecter: 'Se connecter',
-        btn_mdp_oublie: 'Mot de passe oublié ?', ou: 'ou', btn_google: 'Continuer avec Google',
+        btn_mdp_oublie: 'Mot de passe oublié ?', ou: 'ou', btn_google: 'Continuer avec Google', effacer_recherche: '✕ Effacer la recherche',
         titre_creer_compte: '📝 Créer un compte', ph_nom: 'Nom complet *', ph_email_req: 'Email *',
         ph_tel_livraison: 'Téléphone (9 chiffres) — pour la livraison *', ph_mdp_req: 'Mot de passe *',
         ph_confirmer_mdp: 'Confirmer mot de passe *', btn_creer_compte: 'Créer mon compte',
@@ -961,7 +962,7 @@ const I18N = {
         footer_sub: 'Your tech shop in Douala', footer_copy: '© {annee} Kapmaket — Douala, Cameroon',
         tab_connexion: 'Login', tab_inscription: 'Sign up', titre_connexion: '👤 Login',
         ph_email: 'Email address', ph_mdp: 'Password', btn_se_connecter: 'Log in',
-        btn_mdp_oublie: 'Forgot password?', ou: 'or', btn_google: 'Continue with Google',
+        btn_mdp_oublie: 'Forgot password?', ou: 'or', btn_google: 'Continue with Google', effacer_recherche: '✕ Clear search',
         titre_creer_compte: '📝 Create an account', ph_nom: 'Full name *', ph_email_req: 'Email *',
         ph_tel_livraison: 'Phone (9 digits) — for delivery *', ph_mdp_req: 'Password *',
         ph_confirmer_mdp: 'Confirm password *', btn_creer_compte: 'Create my account',
@@ -1046,7 +1047,7 @@ function setupSidebar() {
 
     function closeSidebar() { $('sidebar').classList.remove('open'); $('sidebar-overlay').classList.remove('active'); }
 
-    $('sl-accueil').onclick = () => { closeSidebar(); window.scrollTo({top:0,behavior:'smooth'}); };
+    $('sl-accueil').onclick = () => { closeSidebar(); if (document.body.classList.contains('mode-recherche')) { finRecherche(true); renderProducts(allProducts); } window.scrollTo({top:0,behavior:'smooth'}); };
     $('sl-flash').onclick = () => { closeSidebar(); filtrerFlash(); };
     $('sl-combo').onclick = () => {
         closeSidebar();
@@ -1055,8 +1056,8 @@ function setupSidebar() {
     };
     $('sl-politique').onclick = () => { closeSidebar(); openOverlay('politique-overlay'); };
     $('sl-cgu').onclick = () => { closeSidebar(); openOverlay('cgu-overlay'); };
-    $('sl-promo').onclick = () => { closeSidebar(); renderProducts(allProducts.filter(p=>p.promo_active)); };
-    $('sl-nouveautes').onclick = () => { closeSidebar(); renderProducts(allProducts.filter(p=>isNew(p.created_at))); };
+    $('sl-promo').onclick = () => { closeSidebar(); finRecherche(true); renderProducts(allProducts.filter(p=>p.promo_active)); };
+    $('sl-nouveautes').onclick = () => { closeSidebar(); finRecherche(true); renderProducts(allProducts.filter(p=>isNew(p.created_at))); };
     $('sl-meilleures').onclick = () => { closeSidebar(); afficherMeilleuresVentes(); };
     $('sl-tel').onclick = () => { closeSidebar(); filtrerCat('Téléphonie'); };
     $('sl-acc').onclick = () => { closeSidebar(); filtrerCat('Accessoires'); };
@@ -1080,6 +1081,7 @@ function setupSidebar() {
     $('sidebar-zone').onchange = () => { userZone = $('sidebar-zone').value; $('zone-select').value = userZone; updateLivraison(); };
     $('prix-max-filter').onchange = () => {
         const max = parseFloat($('prix-max-filter').value);
+        finRecherche(true);
         renderProducts(max ? allProducts.filter(p=>getPrix(p)<=max) : allProducts);
     };
 }
@@ -2021,6 +2023,7 @@ window.toggleFavori = async (productId, btn) => {
 function afficherFavoris() {
     const favs = allProducts.filter(p => favorisIds.has(p.id));
     currentCat = 'tous';
+    finRecherche(true);
     renderProducts(favs);
     $('produits').scrollIntoView({behavior:'smooth'});
 }
@@ -2230,6 +2233,7 @@ function setupCategories() {
         btn.onclick = () => {
             document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+            finRecherche(true);
             currentCat = btn.dataset.cat;
             logVisiteur('filtre_categorie', currentCat);
             renderProducts(allProducts);
@@ -2246,6 +2250,7 @@ function setupCategories() {
 }
 
 function filtrerCat(cat) {
+    finRecherche(true);
     currentCat = cat;
     logVisiteur('filtre_categorie', cat);
     document.querySelectorAll('.cat-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
@@ -2253,13 +2258,42 @@ function filtrerCat(cat) {
     $('produits').scrollIntoView({behavior:'smooth'});
 }
 
+// ===== MODE RECHERCHE =====
+// Pendant une recherche, slider / tuiles / catégories / Ventes Flash sont masqués (CSS : body.mode-recherche).
+function normRecherche(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ''); }
+function filtrerParRecherche(liste, brut) {
+    const q = normRecherche(brut);
+    if (!q) return liste;
+    return liste.filter(p => normRecherche(p.name).includes(q) || normRecherche(p.description).includes(q) || normRecherche(p.category).includes(q));
+}
+function majModeRecherche(actif) { document.body.classList.toggle('mode-recherche', !!actif); }
+function finRecherche(vider) {
+    _requeteRecherche = '';
+    majModeRecherche(false);
+    if (vider) { const c = document.getElementById('search-bar'); if (c) c.value = ''; }
+}
+
 // ===== RECHERCHE =====
 function setupSearch() {
-    const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
+    const norm = normRecherche;
     let _debounceRecherche = null;
+    $('btn-fin-recherche').onclick = () => { finRecherche(true); renderProducts(allProducts); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     $('search-bar').oninput = e => {
-        const q = norm(e.target.value.trim());
-        renderProducts(q ? allProducts.filter(p => norm(p.name).includes(q) || norm(p.description||'').includes(q) || norm(p.category).includes(q)) : allProducts);
+        const brut = e.target.value.trim();
+        const q = norm(brut);
+        if (q) {
+            // Entrée en mode recherche : on repart de « Tous » pour qu'aucun filtre de catégorie ne cache de résultat
+            if (!document.body.classList.contains('mode-recherche')) {
+                currentCat = 'tous';
+                document.querySelectorAll('.cat-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === 'tous'));
+                window.scrollTo({ top: 0 });
+            }
+            _requeteRecherche = brut;
+            majModeRecherche(true);
+        } else {
+            finRecherche(false);
+        }
+        renderProducts(allProducts);   // renderProducts applique lui-même le filtre de recherche
         clearTimeout(_debounceRecherche);
         if (e.target.value.trim().length >= 2) {
             _debounceRecherche = setTimeout(() => logVisiteur('recherche', e.target.value.trim()), 1200);
@@ -2300,6 +2334,10 @@ function setupSearch() {
             if (!resultats.length) { notifier('😕 Aucun produit similaire trouvé dans le catalogue.', 'info'); return; }
 
             $('search-bar').value = '';
+            _requeteRecherche = '';
+            currentCat = 'tous';
+            document.querySelectorAll('.cat-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === 'tous'));
+            majModeRecherche(true);
             renderProducts(resultats);
             $('produits').scrollIntoView({behavior:'smooth'});
         } catch (err) {
@@ -2403,9 +2441,16 @@ if (localStorage.getItem('cmkt_vue_produits') === 'liste') changerVueProduits('l
 
 function renderProducts(products) {
     const grid = $('product-grid');
+    if (_requeteRecherche) products = filtrerParRecherche(products, _requeteRecherche);
     const filtered = currentCat === 'tous' ? products : products.filter(p => p.category === currentCat);
     $('prod-count').textContent = filtered.length + (currentLang==='en' ? ' product(s)' : ' produit(s)');
     grid.innerHTML = '';
+    if (!filtered.length && _requeteRecherche) {
+        const en = currentLang === 'en';
+        grid.innerHTML = `<div class="empty-state recherche-vide"><div class="recherche-vide-ico">🔍</div><strong>${en ? 'No product found for' : 'Aucun produit trouvé pour'} « ${echapperHtml(_requeteRecherche)} »</strong><p>${en ? 'Check the spelling, try another word, or send a photo of the item with 📷.' : "Vérifie l'orthographe, essaie un autre mot, ou envoie une photo de l'article avec 📷."}</p><button type="button" class="btn-voir-tout">${en ? 'See all products' : 'Voir tous les produits'}</button></div>`;
+        grid.querySelector('.btn-voir-tout').onclick = () => { finRecherche(true); renderProducts(allProducts); };
+        return;
+    }
     if (!filtered.length) { grid.innerHTML = `<div class="empty-state">${currentLang==='en'?'No products available.':'Aucun produit disponible.'}</div>`; return; }
     filtered.forEach(p => {
         const card = document.createElement('div');
@@ -2454,6 +2499,7 @@ function renderProducts(products) {
 // ===== FLASH =====
 let flashInterval = null;
 function filtrerFlash() {
+    finRecherche(true);
     renderProducts(allProducts.filter(p => p.flash_active));
     $('produits').scrollIntoView({behavior:'smooth'});
 }
@@ -2495,6 +2541,7 @@ function chargerFlash(prods) {
 }
 
 async function afficherMeilleuresVentes() {
+    finRecherche(true);
     const { data } = await db.from('meilleures_ventes').select('items');
     const counts = {};
     (data||[]).forEach(r => (r.items||[]).forEach(i => { counts[i.name]=(counts[i.name]||0)+i.qty; }));
