@@ -66,10 +66,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-    <!-- Firebase volontairement figé sur 12.16.0 : les versions 12.17.0 et 12.17.1 ont un bug connu
-         (« Database is closing/hidden », firebase-js-sdk n°10264) qui fait échouer la connexion sur
-         mobile dès que la page passe en arrière-plan (clavier, gestionnaire de mots de passe, PWA).
-         À ne remonter de version qu'après avoir testé la connexion sur téléphone. -->
+    <!-- Version de la bibliothèque de connexion volontairement figée : les versions plus récentes ont un bug connu sur mobile. À ne changer qu'après test de la connexion sur téléphone. -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
@@ -336,6 +333,7 @@
         <div class="section-hdr">
             <h2 data-i18n="titre_produits">🛒 Nos Produits</h2>
             <div style="display:flex;align-items:center;gap:10px">
+                <button type="button" id="btn-fin-recherche" class="btn-fin-recherche" data-i18n="effacer_recherche">✕ Effacer la recherche</button>
                 <span id="prod-count" class="count-tag"></span>
                 <div id="vue-toggle" role="group" aria-label="Mode d'affichage">
                     <button id="btn-vue-grille" type="button" class="vue-btn active" onclick="changerVueProduits('grille')" title="Affichage en grille" aria-label="Affichage en grille">▦</button>
@@ -460,8 +458,8 @@
                 <ul>
                     <li>Nous collectons ce qu'il faut pour traiter tes commandes, te livrer et faire fonctionner le site.</li>
                     <li>Nous ne vendons jamais tes données et nous ne faisons pas de publicité ciblée.</li>
-                    <li>Si tu parles à notre <strong>assistant virtuel</strong>, tes messages sont envoyés à <strong>Google (Gemini)</strong> pour fabriquer la réponse. Ne lui donne jamais de mot de passe, de code reçu par SMS ni de numéro de carte.</li>
-                    <li>Pour livrer ta commande, ton <strong>nom, ton téléphone et le contenu de ta commande</strong> sont partagés avec notre équipe et nos livreurs dans une messagerie privée (Telegram).</li>
+                    <li>Si tu parles à notre <strong>assistant virtuel</strong>, tes messages sont envoyés à <strong>un service d'intelligence artificielle tiers</strong> pour fabriquer la réponse. Ne lui donne jamais de mot de passe, de code reçu par SMS ni de numéro de carte.</li>
+                    <li>Pour livrer ta commande, ton <strong>nom, ton téléphone et le contenu de ta commande</strong> sont partagés avec notre équipe et nos livreurs dans une messagerie privée.</li>
                     <li>Tu peux demander à voir, corriger ou supprimer tes données à tout moment, sur WhatsApp.</li>
                 </ul>
             </div>
@@ -469,9 +467,9 @@
             <div class="legal-nouveau">
                 <strong>🆕 Ce qui change avec la mise à jour du 15 octobre 2026</strong>
                 <ul>
-                    <li><strong>Assistant virtuel (IA).</strong> Il répond à tes questions sur les produits, la livraison, le paiement et ta commande. Ce que tu lui écris est envoyé à Google (Gemini) avec notre catalogue et nos règles. Il peut se tromper : le prix et la disponibilité définitifs sont ceux du panier.</li>
+                    <li><strong>Assistant virtuel (IA).</strong> Il répond à tes questions sur les produits, la livraison, le paiement et ta commande. Ce que tu lui écris est envoyé à notre service d'intelligence artificielle tiers avec notre catalogue et nos règles. Il peut se tromper : le prix et la disponibilité définitifs sont ceux du panier.</li>
                     <li><strong>Statistiques de la demande.</strong> Pour savoir ce que les clients cherchent, nous enregistrons <strong>de façon anonyme</strong> les questions posées à l'assistant (voir le détail plus bas). Aucun nom, aucun numéro.</li>
-                    <li><strong>Livraison suivie par l'équipe.</strong> Quand une commande est payée, un message est envoyé dans un <strong>groupe Telegram privé</strong> réunissant l'équipe Kapmaket et les livreurs. Le livreur qui la prend est enregistré avec la commande, et tu peux recevoir une notification « en route » puis « livrée ».</li>
+                    <li><strong>Livraison suivie par l'équipe.</strong> Quand une commande est payée, un message est envoyé dans un <strong>groupe de messagerie privé</strong> réunissant l'équipe Kapmaket et les livreurs. Le livreur qui la prend est enregistré avec la commande, et tu peux recevoir une notification « en route » puis « livrée ».</li>
                     <li><strong>Mémoire de la discussion.</strong> Ta conversation avec l'assistant est gardée dans ton navigateur (jusqu'à ta déconnexion si tu as un compte, 24 h sinon). Le bouton ↺ l'efface.</li>
                     <li><strong>Messages d'accueil.</strong> Le site peut afficher un message de bienvenue écrit par l'équipe et t'inviter à essayer l'assistant. Pour ne pas te les répéter sans arrêt, ton navigateur garde de petits repères (dates d'affichage, refus).</li>
                     <li><strong>Précision importante :</strong> lorsque tu es connecté(e), ton identifiant de visite est <strong>relié à ton compte</strong>. Ton activité sur le site (pages vues, produits consultés, recherches) peut donc être rattachée à toi.</li>
@@ -482,25 +480,25 @@
             <p><strong>K.E.R TECH</strong>, qui exploite la boutique en ligne <strong>Kapmaket</strong> (Douala, PK14, Cameroun). Pour toute question ou demande : WhatsApp au <strong>699 781 160</strong> ou <strong>653 756 167</strong>.</p>
 
             <h4>2. Quelles données, et pourquoi ?</h4>
-            <p><strong>👤 Ton compte.</strong> Nom, e-mail, téléphone, points de fidélité, date à laquelle tu as accepté nos règles. Si tu te connectes avec Google, Google nous transmet ton nom et ton e-mail. Ton mot de passe est géré par Firebase (Google) : nous ne le voyons jamais. <em>Pourquoi :</em> créer et sécuriser ton compte, te contacter au sujet de tes commandes, gérer la fidélité (1 point par 1 000 FCFA dépensés).</p>
+            <p><strong>👤 Ton compte.</strong> Nom, e-mail, téléphone, points de fidélité, date à laquelle tu as accepté nos règles. Si tu te connectes avec Google, Google nous transmet ton nom et ton e-mail. Ton mot de passe est géré par notre service d'authentification sécurisé : nous ne le voyons jamais. <em>Pourquoi :</em> créer et sécuriser ton compte, te contacter au sujet de tes commandes, gérer la fidélité (1 point par 1 000 FCFA dépensés).</p>
             <p><strong>📦 Tes commandes.</strong> Code de commande, articles, montant, zone de livraison ou retrait, note éventuelle, statut, dates, référence de paiement, nom du livreur, facture, demandes de retour (avec ton motif). <em>Pourquoi :</em> traiter et livrer ta commande, facturer, gérer les retours et réclamations, respecter nos obligations comptables.</p>
-            <p><strong>💳 Paiement.</strong> Il est traité par <strong>iKeePay</strong> (Mobile Money, carte, virement, USDT). Tu saisis tes informations de paiement chez iKeePay, pas chez nous. Nous recevons seulement la confirmation (statut, montant, référence) : <strong>nous ne stockons aucun numéro de carte ni code secret</strong>.</p>
+            <p><strong>💳 Paiement.</strong> Il est traité par <strong>notre prestataire de paiement sécurisé</strong> (Mobile Money, carte, virement, USDT). Tu saisis tes informations de paiement chez ce prestataire, pas chez nous. Nous recevons seulement la confirmation (statut, montant, référence) : <strong>nous ne stockons aucun numéro de carte ni code secret</strong>.</p>
             <p><strong>⭐ Tes avis.</strong> Ton nom (celui de ton compte), ta note, ton commentaire et ta photo éventuelle peuvent être <strong>affichés publiquement</strong> sous le produit, après validation par l'équipe.</p>
             <p><strong>🔔 Notifications.</strong> Si tu les actives, nous enregistrons l'identifiant technique de ton appareil, relié à ton compte, pour t'informer du statut de tes commandes. Tu peux les désactiver à tout moment dans ton navigateur.</p>
             <p><strong>👀 Ta visite.</strong> Même sans compte : un identifiant aléatoire gardé dans ton navigateur, le type de navigateur et d'appareil, le site d'où tu viens, d'éventuels paramètres de campagne, les pages vues et leur durée, les produits consultés, les ajouts au panier, les mots que tu tapes dans la barre de recherche et les catégories que tu ouvres. <em>Pourquoi :</em> retenir ton panier, comprendre comment le site est utilisé, améliorer notre offre. Ces données ne servent jamais à de la publicité et ne sont pas revendues.</p>
-            <p><strong>🤖 Assistant virtuel.</strong> Ce que tu écris (400 caractères maximum par message) et les derniers échanges de la conversation sont envoyés à Google (Gemini) pour générer la réponse. De notre côté, un <strong>journal anonyme</strong> garde : la date, ta question « nettoyée » (<strong>numéros de téléphone, e-mails et codes de commande masqués</strong>, 200 caractères maximum), le sujet, le produit cherché, le budget cité s'il y en a un, les produits proposés, le fait d'avoir été orienté vers WhatsApp, et l'identifiant aléatoire de visite. <strong>Pas de nom, pas de numéro de téléphone.</strong> <em>Pourquoi :</em> savoir ce que les clients recherchent et quels produits manquent.</p>
-            <p><strong>📷 Recherche par photo.</strong> L'image que tu envoies est transmise à Google (Gemini) pour reconnaître l'article. Nous ne la conservons pas.</p>
+            <p><strong>🤖 Assistant virtuel.</strong> Ce que tu écris (400 caractères maximum par message) et les derniers échanges de la conversation sont envoyés à notre service d'intelligence artificielle tiers pour générer la réponse. De notre côté, un <strong>journal anonyme</strong> garde : la date, ta question « nettoyée » (<strong>numéros de téléphone, e-mails et codes de commande masqués</strong>, 200 caractères maximum), le sujet, le produit cherché, le budget cité s'il y en a un, les produits proposés, le fait d'avoir été orienté vers WhatsApp, et l'identifiant aléatoire de visite. <strong>Pas de nom, pas de numéro de téléphone.</strong> <em>Pourquoi :</em> savoir ce que les clients recherchent et quels produits manquent.</p>
+            <p><strong>📷 Recherche par photo.</strong> L'image que tu envoies est transmise à notre service d'intelligence artificielle tiers pour reconnaître l'article. Nous ne la conservons pas.</p>
             <p><strong>💬 WhatsApp.</strong> Si tu nous écris, tes messages sont aussi traités par WhatsApp (Meta), selon ses propres règles.</p>
 
             <h4>3. Ce qui est gardé dans ton navigateur</h4>
             <p>Ta langue, ton thème, ton panier, les produits vus récemment, tes préférences d'affichage (catégories), l'identifiant de visite, ton profil connecté (pour te garder connecté(e)), ta conversation avec l'assistant et les repères d'invitation et de message de bienvenue. <strong>Ce ne sont pas des cookies publicitaires et nous n'utilisons aucun traceur publicitaire.</strong> Tu peux tout effacer en vidant les données du site dans ton navigateur (ton panier repartira alors de zéro).</p>
-            <p>Pour s'afficher, le site charge aussi des éléments externes : polices Google Fonts, bibliothèques jsDelivr et Firebase (Google). Ces services reçoivent ton adresse IP, comme pour n'importe quel site web.</p>
+            <p>Pour s'afficher, le site charge aussi des éléments externes : polices de caractères, bibliothèques de code et service de connexion, fournis par des services externes. Ces services reçoivent ton adresse IP, comme pour n'importe quel site web.</p>
 
             <h4>4. Qui peut voir tes données ?</h4>
             <ul>
                 <li><strong>L'équipe Kapmaket</strong> (administrateurs).</li>
-                <li><strong>Les livreurs</strong>, via le groupe Telegram privé : code de commande, nom, téléphone, articles, montant payé, zone de livraison ou retrait, note éventuelle. Tous les membres du groupe voient ces messages ; Telegram traite aussi ces messages selon ses propres règles.</li>
-                <li><strong>Nos prestataires techniques</strong>, pour faire fonctionner le service : Google (connexion Firebase, assistant Gemini, polices), iKeePay (paiement), Supabase (base de données), Vercel (hébergement), Telegram (messagerie de l'équipe), jsDelivr (bibliothèques). Chacun applique ses propres règles de confidentialité.</li>
+                <li><strong>Les livreurs</strong>, via le groupe de messagerie privé : code de commande, nom, téléphone, articles, montant payé, zone de livraison ou retrait, note éventuelle. Tous les membres du groupe voient ces messages ; le service de messagerie traite aussi ces messages selon ses propres règles.</li>
+                <li><strong>Nos prestataires techniques</strong>, pour faire fonctionner le service : connexion et authentification, intelligence artificielle, paiement, base de données, hébergement, messagerie de l'équipe, polices et bibliothèques. Chacun applique ses propres règles de confidentialité.</li>
                 <li><strong>Les autorités</strong>, uniquement si la loi l'exige.</li>
             </ul>
             <p>Certains de ces prestataires ont leurs serveurs <strong>en dehors du Cameroun</strong> : tes données peuvent donc être traitées à l'étranger. <strong>Nous ne vendons pas tes données.</strong></p>
@@ -510,7 +508,7 @@
                 <li><strong>Compte et commandes :</strong> tant que ton compte existe, puis le temps nécessaire à nos obligations légales et comptables (factures).</li>
                 <li><strong>Journal anonyme de l'assistant :</strong> 12 mois maximum, puis effacé automatiquement.</li>
                 <li><strong>Statistiques de visite :</strong> pas d'effacement automatique pour le moment ; elles sont gardées tant qu'elles servent à comprendre l'usage du site. Celles qui sont rattachées à ton compte sont effacées sur demande.</li>
-                <li><strong>Messages du groupe Telegram :</strong> ils restent dans ce groupe privé tant qu'il existe.</li>
+                <li><strong>Messages du groupe de messagerie :</strong> ils restent dans ce groupe privé tant qu'il existe.</li>
                 <li><strong>Dans ton navigateur :</strong> jusqu'à ce que tu les effaces (la conversation avec l'assistant : jusqu'à ta déconnexion, ou 24 h sans compte).</li>
             </ul>
 
@@ -561,7 +559,7 @@
 
             <h4>4. Prix et paiement</h4>
             <p>Les prix sont en <strong>FCFA</strong>. Pour des raisons d'affichage, un prix peut apparaître <strong>1 FCFA en dessous</strong> du montant réellement payé (par exemple 14 999 sur la fiche et 15 000 au paiement). Cette différence apparaît dans ton panier sur la ligne <strong>« Ajustement d'arrondi »</strong> : le montant exact à payer est celui du <strong>« Total à payer »</strong>, affiché avant que tu paies.</p>
-            <p>Le paiement se fait via <strong>iKeePay</strong> (Mobile Money, carte, virement, USDT). La commande est <strong>validée uniquement après confirmation du paiement</strong> par iKeePay. Si le montant reçu ne correspond pas à celui de ta commande, elle <strong>n'est pas validée automatiquement</strong> : l'équipe vérifie le paiement et te contacte. Dans ce cas, <strong>ne paie pas une deuxième fois</strong> avant de nous avoir écrit sur WhatsApp.</p>
+            <p>Le paiement se fait via <strong>notre prestataire de paiement sécurisé</strong> (Mobile Money, carte, virement, USDT). La commande est <strong>validée uniquement après confirmation du paiement</strong> par ce prestataire. Si le montant reçu ne correspond pas à celui de ta commande, elle <strong>n'est pas validée automatiquement</strong> : l'équipe vérifie le paiement et te contacte. Dans ce cas, <strong>ne paie pas une deuxième fois</strong> avant de nous avoir écrit sur WhatsApp.</p>
             <p>Tu peux aussi <strong>réserver sans payer</strong> : les articles sont mis de côté par l'équipe, mais la commande n'est confirmée qu'après paiement.</p>
 
             <h4>5. Livraison et retrait</h4>
@@ -770,7 +768,7 @@
         <div class="pay-header">
             <div style="font-size:2.5rem;margin-bottom:8px">💳</div>
             <h2>Paiement Mobile Money</h2>
-            <p style="color:var(--text3);font-size:0.85rem">Sécurisé par <strong>iKeePay</strong></p>
+            <p style="color:var(--text3);font-size:0.85rem">Paiement sécurisé</p>
         </div>
         <div id="pay-amount" class="pay-amount"></div>
         <div class="pay-methods" id="pay-methods-h2h">
@@ -792,7 +790,7 @@
     </div>
 </div>
 
-<!-- WIDGET IKEEPAY (mode 'widget' uniquement — iframe intégrée, pas de redirection externe) -->
+<!-- WIDGET DE PAIEMENT (mode 'widget' uniquement — iframe intégrée, pas de redirection externe) -->
 <div id="ikeepay-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:none;align-items:center;justify-content:center">
     <div style="position:relative;width:100%;max-width:450px;height:100%;max-height:90vh;padding:8px">
         <button id="ikeepay-close" style="position:absolute;top:-2.2rem;right:0.5rem;background:none;border:none;color:#fff;font-size:1.6rem;cursor:pointer;line-height:1">✕</button>
