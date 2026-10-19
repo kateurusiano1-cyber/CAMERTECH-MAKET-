@@ -811,3 +811,31 @@ body.mode-recherche .btn-fin-recherche { display: inline-flex; }
 .recherche-vide p { margin: 0; font-size: 0.85rem; }
 .btn-voir-tout { margin-top: 8px; padding: 10px 20px; border: none; border-radius: 999px; background: var(--green);
     color: #fff; font-family: var(--font-body); font-weight: 700; cursor: pointer; }
+
+/* ===== AUTOCOMPLÉTION (suggestions sous la barre de recherche) ===== */
+.header .header-search-full:focus-within { overflow: visible; }
+.search-suggest { position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: var(--card);
+    border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 12px 32px rgba(15,23,20,0.16);
+    max-height: min(70vh, 460px); overflow-y: auto; z-index: 400; padding: 6px; text-align: left; }
+.search-suggest[hidden] { display: none; }
+.ss-titre { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text3); padding: 8px 10px 4px; }
+.ss-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; cursor: pointer; }
+.ss-item:hover, .ss-item.actif { background: var(--bg); }
+.ss-img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; background: var(--bg); flex-shrink: 0; }
+.ss-img-ph { display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+.ss-ico { width: 28px; text-align: center; flex-shrink: 0; }
+.ss-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.ss-nom { font-size: 0.88rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-nom b { color: var(--green); font-weight: 800; }
+.ss-sous { font-size: 0.75rem; color: var(--text3); }
+.ss-prix { font-weight: 700; color: var(--green); }
+.ss-indispo { color: #b45309; font-weight: 600; }
+.ss-x { background: none; border: none; cursor: pointer; color: var(--text3); font-size: 0.9rem; padding: 4px 8px; }
+.ss-pied { justify-content: center; color: var(--green); font-weight: 700; font-size: 0.82rem; }
+.ss-vide { padding: 12px 10px 6px; font-size: 0.85rem; color: var(--text3); }
+.ss-dym { font-size: 0.88rem; color: var(--text); }
+.ss-dym b { color: var(--green); }
+/* En mode recherche l'en-tête de la liste reçoit un bouton de plus : il peut passer à la ligne sur petit écran */
+body.mode-recherche .section-hdr { flex-wrap: wrap; row-gap: 8px; }
+body.mode-recherche .section-hdr > div { flex-wrap: wrap; }
+.btn-fin-recherche { white-space: nowrap; }

@@ -2270,11 +2270,187 @@ function majModeRecherche(actif) { document.body.classList.toggle('mode-recherch
 function finRecherche(vider) {
     _requeteRecherche = '';
     majModeRecherche(false);
-    if (vider) { const c = document.getElementById('search-bar'); if (c) c.value = ''; }
+    if (vider) {
+        const c = document.getElementById('search-bar'); if (c) c.value = '';
+        if (typeof fermerSuggestions === 'function') fermerSuggestions();
+    }
+}
+
+// ===== AUTOCOMPLÉTION =====
+// Liste de suggestions sous la barre : produits (photo, nom, prix), recherches récentes (mémorisées
+// uniquement sur l'appareil du client) et « Vouliez-vous dire » en cas de faute de frappe.
+const RECENTES_CLE = 'cmkt_recherches_recentes';
+function lireRecentes() {
+    try { const v = JSON.parse(localStorage.getItem(RECENTES_CLE) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string' && x).slice(0, 5) : []; } catch (e) { return []; }
+}
+function ecrireRecentes(l) { try { localStorage.setItem(RECENTES_CLE, JSON.stringify(l.slice(0, 5))); } catch (e) {} }
+function memoriserRecherche(t) {
+    t = (t || '').trim().slice(0, 60);
+    if (normRecherche(t).length < 2) return;
+    ecrireRecentes([t, ...lireRecentes().filter(x => normRecherche(x) !== normRecherche(t))]);
+}
+const sansAccents = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function motsDe(s) { return (s || '').split(/[\s\-_.,'’\/()]+/).filter(Boolean); }
+function distanceEdition(a, b) {
+    if (Math.abs(a.length - b.length) > 2) return 99;
+    const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+        let diag = prev[0]; prev[0] = i;
+        for (let j = 1; j <= b.length; j++) {
+            const tmp = prev[j];
+            prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+            diag = tmp;
+        }
+    }
+    return prev[b.length];
+}
+// Produits qui correspondent, les meilleurs d'abord : nom qui commence par la saisie, mot du nom, nom, catégorie, description
+function suggestionsProduits(brut) {
+    const q = normRecherche(brut);
+    if (q.length < 2) return [];
+    const trouves = [];
+    allProducts.forEach(p => {
+        const nom = normRecherche(p.name);
+        let score;
+        if (nom.startsWith(q)) score = 0;
+        else if (motsDe(p.name).some(m => normRecherche(m).startsWith(q))) score = 1;
+        else if (nom.includes(q)) score = 2;
+        else if (normRecherche(p.category).includes(q)) score = 3;
+        else if (normRecherche(p.description).includes(q)) score = 4;
+        else return;
+        trouves.push({ p, score });
+    });
+    trouves.sort((a, b) => a.score - b.score || String(a.p.name).localeCompare(String(b.p.name), 'fr'));
+    return trouves.map(x => x.p);
+}
+// Mot du catalogue le plus proche d'une saisie sans résultat (une ou deux lettres de différence)
+function motProche(brut) {
+    const q = normRecherche(brut);
+    if (q.length < 4 || /\s/.test((brut || '').trim())) return null;
+    const seuil = q.length >= 7 ? 2 : 1;
+    let meilleur = null;
+    const vus = new Set();
+    allProducts.forEach(p => motsDe(p.name).forEach(m => {
+        const n = normRecherche(m);
+        if (n.length < 3 || vus.has(n)) return;
+        vus.add(n);
+        const d = Math.min(distanceEdition(q, n), n.length > q.length ? distanceEdition(q, n.slice(0, q.length)) : 99);
+        if (d <= seuil && (!meilleur || d < meilleur.d || (d === meilleur.d && n.length < meilleur.n.length))) meilleur = { d, n, m };
+    }));
+    return meilleur ? meilleur.m : null;
+}
+function fragmentSurligne(texte, brut) {
+    const f = document.createDocumentFragment();
+    const t = String(texte || '');
+    const sa = sansAccents(t).toLowerCase();
+    const cherche = sansAccents(brut).toLowerCase();
+    const i = (cherche && sa.length === t.length) ? sa.indexOf(cherche) : -1;
+    if (i < 0) { f.appendChild(document.createTextNode(t)); return f; }
+    f.appendChild(document.createTextNode(t.slice(0, i)));
+    const b = document.createElement('b'); b.textContent = t.slice(i, i + cherche.length); f.appendChild(b);
+    f.appendChild(document.createTextNode(t.slice(i + cherche.length)));
+    return f;
+}
+function setupAutocomplete() {
+    const champ = $('search-bar'), boite = $('search-suggest');
+    if (!champ || !boite) return;
+    let actif = -1;
+    const en = () => currentLang === 'en';
+    champ.setAttribute('role', 'combobox');
+    champ.setAttribute('aria-autocomplete', 'list');
+    champ.setAttribute('aria-controls', 'search-suggest');
+    champ.setAttribute('aria-expanded', 'false');
+    const items = () => Array.from(boite.querySelectorAll('.ss-item'));
+    function fermer() {
+        boite.hidden = true; boite.innerHTML = ''; actif = -1;
+        champ.setAttribute('aria-expanded', 'false'); champ.removeAttribute('aria-activedescendant');
+    }
+    window.fermerSuggestions = fermer;
+    function choisir(i) {
+        const l = items();
+        l.forEach(x => x.classList.remove('actif'));
+        actif = i;
+        if (i >= 0 && l[i]) { l[i].classList.add('actif'); l[i].scrollIntoView({ block: 'nearest' }); champ.setAttribute('aria-activedescendant', l[i].id); }
+        else champ.removeAttribute('aria-activedescendant');
+    }
+    function titre(txt) { const d = document.createElement('div'); d.className = 'ss-titre'; d.textContent = txt; boite.appendChild(d); }
+    function item(classe, action) {
+        const d = document.createElement('div');
+        d.className = 'ss-item ' + classe; d.setAttribute('role', 'option'); d.id = 'ss-opt-' + items().length;
+        d.addEventListener('click', action); boite.appendChild(d); return d;
+    }
+    function remplir(texte) { champ.value = texte; champ.dispatchEvent(new Event('input', { bubbles: true })); champ.focus(); }
+    function afficher() {
+        const brut = champ.value.trim();
+        boite.innerHTML = ''; actif = -1; champ.removeAttribute('aria-activedescendant');
+        if (!brut) {
+            const rec = lireRecentes();
+            if (!rec.length) return fermer();
+            titre(en() ? 'Recent searches' : 'Recherches récentes');
+            rec.forEach(t => {
+                const it = item('ss-rec', () => remplir(t));
+                const ico = document.createElement('span'); ico.className = 'ss-ico'; ico.textContent = '🕘';
+                const txt = document.createElement('span'); txt.className = 'ss-main ss-nom'; txt.textContent = t;
+                const x = document.createElement('button'); x.type = 'button'; x.className = 'ss-x'; x.textContent = '✕';
+                x.setAttribute('aria-label', en() ? 'Remove' : 'Retirer');
+                x.addEventListener('click', e => { e.stopPropagation(); ecrireRecentes(lireRecentes().filter(y => y !== t)); afficher(); });
+                it.append(ico, txt, x);
+            });
+        } else if (normRecherche(brut).length >= 2 && allProducts.length) {
+            const tous = suggestionsProduits(brut);
+            if (tous.length) {
+                tous.slice(0, 6).forEach(p => {
+                    const it = item('ss-prod', () => { memoriserRecherche(brut); fermer(); champ.blur(); openModal(p.id); });
+                    let img;
+                    if (p.image_url) { img = document.createElement('img'); img.className = 'ss-img'; img.src = p.image_url; img.alt = ''; img.loading = 'lazy'; }
+                    else { img = document.createElement('span'); img.className = 'ss-img ss-img-ph'; img.textContent = '📦'; }
+                    const main = document.createElement('span'); main.className = 'ss-main';
+                    const nom = document.createElement('span'); nom.className = 'ss-nom';
+                    nom.appendChild(fragmentSurligne(texteProduit(p).name, brut));
+                    const sous = document.createElement('span'); sous.className = 'ss-sous';
+                    sous.appendChild(document.createTextNode(catLabel(p.category) + ' · '));
+                    const prix = document.createElement('span');
+                    if (p.quantity === 0) { prix.className = 'ss-indispo'; prix.textContent = en() ? 'Unavailable' : 'Indisponible'; }
+                    else { prix.className = 'ss-prix'; prix.textContent = fmt(getPrix(p)) + ' FCFA'; }
+                    sous.appendChild(prix);
+                    main.append(nom, sous); it.append(img, main);
+                });
+                const pied = item('ss-pied', () => { memoriserRecherche(brut); fermer(); champ.blur(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+                pied.textContent = en() ? `See all ${tous.length} results` : `Voir les ${tous.length} résultats`;
+            } else {
+                const v = document.createElement('div'); v.className = 'ss-vide';
+                v.textContent = (en() ? 'No product for ' : 'Aucun produit pour ') + '« ' + brut + ' »';
+                boite.appendChild(v);
+                const m = motProche(brut);
+                if (m) {
+                    const it = item('ss-dym', () => remplir(m));
+                    const b = document.createElement('b'); b.textContent = m;
+                    it.append(document.createTextNode((en() ? 'Did you mean: ' : 'Vouliez-vous dire : ')), b, document.createTextNode(' ?'));
+                }
+            }
+        } else return fermer();
+        boite.hidden = false; champ.setAttribute('aria-expanded', 'true');
+    }
+    champ.addEventListener('input', afficher);
+    champ.addEventListener('focus', afficher);
+    champ.addEventListener('keydown', e => {
+        if (boite.hidden) { if (e.key === 'ArrowDown') afficher(); return; }
+        const l = items();
+        if (e.key === 'ArrowDown') { e.preventDefault(); choisir(l.length ? (actif + 1) % l.length : -1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); choisir(l.length ? (actif <= 0 ? l.length - 1 : actif - 1) : -1); }
+        else if (e.key === 'Enter') {
+            if (actif >= 0 && l[actif]) { e.preventDefault(); l[actif].click(); }
+            else { memoriserRecherche(champ.value); fermer(); champ.blur(); }
+        }
+        else if (e.key === 'Escape') fermer();
+    });
+    boite.addEventListener('mousedown', e => e.preventDefault());   // garde le focus dans le champ
+    document.addEventListener('click', e => { if (!boite.hidden && !e.target.closest('.header-search-full')) fermer(); });
 }
 
 // ===== RECHERCHE =====
 function setupSearch() {
+    setupAutocomplete();
     const norm = normRecherche;
     let _debounceRecherche = null;
     $('btn-fin-recherche').onclick = () => { finRecherche(true); renderProducts(allProducts); window.scrollTo({ top: 0, behavior: 'smooth' }); };
