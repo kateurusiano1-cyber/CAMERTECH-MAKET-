@@ -67,7 +67,7 @@ async function validerCodePromo(supabase, codeSaisi, sousTotal, userId) {
     if (!code) return { valide: false, reduction: 0 };
 
     const { data: promo } = await supabase.from('codes_promo').select('*').eq('code', code).single();
-    if (!promo) return { valide: false, reduction: 0, message: 'Code promo introuvable.' };
+    if (!promo) return { valide: false, reduction: 0, inconnu: true, message: 'Code promo introuvable.' };
     if (!promo.actif) return { valide: false, reduction: 0, message: "Ce code promo n'est plus actif." };
     if (promo.utilisateur_id && promo.utilisateur_id !== userId) {
         return { valide: false, reduction: 0, message: 'Ce code promo est personnel et ne peut pas être utilisé sur ce compte.' };
@@ -148,9 +148,9 @@ module.exports = async (req, res) => {
             // attendreConfirmationCommande côté client). Reste largement
             // insuffisant pour énumérer l'espace de codes (~10^12 valeurs).
             const cleSuivi = 'suivi-commande:' + ipSuivi;
-            const checkSuivi = await tropDeTentatives(supabase, cleSuivi, 100, 10);
+            const checkSuivi = await tropDeTentatives(supabase, cleSuivi, 400, 10);
             if (checkSuivi.bloque) return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${Math.ceil(checkSuivi.retryAfterSeconds / 60)} min.` });
-            await signalerEchecTentative(supabase, cleSuivi, 100, 10);
+            await signalerEchecTentative(supabase, cleSuivi, 400, 10);
 
             const codeNorm = String(suivi.code).trim().toUpperCase();
             const { data: r } = await supabase
@@ -165,9 +165,9 @@ module.exports = async (req, res) => {
         if (infos_livraison && typeof infos_livraison === 'object' && infos_livraison.code) {
             const ipInfos = (req.headers['x-forwarded-for'] || 'ip-inconnue').split(',')[0].trim();
             const cleInfos = 'infos-livraison:' + ipInfos;
-            const checkInfos = await tropDeTentatives(supabase, cleInfos, 30, 10);
+            const checkInfos = await tropDeTentatives(supabase, cleInfos, 60, 10);
             if (checkInfos.bloque) return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${Math.ceil(checkInfos.retryAfterSeconds / 60)} min.` });
-            await signalerEchecTentative(supabase, cleInfos, 30, 10);
+            await signalerEchecTentative(supabase, cleInfos, 60, 10);
 
             const codeInfos = String(infos_livraison.code).trim().toUpperCase();
             const { data: cmd } = await supabase.from('reservations').select('*').eq('code', codeInfos).single();
@@ -230,9 +230,13 @@ module.exports = async (req, res) => {
         // boucle, ou de spammer la création de commandes.
         const ip = (req.headers['x-forwarded-for'] || 'ip-inconnue').split(',')[0].trim();
         const cle = 'preparer-paiement:' + (uid || ('invite:' + ip));
-        const check = await tropDeTentatives(supabase, cle, 20, 10); // 20 essais / 10 min
-        if (check.bloque) return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${Math.ceil(check.retryAfterSeconds / 60)} min.` });
-        await signalerEchecTentative(supabase, cle, 20, 10);
+        // Un simple aperçu (recalcul du panier, vérification d'un code promo) ne crée rien : il ne compte pas ici.
+        // Le code promo a sa propre limite, qui ne compte que les codes FAUX (voir plus bas).
+        if (!preview) {
+            const check = await tropDeTentatives(supabase, cle, 100, 10); // 100 actions / 10 min (réseaux mobiles partagés)
+            if (check.bloque) return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${Math.ceil(check.retryAfterSeconds / 60)} min.` });
+            await signalerEchecTentative(supabase, cle, 100, 10);
+        }
 
         if (body.mescommandes) {
             // Liste des commandes du compte connecté — remplace l'ancienne
@@ -339,9 +343,18 @@ module.exports = async (req, res) => {
             // Flash Combo, jamais sur les frais de livraison ni sur un kit
             // déjà à prix forfaitaire réduit (non cumulable).
             const sousTotalRemisable = Math.max(0, sousTotal - montantCombos);
-            const promoResult = (sousTotalRemisable === 0 && montantCombos > 0 && code_promo)
-                ? { valide: false, reduction: 0, message: "Ce code ne s'applique pas : ton panier ne contient qu'un Flash Combo, déjà à prix réduit." }
-                : await validerCodePromo(supabase, code_promo, sousTotalRemisable, user.id);
+            // Limite anti-devinette : seuls les codes INCONNUS comptent (15 essais ratés / 10 min). Un client qui applique
+            // son vrai code, ou dont le panier est recalculé, n'est jamais bloqué.
+            const clePromo = 'promo:' + (uid || ('ip:' + ip));
+            let promoResult;
+            if (sousTotalRemisable === 0 && montantCombos > 0 && code_promo) {
+                promoResult = { valide: false, reduction: 0, message: "Ce code ne s'applique pas : ton panier ne contient qu'un Flash Combo, déjà à prix réduit." };
+            } else if (code_promo && (await tropDeTentatives(supabase, clePromo, 15, 10)).bloque) {
+                promoResult = { valide: false, reduction: 0, message: "Trop d'essais de code promo. Réessaie dans quelques minutes." };
+            } else {
+                promoResult = await validerCodePromo(supabase, code_promo, sousTotalRemisable, user.id);
+                if (code_promo && promoResult.inconnu) await signalerEchecTentative(supabase, clePromo, 15, 10);
+            }
             const total = Math.max(0, sousTotal - promoResult.reduction) + frais;
 
             if (preview) {

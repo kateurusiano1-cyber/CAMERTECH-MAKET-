@@ -3624,8 +3624,8 @@ function updateLivraison(sansSync) {
     if (regleEl) {
         regleEl.style.display = (zone && couverte) ? 'block' : 'none';
         regleEl.textContent = currentLang === 'en'
-            ? '⏱ After payment you will give the exact delivery spot. If you are absent 5 min after the appointment time, your order goes back to the agency: collect it there (within 7 days), then non-refundable.'
-            : "⏱ Après ton paiement, tu indiqueras l'endroit précis de livraison. Si tu es absent 5 min après l'heure du rendez-vous, ta commande retourne à l'agence : à récupérer sur place (sous 7 jours), puis non remboursable.";
+            ? 'ℹ️ After payment you give the exact drop-off spot. Absent 5 min after the appointment: collect at the agency, non-refundable.'
+            : "ℹ️ Après ton paiement, tu indiques le lieu précis de livraison. Absent 5 min au rendez-vous : commande à récupérer à l'agence, non remboursable.";
     }
     if(panier.length) renderPanier();
     if (sansSync !== true) syncPanierServeur(); // (sansSync peut être un événement : on teste === true)

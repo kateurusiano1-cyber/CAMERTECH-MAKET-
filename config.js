@@ -15,6 +15,10 @@ const CONFIG = {
     },
     PAIEMENT_MODE: "widget",
     // Quartiers livrés directement (1 000 FCFA). Tout autre quartier = retrait en agence.
+    // Limites anti-abus côté CLIENTS : commande, paiement, code promo, suivi, facture, recherche par photo, questions à l'assistant
+    // (par visiteur). false = aucune limite (phase de démarrage). true = limites actives (voir api/_lib/rateLimit.js).
+    // Les protections de connexion administrateur restent TOUJOURS actives, quelle que soit cette valeur.
+    LIMITES_CLIENTS_ACTIVES: false,
     ZONES_COUVERTES: ["Akwa","Bonamoussadi","Ndokoti","PK14","Makepe","Bassa","Logbaba","Deido","Bonaberi","Bonanjo","Bali","New-Bell","Bépanda","Ndogpassi","Ndogbong","Cité SIC","Kotto","PK8","PK9","PK10","PK12","PK16","PK21","Logpom","Yassa","Village","Bonapriso","Japoma","Nyalla","Zone Industrielle Bassa","Cité des Palmiers"],
     FRAIS_LIVRAISON: 1000,
     // ⚠️ À personnaliser : adresse exacte et numéro de contact pour le retrait en agence

@@ -305,7 +305,7 @@ module.exports = async (req, res) => {
         const cleJour = `assistant:jour:${maintenant.slice(0, 10)}`;
         // Compteurs et disjoncteur vérifiés EN MÊME TEMPS (au lieu de 5 appels à la base, les uns après les autres).
         const [okHeure, okJour, circuit] = await Promise.all([
-            compter(supabase, cleHeure, MAX_PAR_HEURE_ET_VISITEUR),
+            CONFIG.LIMITES_CLIENTS_ACTIVES ? compter(supabase, cleHeure, MAX_PAR_HEURE_ET_VISITEUR) : Promise.resolve(true),   // limite par visiteur : coupée avec les autres limites clients
             compter(supabase, cleJour, PLAFOND_JOUR),
             circuitOuvert(supabase, SERVICE_CIRCUIT).catch((e) => { console.error('Assistant [disjoncteur] indisponible, ignoré :', e.message); return { ouvert: false }; })
         ]);
