@@ -49,14 +49,15 @@ function clavier(boutons) {
 
 // Envoie un message dans le groupe (2 tentatives max). Renvoie le message
 // Telegram (avec message_id) ou null — ne lève jamais d'erreur.
-async function envoyerMessage(texte, boutons) {
+async function envoyerMessage(texte, boutons, repondreA) {
     const cfg = configurer();
     if (!cfg) return null;
     for (let essai = 1; essai <= 2; essai++) {
         try {
             return await appel(cfg.token, 'sendMessage', {
                 chat_id: cfg.chatId, text: texte, parse_mode: 'HTML',
-                disable_web_page_preview: true, reply_markup: clavier(boutons)
+                disable_web_page_preview: true, reply_markup: clavier(boutons),
+                ...(repondreA ? { reply_to_message_id: repondreA, allow_sending_without_reply: true } : {})
             });
         } catch (e) {
             console.error(`Telegram sendMessage (essai ${essai}) :`, e.message);
@@ -131,6 +132,14 @@ function texteCommande(resa, { retrait, etat } = {}) {
         l.push(`🏪 Retrait en agence${lim}`);
     } else {
         l.push(`🚚 Livraison à <b>${echapper(resa.zone_livraison || '—')}</b>${resa.frais_livraison ? ' (frais ' + fmt(resa.frais_livraison) + ' FCFA)' : ''}`);
+        if (resa.livraison_repere) {
+            l.push(`📌 <b>Déposer à : ${echapper(resa.zone_livraison || '—')} (${echapper(resa.livraison_repere)})</b>`);
+            l.push(`💬 WhatsApp : <b>${echapper(resa.livraison_whatsapp || '—')}</b> — ${resa.livraison_whatsapp_ok ? '✅ numéro sur WhatsApp' : '❌ pas sur WhatsApp'}`);
+            l.push(`📞 Appels : ${resa.livraison_appels_ok ? '✅ à toute heure' : '⚠️ pas à toute heure (écrire d\'abord)'}`);
+            l.push('⏱ Client absent 5 min après l\'heure du rendez-vous → retour à l\'agence (non remboursable).');
+        } else {
+            l.push('📍 Détails de livraison : ⏳ <b>en attente du client</b> (l\'appeler au numéro ci-dessus)');
+        }
     }
     l.push('🛒 Articles :\n' + lignesArticles(resa.items));
     if (resa.note) l.push('📝 ' + echapper(String(resa.note).slice(0, 300)));
@@ -187,6 +196,25 @@ async function notifierCommandePayee(supabase, resa, { retrait, dateLimiteRetrai
     return !!msg;
 }
 
+// Le client vient de saisir (ou de modifier) l'endroit précis de livraison et son numéro WhatsApp :
+// message de suite qui répond à la commande, et mise à jour du message principal (mêmes boutons).
+async function notifierInfosLivraison(supabase, resa, { misAJour } = {}) {
+    const texte = [
+        misAJour ? '🔄 <b>INFOS DE LIVRAISON MISES À JOUR</b>' : '📍 <b>INFOS DE LIVRAISON</b>',
+        `<b>${echapper(resa.code)}</b> · ${echapper(resa.nom_client || 'Client')}`,
+        `📌 <b>${echapper(resa.zone_livraison || '—')} (${echapper(resa.livraison_repere)})</b>`,
+        `💬 WhatsApp : <b>${echapper(resa.livraison_whatsapp)}</b> — ${resa.livraison_whatsapp_ok ? '✅ numéro sur WhatsApp' : '❌ pas sur WhatsApp'}`,
+        `📞 Appels : ${resa.livraison_appels_ok ? '✅ à toute heure' : '⚠️ pas à toute heure (écrire d\'abord)'}`,
+        '',
+        '⏱ <b>Règle</b> : si le client n\'est pas là 5 min après l\'heure du rendez-vous, retour à l\'agence. Commande à récupérer sur place (7 jours), ensuite non remboursable ni retournable.'
+    ].join('\n');
+    const envoye = await envoyerMessage(texte, [], resa.telegram_message_id || undefined);
+    if (resa.telegram_message_id) {
+        await modifierMessage(resa.telegram_message_id, texteCommande(resa, { retrait: false, etat: ligneEtat(resa) }), boutonsPour(resa, false));
+    }
+    return !!envoye;
+}
+
 // Paiement dont le montant ne correspond pas : à vérifier à la main.
 async function notifierPaiementAVerifier(supabase, resa, { montantRecu, refFournisseur }) {
     const texte = [
@@ -218,6 +246,7 @@ async function synchroniserStatut(resa, zonesCouvertes) {
 }
 
 module.exports = {
+    notifierInfosLivraison,
     configurer, echapper, fmt, envoyerMessage, modifierMessage, repondreBouton, repondreTexte,
     estRetrait, texteCommande, ligneEtat, boutonsPour, heure,
     notifierCommandePayee, notifierPaiementAVerifier, synchroniserStatut

@@ -65,6 +65,7 @@ function politiques() {
     return [
         `Commander : ajouter au panier, choisir la zone de livraison, cliquer « Payer maintenant ». Compte facultatif : nom + téléphone suffisent (un code CMT-XXXXXXXXXX permet le suivi). Un compte donne un historique et des points de fidélité (1 point par 1 000 FCFA).`,
         `Paiement (en ligne, sécurisé) : Mobile Money (MTN/Orange), carte bancaire (Visa/Mastercard), virement bancaire, cryptomonnaie (USDT).`,
+        `Livraison à domicile : après son paiement, le client indique l'endroit précis où déposer la commande et un numéro WhatsApp. Si le client est absent 5 minutes après l'heure du rendez-vous fixé avec le livreur, la commande retourne à l'agence, à récupérer sous 7 jours ; elle n'est alors plus remboursable et la politique de retour ne s'applique plus (sauf faute de Kapmaket).`,
         `Livraison à domicile : ${CONFIG.FRAIS_LIVRAISON} FCFA dans ces quartiers de Douala : ${CONFIG.ZONES_COUVERTES.join(', ')}. Autres quartiers : retrait en agence gratuit (${CONFIG.AGENCE_ADRESSE}). Commande à retirer sous 7 jours. La zone se choisit au moment de valider le panier. Aucun délai précis n'est garanti : ne pas en promettre.`,
         `Réserver sans payer : bouton « Réserver ma commande » dans le panier ; articles mis de côté, retrouvables dans « Mes Commandes » ou avec le code.`,
         `Suivi : menu ☰ → « Suivi de commande », entrer le code CMT-XXXXXXXXXX (avec ou sans compte).`,

@@ -103,8 +103,8 @@ module.exports = async (req, res) => {
             try {
                 await envoyerPushUtilisateur(supabase, resa.utilisateur_id, {
                     titre: '✅ Commande validée !',
-                    corps: `Ta commande ${resa.code} est confirmée (${Math.round(resa.total)} FCFA).`,
-                    url: '/'
+                    corps: `Ta commande ${resa.code} est confirmée (${Math.round(resa.total)} FCFA).${estRetraitAgence ? '' : ' Indique maintenant où te livrer.'}`,
+                    url: estRetraitAgence ? '/' : `/?infos=${encodeURIComponent(resa.code)}`
                 });
             } catch (e) { console.error('Erreur push validation:', e.message); }
             // Prévient l'équipe en boutique qu'une commande payée est à

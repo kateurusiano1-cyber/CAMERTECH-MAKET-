@@ -24,6 +24,10 @@ async function recupererLogo() {
 // invalide, ou trop lente à charger — dans ce cas, la ligne s'affiche
 // simplement sans photo plutôt que de faire échouer tout le document.
 const sharp = require('sharp');
+const CONFIG = require('../../config.js');
+
+// Les polices standard du PDF ne gèrent pas tous les caractères (émojis…) : on garde un texte lisible.
+const sur = (s) => String(s || '').replace(/[^\x20-\x7E\u00A0-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D]/g, '').trim().slice(0, 140);
 
 // Récupère une image d'article depuis son URL pour l'intégrer au PDF.
 // pdfkit ne sait afficher nativement que du JPEG/PNG — on convertit donc
@@ -107,8 +111,12 @@ function genererFacturePdf(reservation) {
             let yClient = 178;
             if (reservation.email_client) { doc.text(reservation.email_client, 50, yClient); yClient += 14; }
             doc.text(`Livraison : ${reservation.zone_livraison || '—'}`, 50, yClient); yClient += 14;
+            if (reservation.livraison_repere) {
+                doc.text(`Point de dépôt : ${sur(reservation.livraison_repere)}`, 50, yClient); yClient += 14;
+                doc.text(`Contact livraison : ${sur(reservation.livraison_whatsapp)}${reservation.livraison_whatsapp_ok ? ' (WhatsApp)' : ''}${reservation.livraison_appels_ok ? ' - appels acceptés à tout moment' : ''}`, 50, yClient); yClient += 14;
+            }
             doc.text(`Statut : ${reservation.statut}`, 50, yClient); yClient += 14;
-            if (estPaye) { doc.text('Moyen de paiement : Payé via iKeePay', 50, yClient); yClient += 14; }
+            if (estPaye) { doc.text('Moyen de paiement : Paiement en ligne sécurisé', 50, yClient); yClient += 14; }
             if (reservation.date_limite_retrait) {
                 doc.fillColor('#c24c00').font('Helvetica-Bold')
                     .text(`⏳ À retirer avant le ${new Date(reservation.date_limite_retrait).toLocaleDateString('fr-FR')} (au-delà, marchandise non garantie)`, 50, yClient, { width: 495 });
@@ -176,6 +184,10 @@ function genererFacturePdf(reservation) {
                 doc.font('Helvetica').fontSize(9).text("Le paiement n'a pas encore été confirmé pour cette commande.", 50, y + 14, { width: 495, align: 'center' });
             }
 
+            if (estPaye && CONFIG.ZONES_COUVERTES.includes(reservation.zone_livraison)) {
+                doc.fillColor(gris).font('Helvetica').fontSize(7.5)
+                    .text("Livraison : si le client est absent 5 minutes après l'heure du rendez-vous convenu avec le livreur, la commande retourne à l'agence et doit y être récupérée sous 7 jours. Elle n'est alors plus remboursable et la politique de retour ne s'applique plus, sauf faute de Kapmaket.", 50, 714, { align: 'center', width: 495 });
+            }
             doc.fillColor(gris).font('Helvetica').fontSize(8)
                 .text('Politique de retour : 7 jours après réception pour demander un retour (rubrique "Politique de retour" du site ou "Mes commandes").', 50, 745, { align: 'center', width: 495 });
             doc.text('Merci pour votre confiance — Kapmaket', 50, 760, { align: 'center', width: 495 });

@@ -31,6 +31,13 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { verifierRequeteUtilisateur } = require('./_lib/verifierFirebaseToken');
 const { tropDeTentatives, signalerEchecTentative } = require('./_lib/rateLimit');
+const CONFIG = require('../config.js');
+const { notifierInfosLivraison } = require('./_lib/telegram');
+
+// Champs d'une commande que le suivi (par code) renvoie au navigateur : liste blanche, donc aucune colonne interne ne sort.
+const CHAMPS_SUIVI = ['code', 'statut', 'total', 'items', 'zone_livraison', 'frais_livraison', 'created_at', 'paye_le', 'date_limite_retrait',
+    'etape_livraison', 'livraison_repere', 'livraison_whatsapp', 'livraison_whatsapp_ok', 'livraison_appels_ok', 'livraison_infos_le'];
+function sortieSuivi(r) { const o = {}; CHAMPS_SUIVI.forEach(k => { if (r[k] !== undefined) o[k] = r[k]; }); return o; }
 
 // PRIX ENCAISSÉ : le prix réel en base, arrondi au FCFA. C'est la SEULE version
 // qui compte pour l'encaissement — le navigateur ne l'utilise que pour afficher
@@ -126,7 +133,7 @@ module.exports = async (req, res) => {
     try {
         const uid = await verifierRequeteUtilisateur(req);
         const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-        const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview, invite, visiteur_session_id, suivi } = body;
+        const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview, invite, visiteur_session_id, suivi, infos_livraison } = body;
 
         if (suivi && suivi.code) {
             // Suivre une commande sans compte, juste avec le code — comme un
@@ -147,10 +154,55 @@ module.exports = async (req, res) => {
 
             const codeNorm = String(suivi.code).trim().toUpperCase();
             const { data: r } = await supabase
-                .from('reservations').select('code,statut,total,items,zone_livraison,frais_livraison,created_at,paye_le')
+                .from('reservations').select('*')
                 .eq('code', codeNorm).single();
             if (!r) return res.status(404).json({ error: 'Commande introuvable. Vérifie le code saisi.' });
-            return res.status(200).json({ success: true, commande: r });
+            return res.status(200).json({ success: true, commande: sortieSuivi(r) });
+        }
+
+        // ===== INFOS DE LIVRAISON (saisies par le client après son paiement) =====
+        // Le code de commande (~10^12 possibilités) fait office de secret, comme pour le suivi.
+        if (infos_livraison && typeof infos_livraison === 'object' && infos_livraison.code) {
+            const ipInfos = (req.headers['x-forwarded-for'] || 'ip-inconnue').split(',')[0].trim();
+            const cleInfos = 'infos-livraison:' + ipInfos;
+            const checkInfos = await tropDeTentatives(supabase, cleInfos, 30, 10);
+            if (checkInfos.bloque) return res.status(429).json({ error: `Trop de tentatives. Réessaie dans ${Math.ceil(checkInfos.retryAfterSeconds / 60)} min.` });
+            await signalerEchecTentative(supabase, cleInfos, 30, 10);
+
+            const codeInfos = String(infos_livraison.code).trim().toUpperCase();
+            const { data: cmd } = await supabase.from('reservations').select('*').eq('code', codeInfos).single();
+            if (!cmd) return res.status(404).json({ error: 'Commande introuvable.' });
+            if (cmd.statut === 'livre') return res.status(409).json({ error: 'Cette commande est déjà livrée.' });
+            if (cmd.statut !== 'valide') return res.status(409).json({ error: "Le paiement de cette commande n'est pas encore confirmé." });
+            if (!CONFIG.ZONES_COUVERTES.includes(cmd.zone_livraison)) return res.status(400).json({ error: 'Cette commande est à retirer en agence : aucune information de livraison nécessaire.' });
+            if (['en_route', 'livree'].includes(cmd.etape_livraison)) return res.status(409).json({ error: 'Ta commande est déjà en route : écris-nous sur WhatsApp pour modifier ces informations.' });
+
+            const repere = String(infos_livraison.repere || '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim();
+            if (repere.length < 3) return res.status(400).json({ error: "Indique l'endroit précis où déposer ta commande (3 caractères minimum)." });
+            if (repere.length > 120) return res.status(400).json({ error: "L'endroit précis est trop long (120 caractères maximum)." });
+            let chiffres = String(infos_livraison.whatsapp || '').replace(/\D/g, '').replace(/^00/, '');
+            if (chiffres.length === 9) chiffres = '237' + chiffres;   // numéro camerounais saisi sans l'indicatif
+            if (!/^\d{10,15}$/.test(chiffres)) return res.status(400).json({ error: 'Numéro WhatsApp invalide (exemple : 6 99 78 11 60).' });
+            if (infos_livraison.accepte !== true) return res.status(400).json({ error: 'Accepte la règle de livraison pour valider.' });
+
+            const maintenant = new Date().toISOString();
+            const nouveau = {
+                livraison_repere: repere,
+                livraison_whatsapp: '+' + chiffres,
+                livraison_whatsapp_ok: infos_livraison.whatsapp_ok === true,
+                livraison_appels_ok: infos_livraison.appels_ok === true,
+                livraison_infos_le: maintenant,
+                livraison_regle_acceptee_le: cmd.livraison_regle_acceptee_le || maintenant
+            };
+            const { error: errMaj } = await supabase.from('reservations').update(nouveau).eq('code', codeInfos);
+            if (errMaj) {
+                console.error('Infos livraison : enregistrement impossible (colonnes livraison_* créées ? voir sql/infos-livraison.sql) :', errMaj.message);
+                return res.status(500).json({ error: 'Enregistrement impossible pour le moment, réessaie dans un instant.' });
+            }
+            const miseAJour = { ...cmd, ...nouveau };
+            try { await notifierInfosLivraison(supabase, miseAJour, { misAJour: !!cmd.livraison_infos_le }); }
+            catch (e) { console.error('Telegram infos livraison :', e.message); }
+            return res.status(200).json({ success: true, commande: sortieSuivi(miseAJour) });
         }
 
         let user; // forme commune { id, nom, telephone, email } — id est null pour un invité

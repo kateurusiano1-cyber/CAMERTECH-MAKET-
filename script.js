@@ -2065,6 +2065,8 @@ async function envoyerLienReset() {
 // Traite le retour du lien de réinitialisation (arrivée sur notre propre domaine avec ?oobCode=...)
 let resetOobCode = null;
 async function verifierLienResetDansURL() {
+    const codeInfos = new URLSearchParams(window.location.search).get('infos');
+    if (codeInfos) { window.history.replaceState({}, '', window.location.pathname); setTimeout(() => ouvrirInfosLivraison(codeInfos), 1200); }
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') !== 'resetPassword' || !params.get('oobCode')) return;
     resetOobCode = params.get('oobCode');
@@ -3618,6 +3620,13 @@ function updateLivraison(sansSync) {
         info.style.display='none';
         warn.style.display='none';
     }
+    const regleEl = $('livraison-regle');
+    if (regleEl) {
+        regleEl.style.display = (zone && couverte) ? 'block' : 'none';
+        regleEl.textContent = currentLang === 'en'
+            ? '⏱ After payment you will give the exact delivery spot. If you are absent 5 min after the appointment time, your order goes back to the agency: collect it there (within 7 days), then non-refundable.'
+            : "⏱ Après ton paiement, tu indiqueras l'endroit précis de livraison. Si tu es absent 5 min après l'heure du rendez-vous, ta commande retourne à l'agence : à récupérer sur place (sous 7 jours), puis non remboursable.";
+    }
     if(panier.length) renderPanier();
     if (sansSync !== true) syncPanierServeur(); // (sansSync peut être un événement : on teste === true)
 }
@@ -3854,6 +3863,143 @@ function construireAnimationSucces(items, estLivraisonDomicile) {
     return `<div class="success-anim"><div class="success-anim-items">${vignettes}</div><div class="success-anim-box">📦</div></div>`;
 }
 
+// ===== INFOS DE LIVRAISON (demandées au client après le paiement) =====
+// Quartier (rappel) + endroit précis + numéro WhatsApp avec ses deux cases + règle des 5 minutes.
+// Les infos vont sur la facture et dans le groupe des livreurs (voir api/preparer-paiement.js).
+const regleLivraison = () => currentLang === 'en'
+    ? "If you are not there 5 minutes after the appointment time set with the courier, your order goes back to the agency. You will have to collect it there (within 7 days). It will then no longer be refundable and the return policy will no longer apply, except in case of fault by Kapmaket."
+    : "Si tu n'es pas présent 5 minutes après l'heure du rendez-vous fixé avec le livreur, ta commande retourne à l'agence. Tu devras venir la récupérer sur place (sous 7 jours). Elle ne sera alors plus remboursable et la politique de retour ne s'appliquera plus, sauf faute de Kapmaket.";
+const livraisonVerrouillee = r => ['en_route', 'livree'].includes(r.etape_livraison) || r.statut === 'livre';
+const estLivraisonDomicileCmd = r => CONFIG.ZONES_COUVERTES.includes(r.zone_livraison);
+
+// Contenu du petit bloc « livraison » des cartes de « Mes commandes » et du suivi (commande payée à livrer)
+function blocLivraisonCarte(r) {
+    if (!r || r.statut !== 'valide' || !estLivraisonDomicileCmd(r)) return '';
+    const en = currentLang === 'en', code = echapperHtml(r.code);
+    if (r.livraison_repere) {
+        return `<div class="liv-resume">📍 <b>${echapperHtml(r.zone_livraison)} (${echapperHtml(r.livraison_repere)})</b><br>💬 ${echapperHtml(r.livraison_whatsapp || '')}${livraisonVerrouillee(r) ? '' : ` <button type="button" class="liv-lien" onclick="ouvrirInfosLivraison('${code}')">${en ? 'Edit' : 'Modifier'}</button>`}</div>`;
+    }
+    return `<button type="button" class="liv-cta" onclick="ouvrirInfosLivraison('${code}')">📍 ${en ? 'Tell us where to deliver' : 'Indique où te livrer'}</button>`;
+}
+
+async function ouvrirInfosLivraison(code, { quandFerme } = {}) {
+    code = String(code || '').trim().toUpperCase();
+    if (!code || document.getElementById('liv-panel')) return;
+    const T = phT;
+    const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+    const bouton = (txt, cls, fn) => { const b = el('button', cls, txt); b.type = 'button'; b.addEventListener('click', fn); return b; };
+    const ancienScroll = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const ov = el('div', 'photo-overlay'); ov.id = 'liv-panel';
+    ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-labelledby', 'liv-titre');
+    const feuille = el('div', 'photo-sheet'), tete = el('div', 'photo-head');
+    const titre = el('h3', null, T('📍 Où te livrer ?', '📍 Where to deliver?')); titre.id = 'liv-titre';
+    const btnX = bouton('✕', 'photo-x', () => fermer()); btnX.setAttribute('aria-label', T('Fermer', 'Close'));
+    tete.append(titre, btnX);
+    const corps = el('div', 'photo-body');
+    feuille.append(tete, corps); ov.append(feuille); document.body.append(ov);
+
+    let cmd = null, occupe = false, enregistre = false;
+    function fermer() {
+        document.removeEventListener('keydown', surTouche);
+        document.body.style.overflow = ancienScroll; ov.remove();
+        if (typeof quandFerme === 'function') { try { quandFerme(enregistre); } catch (e) {} }
+    }
+    function surTouche(e) { if (e.key === 'Escape' && !occupe) fermer(); }
+    document.addEventListener('keydown', surTouche);
+
+    async function appel(corpsRequete) {
+        const ctrl = new AbortController(); const m = setTimeout(() => ctrl.abort(), 15000);
+        try {
+            const resp = await fetch('/api/preparer-paiement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpsRequete), signal: ctrl.signal });
+            let data = null; try { data = await resp.json(); } catch (e) {}
+            return { ok: !!(resp.ok && data && data.success), data };
+        } catch (e) { return { ok: false, data: null }; }
+        finally { clearTimeout(m); }
+    }
+    function message(txt, reessayer) {
+        corps.replaceChildren(el('div', 'photo-ico', 'ℹ️'), el('p', 'photo-etat', txt));
+        const rang = el('div', 'photo-choix');
+        if (reessayer) rang.append(bouton(T('Réessayer', 'Try again'), 'photo-btn photo-btn-main', charger));
+        rang.append(bouton(T('Fermer', 'Close'), 'photo-btn photo-btn-sec', () => fermer()));
+        corps.append(rang);
+    }
+    function recap({ nouveau, verrouille } = {}) {
+        corps.replaceChildren(el('div', 'photo-ico', nouveau ? '✅' : '📍'));
+        if (nouveau) corps.append(el('p', 'photo-etat', T("C'est enregistré : le livreur est prévenu.", 'Saved: the courier has been notified.')));
+        const bloc = el('div', 'liv-resume');
+        bloc.append(el('div', null, '📌 ' + cmd.zone_livraison + ' (' + cmd.livraison_repere + ')'),
+            el('div', null, '💬 ' + (cmd.livraison_whatsapp || '') + (cmd.livraison_whatsapp_ok ? ' · ✅ WhatsApp' : '') + (cmd.livraison_appels_ok ? ' · 📞 ' + T('appels OK', 'calls OK') : '')));
+        corps.append(bloc);
+        const rang = el('div', 'photo-choix');
+        if (verrouille) {
+            corps.append(el('p', 'photo-note', T('Ta commande est en route : pour modifier ces informations, écris-nous sur WhatsApp.', 'Your order is on its way: to change this information, message us on WhatsApp.')));
+            const wa = el('a', 'photo-btn', '💬 WhatsApp');
+            wa.href = 'https://wa.me/' + CONFIG.AGENCE_TEL + '?text=' + encodeURIComponent('Bonjour, je souhaite modifier les infos de livraison de ma commande ' + code);
+            wa.target = '_blank'; wa.rel = 'noopener'; rang.append(wa);
+        } else {
+            corps.append(el('p', 'photo-note', T('Tu peux modifier ces informations tant que le livreur n’est pas en route.', 'You can edit this information until the courier is on their way.')));
+            rang.append(bouton(T('Modifier', 'Edit'), 'photo-btn', formulaire));
+        }
+        rang.append(bouton(T('Fermer', 'Close'), 'photo-btn photo-btn-main', () => fermer()));
+        corps.append(rang);
+    }
+    function formulaire() {
+        corps.replaceChildren(el('p', 'photo-intro', T('Dernière étape : dis-nous où déposer ta commande.', 'Last step: tell us where to drop off your order.')));
+        const quartier = el('div', 'liv-quartier');
+        quartier.append(el('span', 'liv-lib', T('Ton quartier (choisi à la commande)', 'Your area (chosen at checkout)')), el('b', null, cmd.zone_livraison));
+        const champ = (lib, input, aide) => { const w = el('label', 'liv-champ'); w.append(el('span', 'liv-lib', lib), input); if (aide) w.append(el('small', 'liv-aide', aide)); return w; };
+        const repere = el('input'); repere.type = 'text'; repere.maxLength = 120; repere.autocomplete = 'off';
+        repere.placeholder = T('Ex : Glacier Moderne, en face de la pharmacie', 'E.g. Glacier Moderne, opposite the pharmacy'); repere.value = cmd.livraison_repere || '';
+        const wa = el('input'); wa.type = 'tel'; wa.inputMode = 'tel'; wa.autocomplete = 'tel'; wa.placeholder = '6 99 78 11 60';
+        wa.value = cmd.livraison_whatsapp || (currentUser && currentUser.telephone) || '';
+        const coche = (txt, val) => { const l = el('label', 'liv-coche'); const c = el('input'); c.type = 'checkbox'; c.checked = !!val; l.append(c, el('span', null, txt)); return { l, c }; };
+        const c1 = coche(T('Ce numéro est sur WhatsApp', 'This number is on WhatsApp'), cmd.livraison_whatsapp_ok);
+        const c2 = coche(T('Je reçois les appels à n’importe quel moment', 'I can receive calls at any time'), cmd.livraison_appels_ok);
+        const regle = el('div', 'liv-regle'); regle.append(el('b', null, '⏱ ' + T('Important', 'Important')), el('p', null, regleLivraison()));
+        const err = el('p', 'liv-erreur'); err.setAttribute('role', 'alert');
+        const libValider = '✅ ' + T('Valider et accepter cette règle', 'Confirm and accept this rule');
+        const valider = bouton(libValider, 'photo-btn photo-btn-main', async () => {
+            err.textContent = '';
+            const rp = repere.value.replace(/\s+/g, ' ').trim();
+            const chiffres = wa.value.replace(/\D/g, '');
+            if (rp.length < 3) { err.textContent = T("Indique l'endroit précis où déposer ta commande.", 'Enter the exact spot where to drop off your order.'); return; }
+            if (!(chiffres.length === 9 || (chiffres.length >= 10 && chiffres.length <= 15))) { err.textContent = T('Numéro WhatsApp invalide (exemple : 6 99 78 11 60).', 'Invalid WhatsApp number (example: 6 99 78 11 60).'); return; }
+            occupe = true; valider.disabled = true; valider.textContent = T('Enregistrement…', 'Saving…');
+            const r = await appel({ infos_livraison: { code, repere: rp, whatsapp: wa.value, whatsapp_ok: c1.c.checked, appels_ok: c2.c.checked, accepte: true } });
+            occupe = false;
+            if (!r.ok) {
+                valider.disabled = false; valider.textContent = libValider;
+                err.textContent = (r.data && r.data.error) || T('Enregistrement impossible, vérifie ta connexion et réessaie.', 'Could not save, check your connection and try again.');
+                return;
+            }
+            cmd = r.data.commande; enregistre = true;
+            if (Array.isArray(window._mesCommandes)) { const o = window._mesCommandes.find(x => x.code === cmd.code); if (o) Object.assign(o, cmd); }
+            document.querySelectorAll('.liv-slot[data-code="' + cmd.code + '"]').forEach(sl => { sl.innerHTML = blocLivraisonCarte(cmd); });
+            recap({ nouveau: true });
+        });
+        corps.append(quartier,
+            champ(T('Endroit précis où déposer la commande *', 'Exact drop-off spot *'), repere, T('Un lieu connu : restaurant, carrefour, pharmacie, église…', 'A well-known place: restaurant, junction, pharmacy, church…')),
+            champ(T('Numéro WhatsApp pour te joindre *', 'WhatsApp number to reach you *'), wa),
+            c1.l, c2.l, regle, err, valider,
+            el('p', 'liv-aide liv-centre', T('En validant, tu acceptes cette règle.', 'By confirming, you accept this rule.')),
+            bouton(T('Plus tard', 'Later'), 'photo-btn photo-btn-sec', () => fermer()));
+        repere.focus();
+    }
+    async function charger() {
+        corps.replaceChildren(el('div', 'photo-spinner'), el('p', 'photo-etat', T('Chargement…', 'Loading…')));
+        const r = await appel({ suivi: { code } });
+        if (!r.ok) return message((r.data && r.data.error) || T('Commande introuvable ou réseau lent. Réessaie.', 'Order not found or slow network. Try again.'), true);
+        cmd = r.data.commande;
+        if (!estLivraisonDomicileCmd(cmd)) return message(T('Cette commande est à retirer en agence : rien à renseigner.', 'This order is for pick-up at the agency: nothing to fill in.'));
+        if (cmd.statut !== 'valide' && cmd.statut !== 'livre') return message(T("Le paiement n'est pas encore confirmé. Reviens dans un instant.", 'Payment not confirmed yet. Come back in a moment.'), true);
+        if (livraisonVerrouillee(cmd)) return cmd.livraison_repere ? recap({ verrouille: true }) : message(T('Ta commande est déjà en route : le livreur te contactera directement.', 'Your order is already on its way: the courier will contact you directly.'));
+        formulaire();
+    }
+    charger();
+}
+window.ouvrirInfosLivraison = ouvrirInfosLivraison;
+
 function afficherSucces(code, total, dateLimiteRetrait) {
     fermerWidgetIkeepay();
     $('success-code-display').textContent = code;
@@ -3867,7 +4013,7 @@ function afficherSucces(code, total, dateLimiteRetrait) {
     html+=`<div class="recap-total"><span>Total</span><span>${fmt(total)} FCFA</span></div>`;
     $('success-recap').innerHTML = html;
     $('success-agence-msg').textContent = estLivraisonDomicile
-        ? `🚚 Livraison à domicile prévue à ${userZone}. Nous vous contacterons pour organiser la remise. Besoin d'aide ? Contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')}.`
+        ? `🚚 Livraison à domicile prévue à ${userZone}. Indique ci-dessous l'endroit précis de livraison : le livreur te contactera sur ton numéro WhatsApp. Besoin d'aide ? Contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')}.`
         : `Veuillez vous présenter à notre agence (${CONFIG.AGENCE_ADRESSE}) pour le retrait, ou contactez-nous au ${CONFIG.AGENCE_TEL.replace('237','')} pour organiser une expédition par agence de voyage si nécessaire.${dateLimiteRetrait ? ` ⏳ À retirer avant le ${new Date(dateLimiteRetrait).toLocaleDateString('fr-FR')} — passé ce délai, nous ne sommes plus garants de la marchandise.` : ''}`;
     $('success-wa').href = `https://wa.me/${CONFIG.AGENCE_TEL}?text=${encodeURIComponent('Bonjour, je viens de payer ma commande '+code+' sur Kapmaket.')}`;
     $('invite-nudge-success').style.display = (inviteInfo && !currentUser) ? 'block' : 'none';
@@ -3877,7 +4023,22 @@ function afficherSucces(code, total, dateLimiteRetrait) {
     // le paiement est confirmé — fonctionne aussi pour un achat invité (voir
     // api/facture.js). Léger délai pour laisser l'écran de succès s'afficher
     // avant que le navigateur ne déclenche le téléchargement.
-    setTimeout(() => telechargerFacture(code), 600);
+    let cta = document.getElementById('success-infos-liv');
+    if (!cta) {
+        cta = document.createElement('button'); cta.id = 'success-infos-liv'; cta.type = 'button'; cta.className = 'liv-cta';
+        $('success-agence-msg').insertAdjacentElement('afterend', cta);
+    }
+    cta.style.display = estLivraisonDomicile ? 'block' : 'none';
+    cta.textContent = '📍 ' + phT('Indiquer où te livrer', 'Tell us where to deliver');
+    if (estLivraisonDomicile) {
+        // La facture contient les infos de livraison : on la télécharge une fois le formulaire rempli (ou fermé).
+        let factureTelechargee = false;
+        const telecharger = () => { if (!factureTelechargee) { factureTelechargee = true; telechargerFacture(code); } };
+        cta.onclick = () => ouvrirInfosLivraison(code, { quandFerme: telecharger });
+        setTimeout(() => ouvrirInfosLivraison(code, { quandFerme: telecharger }), 900);
+    } else {
+        setTimeout(() => telechargerFacture(code), 600);
+    }
 }
 
 // ===== AUTRES MODALS =====
@@ -3911,6 +4072,7 @@ async function suivreCommande() {
             <div style="color:var(--text3);font-size:0.82rem">📅 ${new Date(data.created_at).toLocaleString('fr-FR')}</div>
             <div style="color:var(--text3);font-size:0.82rem">📍 ${data.zone_livraison||'Non précisé'}</div>
             <div style="color:var(--green);font-weight:700;margin-top:8px">${fmt(data.total)} FCFA</div>
+            <div class="liv-slot" data-code="${data.code}">${blocLivraisonCarte(data)}</div>
         </div>`;
     } catch (e) {
         res.innerHTML = '<p style="color:var(--danger)">❌ Erreur, réessaie.</p>';
@@ -3963,6 +4125,7 @@ function afficherMesCommandes(liste) {
             <span style="display:inline-block;padding:3px 12px;border-radius:10px;font-size:0.72rem;font-weight:700;background:${r.statut==='en attente'?'#fff8f0':estPaye?'#f0fff4':'#fff0f0'};color:${r.statut==='en attente'?'var(--orange)':estPaye?'var(--success)':'var(--danger)'}">${r.statut}</span>
             <div style="color:var(--text2);font-size:0.82rem;margin-top:6px">${r.items.map(i=>`${i.name} ×${i.qty}`).join(', ')}</div>
             <div style="color:var(--green);font-weight:700;margin-top:4px">${fmt(r.total)} FCFA</div>
+            <div class="liv-slot" data-code="${r.code}">${blocLivraisonCarte(r)}</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
                 ${peutPayer ? `<button onclick="payerCommandeExistante('${r.code}')" style="background:linear-gradient(135deg,var(--orange),var(--orange-light));color:white;border:none;padding:9px 16px;border-radius:var(--radius-pill);font-size:0.82rem;font-weight:700;cursor:pointer;font-family:var(--font-title);letter-spacing:0.3px;box-shadow:0 3px 10px rgba(255,107,26,0.3)">💳 Payer maintenant</button>` : ''}
                 <button onclick="telechargerFacture('${r.code}')" style="background:${peutPayer?'none':'linear-gradient(135deg,var(--green),var(--green-light))'};color:${peutPayer?'var(--text2)':'white'};border:${peutPayer?'1px solid var(--border)':'none'};padding:9px 16px;border-radius:var(--radius-pill);font-size:0.82rem;font-weight:700;cursor:pointer;font-family:${peutPayer?'var(--font-body)':'var(--font-title)'};letter-spacing:0.3px;${peutPayer?'':'box-shadow:0 3px 10px rgba(14,124,74,0.28)'}">⬇️ ${peutPayer?'Suivi':'Télécharger (Facture)'}</button>
@@ -5020,6 +5183,7 @@ window.ouvrirDetailsCmdAdmin = (code) => {
             <div><strong>Client :</strong> ${echapperHtml(r.nom_client)} — ${echapperHtml(r.telephone)} ${!r.utilisateur_id ? '<span style="background:#f0f0f0;color:#888;padding:2px 8px;border-radius:6px;font-size:0.7rem;font-weight:700">🕶️ INVITÉ (sans compte)</span>' : ''}</div>
             <div><strong>Date :</strong> ${new Date(r.created_at).toLocaleDateString('fr-FR')} à ${new Date(r.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div>
             <div><strong>Zone :</strong> ${r.zone_livraison||'—'} ${r.frais_livraison?`(frais: ${fmt(r.frais_livraison)} F)`:''}</div>
+            ${r.livraison_repere ? `<div><strong>Dépôt :</strong> ${echapperHtml(r.livraison_repere)}</div><div><strong>WhatsApp livraison :</strong> ${echapperHtml(r.livraison_whatsapp||'—')} ${r.livraison_whatsapp_ok?'✅ sur WhatsApp':'❌ pas sur WhatsApp'} · ${r.livraison_appels_ok?'📞 appels à toute heure':'📞 appels limités'}</div>` : ((CONFIG.ZONES_COUVERTES.includes(r.zone_livraison) && r.statut==='valide') ? '<div style="color:#c24c00"><strong>⏳ Infos de livraison non renseignées par le client</strong></div>' : '')}
             <div><strong>Statut :</strong> ${r.statut}${r.paye_le ? ` — payé le ${new Date(r.paye_le).toLocaleString('fr-FR')}` : ''}</div>
             ${r.transaction_id ? `<div><strong>Référence paiement :</strong> ${r.transaction_id}</div>` : ''}
             ${r.date_limite_retrait ? `<div style="color:#c24c00;font-weight:700">⏳ À retirer avant le ${new Date(r.date_limite_retrait).toLocaleDateString('fr-FR')}</div>` : ''}
