@@ -2887,9 +2887,20 @@ function chargerFlash(prods) {
 
 async function afficherMeilleuresVentes() {
     finRecherche(true);
-    const { data } = await db.from('meilleures_ventes').select('items');
     const counts = {};
-    (data||[]).forEach(r => (r.items||[]).forEach(i => { counts[i.name]=(counts[i.name]||0)+i.qty; }));
+    try {
+        // Le classement est calculé côté serveur : le navigateur ne lit plus aucune commande.
+        const resp = await fetch('/api/preparer-paiement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ meilleures_ventes: true }) });
+        const j = await resp.json();
+        if (!resp.ok || !j || !Array.isArray(j.ventes)) throw new Error('classement indisponible');
+        j.ventes.forEach(v => { counts[v.nom] = v.quantite; });
+    } catch (e) {
+        // Repli temporaire sur l'ancienne vue de la base ; sans effet une fois la vue supprimée (voir sql/supprimer-vue-meilleures-ventes.sql).
+        try {
+            const { data } = await db.from('meilleures_ventes').select('items');
+            (data||[]).forEach(r => (r.items||[]).forEach(i => { counts[i.name]=(counts[i.name]||0)+i.qty; }));
+        } catch (e2) {}
+    }
     const sorted = [...allProducts].sort((a,b) => (counts[b.name]||0)-(counts[a.name]||0));
     renderProducts(sorted);
     $('produits').scrollIntoView({behavior:'smooth'});

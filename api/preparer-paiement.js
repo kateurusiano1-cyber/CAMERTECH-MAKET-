@@ -34,6 +34,10 @@ const { tropDeTentatives, signalerEchecTentative } = require('./_lib/rateLimit')
 const CONFIG = require('../config.js');
 const { notifierInfosLivraison } = require('./_lib/telegram');
 
+// Classement des meilleures ventes : calculé ici (clé serveur) et mis en mémoire 5 minutes.
+// Le navigateur ne reçoit que des noms de produits et des quantités, jamais les commandes elles-mêmes.
+const cacheVentes = { le: 0, donnees: null };
+
 // Champs d'une commande que le suivi (par code) renvoie au navigateur : liste blanche, donc aucune colonne interne ne sort.
 const CHAMPS_SUIVI = ['code', 'statut', 'total', 'items', 'zone_livraison', 'frais_livraison', 'created_at', 'paye_le', 'date_limite_retrait',
     'etape_livraison', 'livraison_repere', 'livraison_whatsapp', 'livraison_whatsapp_ok', 'livraison_appels_ok', 'livraison_infos_le'];
@@ -134,6 +138,27 @@ module.exports = async (req, res) => {
         const uid = await verifierRequeteUtilisateur(req);
         const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
         const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview, invite, visiteur_session_id, suivi, infos_livraison } = body;
+
+        // ===== MEILLEURES VENTES (agrégat public) =====
+        if (body && body.meilleures_ventes === true) {
+            if (cacheVentes.donnees && Date.now() - cacheVentes.le < 5 * 60 * 1000) return res.status(200).json({ success: true, ventes: cacheVentes.donnees });
+            const { data: lignes, error: errVentes } = await supabase.from('reservations').select('items')
+                .in('statut', ['valide', 'livre']).order('created_at', { ascending: false }).limit(3000);
+            if (errVentes) { console.error('Meilleures ventes :', errVentes.message); return res.status(500).json({ error: 'Classement indisponible pour le moment.' }); }
+            const compte = {};
+            (lignes || []).forEach(l => {
+                let items = l && l.items;
+                if (typeof items === 'string') { try { items = JSON.parse(items); } catch (e) { items = []; } }
+                (Array.isArray(items) ? items : []).forEach(i => {
+                    const nom = i && typeof i.name === 'string' ? i.name.trim() : '';
+                    if (!nom) return;
+                    compte[nom] = (compte[nom] || 0) + (Number(i.qty) > 0 ? Number(i.qty) : 1);
+                });
+            });
+            const ventes = Object.entries(compte).sort((x, y) => y[1] - x[1]).slice(0, 60).map(([nom, quantite]) => ({ nom, quantite }));
+            cacheVentes.donnees = ventes; cacheVentes.le = Date.now();
+            return res.status(200).json({ success: true, ventes });
+        }
 
         if (suivi && suivi.code) {
             // Suivre une commande sans compte, juste avec le code — comme un
