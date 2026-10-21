@@ -6,12 +6,6 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://www.kapmaket.shop/produit/power-bank-oraimo-40000-mah-22-5w-a0aa623a</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-    <image:image><image:loc>https://czrxdtacgbaccdsctlxv.supabase.co/storage/v1/object/public/images/1792466602124-vzsvfx4qdya.webp</image:loc></image:image>
-  </url>
-  <url>
     <loc>https://www.kapmaket.shop/produit/ecouteurs-bluetooth-tour-de-cou-oraimo-necklace-lite-3b6ba8b4</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
