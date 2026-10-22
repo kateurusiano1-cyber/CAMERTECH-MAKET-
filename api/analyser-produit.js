@@ -3,9 +3,46 @@
 // déduire un nom, une catégorie et une description. L'admin garde la main
 // sur le prix et la quantité, jamais devinés par l'IA.
 
-const { createClient } = require('@supabase/supabase-js');
-const { circuitOuvert, signalerEchec, signalerSucces } = require('./_lib/circuitBreaker');
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
+
+// Modèles essayés dans l'ordre : si le premier est surchargé ou introuvable, on passe au suivant.
+// Modifiable sans toucher au code : variable GEMINI_MODELES (noms séparés par des virgules).
+const MODELES = (process.env.GEMINI_MODELES || 'gemini-3.6-flash,gemini-2.5-flash,gemini-2.5-flash-lite').split(',').map(s => s.trim()).filter(Boolean);
+const PAUSE_MS = Number(process.env.GEMINI_PAUSE_MS || 1500);
+const TRANSITOIRES = new Set([429, 500, 502, 503, 504]);
+const attendre = (ms) => new Promise(ok => setTimeout(ok, ms));
+
+// Appelle l'IA avec 2 essais par modèle (courte pause entre les deux) puis bascule sur le modèle suivant.
+// Une surcharge passagère (503, « forte demande ») ne bloque donc plus l'ajout d'un produit.
+// Budget total : 45 s, pour rester sous la durée maximale de la fonction (voir vercel.json).
+async function analyserAvecRepli(parts, parse) {
+    const debut = Date.now();
+    let derniere = { statut: 502, message: 'aucune réponse' };
+    for (const modele of MODELES) {
+        for (let essai = 0; essai < 2; essai++) {
+            if (Date.now() - debut > 45000) return { ok: false, ...derniere };
+            let resp, data;
+            try {
+                resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(20000),
+                    body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } })
+                });
+                data = await resp.json();
+            } catch (e) { derniere = { statut: 504, message: `${modele} : délai dépassé` }; if (essai === 0) await attendre(PAUSE_MS); continue; }
+            if (resp.ok) {
+                const valeur = parse(data.candidates?.[0]?.content?.parts?.[0]?.text || '');
+                if (valeur) return { ok: true, valeur, modele };
+                derniere = { statut: 502, message: `${modele} : réponse illisible` };
+                break;                                   // réponse inexploitable : modèle suivant
+            }
+            derniere = { statut: resp.status, message: `${modele} : ${data.error?.message || ''}`.slice(0, 200) };
+            if (resp.status === 404 || resp.status === 400) break;                // modèle inconnu ou requête refusée : modèle suivant
+            if (!TRANSITOIRES.has(resp.status)) return { ok: false, ...derniere };   // clé refusée, etc. : inutile d'insister
+            if (essai === 0) await attendre(PAUSE_MS);
+        }
+    }
+    return { ok: false, ...derniere };
+}
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,8 +59,6 @@ module.exports = async (req, res) => {
     return res.status(401).json({ error: 'Accès réservé à l\'administrateur' });
   }
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     // Nouveau format : { images: [{data, media_type}, ...], mode: 'unique' | 'lot' }
@@ -37,12 +72,6 @@ module.exports = async (req, res) => {
     if (!process.env.GEMINI_API_KEY) {
       console.error('Configuration : GEMINI_API_KEY manquante');
       return res.status(500).json({ error: "Service non configuré côté serveur" });
-    }
-
-    // Circuit breaker : si Gemini échoue/quota dépassé en boucle, on arrête de le solliciter un moment
-    const circuit = await circuitOuvert(supabase, 'gemini');
-    if (circuit.ouvert) {
-      return res.status(503).json({ error: `IA temporairement indisponible (quota ou panne), réessayez dans ${Math.ceil(circuit.retryAfterSeconds / 60)} min.` });
     }
 
     const champsJson = '{"name":"nom court et vendeur du produit, en français","category":"une seule valeur parmi : Téléphonie, Accessoires, Électronique, Réseau, Gaming, Autre","description":"description commerciale de 1 à 2 phrases en français, sans inventer de caractéristiques techniques précises que tu ne peux pas voir sur la photo"}';
@@ -61,35 +90,20 @@ module.exports = async (req, res) => {
       ...images.map(img => ({ inline_data: { mime_type: img.media_type || 'image/jpeg', data: img.data } }))
     ];
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts }] })
-      }
-    );
-
-    const data = await response.json();
-    if (!response.ok) {
-      await signalerEchec(supabase, 'gemini');
-      return res.status(500).json({ error: data.error?.message || 'Erreur API IA' });
+    const parse = (texte) => { try { return JSON.parse(String(texte).replace(/```json|```/g, '').trim()); } catch (e) { return null; } };
+    const r = await analyserAvecRepli(parts, parse);
+    if (!r.ok) {
+      console.error(`Analyse produit impossible : statut ${r.statut} — ${r.message || ''}`);
+      if (r.statut === 429) return res.status(429).json({ code: 'quota', retry_apres: 60, error: "Limite de requêtes de l'IA atteinte. Réessaie dans environ 1 minute." });
+      if ([500, 502, 503, 504].includes(r.statut)) return res.status(503).json({ code: 'surcharge', retry_apres: 10, error: "L'IA est très sollicitée en ce moment (forte demande). Réessaie dans quelques instants." });
+      return res.status(500).json({ code: 'erreur', error: "Analyse impossible pour le moment." });
     }
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const clean = text.replace(/```json|```/g, '').trim();
-    let parsed;
-    try { parsed = JSON.parse(clean); }
-    catch (e) { await signalerEchec(supabase, 'gemini'); return res.status(500).json({ error: "Réponse IA illisible, réessaie" }); }
-
-    await signalerSucces(supabase, 'gemini');
-
+    let parsed = r.valeur;
     // En mode lot, on garantit toujours un tableau, même si l'IA n'a détecté qu'un seul produit.
     if (modeLot && !Array.isArray(parsed)) parsed = [parsed];
-
     return res.status(200).json(parsed);
   } catch (e) {
     console.error('Erreur analyser-produit:', e);
-    try { await signalerEchec(supabase, 'gemini'); } catch (e2) {}
-    return res.status(500).json({ error: 'Erreur serveur' });
+    return res.status(500).json({ code: 'erreur', error: 'Erreur serveur' });
   }
 };

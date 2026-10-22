@@ -139,6 +139,38 @@ module.exports = async (req, res) => {
         const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
         const { reference, items, zone_livraison, frais_livraison, note, reservation, code_promo, preview, invite, visiteur_session_id, suivi, infos_livraison } = body;
 
+        // ===== SUIVI DES VISITEURS =====
+        // Le navigateur n'écrit plus directement dans `visiteurs_sessions` : c'est le serveur qui crée / met à jour la session
+        // (voir sql/securiser-visiteurs.sql). Le lien avec un compte client n'est fait que si la connexion est vérifiée.
+        if (body && body.visite && typeof body.visite === 'object') {
+            const v = body.visite;
+            const sid = String(v.session_id || '');
+            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sid)) return res.status(400).json({ error: 'Session invalide.' });
+            const court = (x, n) => (x == null ? null : (String(x).slice(0, n) || null));
+            let utilisateurId = null;
+            if (uid) {
+                const { data: prof } = await supabase.from('utilisateurs').select('id').eq('firebase_uid', uid).single();
+                utilisateurId = prof ? prof.id : null;
+            }
+            const maintenant = new Date();
+            const { data: ex } = await supabase.from('visiteurs_sessions').select('nb_visites, derniere_activite').eq('session_id', sid).maybeSingle();
+            let erreur = null;
+            if (ex) {
+                // Plus de 30 min sans activité = nouvelle visite (comme la plupart des outils d'analytics).
+                const inactifMin = (maintenant - new Date(ex.derniere_activite)) / 60000;
+                const maj = { derniere_activite: maintenant.toISOString(), nb_visites: (ex.nb_visites || 1) + (inactifMin > 30 ? 1 : 0) };
+                if (utilisateurId) maj.utilisateur_id = utilisateurId;
+                ({ error: erreur } = await supabase.from('visiteurs_sessions').update(maj).eq('session_id', sid));
+            } else {
+                ({ error: erreur } = await supabase.from('visiteurs_sessions').upsert([{
+                    session_id: sid, utilisateur_id: utilisateurId, user_agent: court(v.user_agent, 300), referrer: court(v.referrer, 300),
+                    utm_source: court(v.utm_source, 100), utm_medium: court(v.utm_medium, 100), utm_campaign: court(v.utm_campaign, 100)
+                }], { onConflict: 'session_id', ignoreDuplicates: true }));
+            }
+            if (erreur) { console.error('Suivi visiteur :', erreur.message); return res.status(500).json({ error: 'Indisponible.' }); }
+            return res.status(200).json({ success: true });
+        }
+
         // ===== MEILLEURES VENTES (agrégat public) =====
         if (body && body.meilleures_ventes === true) {
             if (cacheVentes.donnees && Date.now() - cacheVentes.le < 5 * 60 * 1000) return res.status(200).json({ success: true, ventes: cacheVentes.donnees });

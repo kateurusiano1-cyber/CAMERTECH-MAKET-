@@ -87,36 +87,23 @@ function logPageVue(page) {
     _pageDebut = Date.now();
 }
 
-async function initTrackingVisiteur() {
+// Enregistre la session du visiteur par le serveur (le navigateur n'écrit plus dans visiteurs_sessions).
+// Avec `avecJeton`, la connexion du client est vérifiée par le serveur, qui relie alors la session à son compte.
+async function enregistrerSessionVisiteur(avecJeton) {
     try {
-        const { data: existante } = await db.from('visiteurs_sessions').select('nb_visites, derniere_activite').eq('session_id', visiteurId).maybeSingle();
-        const maintenant = new Date();
-        if (existante) {
-            // Plus de 30 min sans activité = on considère que c'est une
-            // nouvelle visite (comme la plupart des outils d'analytics).
-            const inactifDepuis = (maintenant - new Date(existante.derniere_activite)) / 60000;
-            await db.from('visiteurs_sessions').update({
-                derniere_activite: maintenant.toISOString(),
-                nb_visites: existante.nb_visites + (inactifDepuis > 30 ? 1 : 0),
-                utilisateur_id: currentUser ? currentUser.id : undefined
-            }).eq('session_id', visiteurId);
-        } else {
-            const params = new URLSearchParams(location.search);
-            // upsert plutôt qu'un simple insert : si un second appel arrive
-            // presque en même temps (plusieurs onglets ouverts, rechargement
-            // très rapide), on évite un conflit de clé primaire sur
-            // session_id — la ligne est juste mise à jour au lieu d'échouer.
-            await db.from('visiteurs_sessions').upsert([{
-                session_id: visiteurId,
-                utilisateur_id: currentUser ? currentUser.id : null,
-                user_agent: navigator.userAgent,
-                referrer: document.referrer || null,
-                utm_source: params.get('utm_source'),
-                utm_medium: params.get('utm_medium'),
-                utm_campaign: params.get('utm_campaign')
-            }], { onConflict: 'session_id', ignoreDuplicates: false });
-        }
+        const headers = { 'Content-Type': 'application/json' };
+        if (avecJeton) { const u = await attendreFirebaseUser(); if (u) headers['Authorization'] = 'Bearer ' + await u.getIdToken(); }
+        const p = new URLSearchParams(location.search);
+        await fetch('/api/preparer-paiement', {
+            method: 'POST', headers, keepalive: true,
+            body: JSON.stringify({ visite: { session_id: visiteurId, user_agent: navigator.userAgent, referrer: document.referrer || null,
+                utm_source: p.get('utm_source'), utm_medium: p.get('utm_medium'), utm_campaign: p.get('utm_campaign') } })
+        });
     } catch (e) {}
+}
+
+async function initTrackingVisiteur() {
+    enregistrerSessionVisiteur(false);   // le serveur crée / met à jour la session (sans bloquer la page)
     logPageVue(location.pathname);
 
     // Enregistre la durée de la page en cours dès que le visiteur quitte/
@@ -152,7 +139,7 @@ function _envoyerDureeBeacon() {
 // un compte — légitime puisqu'il s'identifie lui-même à ce moment précis.
 function lierSessionVisiteur() {
     if (!currentUser) return;
-    try { db.from('visiteurs_sessions').update({ utilisateur_id: currentUser.id }).eq('session_id', visiteurId).then(()=>{}, ()=>{}); } catch (e) {}
+    enregistrerSessionVisiteur(true);
 }
 
 // Repère les produits qui apparaissent réellement à l'écran (pas juste
@@ -2457,17 +2444,17 @@ const phT = (fr, en) => currentLang === 'en' ? en : fr;
 function normMot(m) { let n = normRecherche(m); if (n.length > 3 && /[sx]$/.test(n)) n = n.slice(0, -1); return n; }   // « écouteurs » → « ecouteur »
 
 // Réduit la photo (800 px, JPEG) : de 3-8 Mo à ~100 Ko, donc envoi beaucoup plus rapide sur réseau mobile
-async function preparerImagePhoto(fichier) {
+async function preparerImagePhoto(fichier, max = 800, qualite = 0.75) {
     if (!fichier || !/^image\//.test(fichier.type || '')) throw new Error('format');
     if (fichier.size > 25 * 1024 * 1024) throw new Error('trop-grande');
     const url = URL.createObjectURL(fichier);
     try {
         const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('format')); i.src = url; });
-        const k = Math.min(1, 800 / Math.max(img.naturalWidth, img.naturalHeight));
+        const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
         const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
         const c = document.createElement('canvas'); c.width = w; c.height = h;
         const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
-        const dataUrl = c.toDataURL('image/jpeg', 0.75);
+        const dataUrl = c.toDataURL('image/jpeg', qualite);
         return { dataUrl, base64: dataUrl.split(',')[1] };
     } finally { URL.revokeObjectURL(url); }
 }
@@ -5510,6 +5497,31 @@ window.resetAdminImg = () => {
     const c=document.getElementById('ia-mode-lot'); if(c)c.checked=false;
 };
 
+// Appelle l'analyse IA. Si l'IA est très sollicitée ou si la limite est atteinte, réessaie seule (3 fois, avec compte à rebours).
+async function appelAnalyseIA(images, modeLot, res) {
+    const attentes = [8, 15, 25];   // secondes avant chaque nouvelle tentative
+    for (let essai = 0; ; essai++) {
+        let resp = null, data;
+        try {
+            resp = await fetch('/api/analyser-produit', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (sessionStorage.getItem('cmkt_admin_token') || '') },
+                body: JSON.stringify({ images, mode: modeLot ? 'lot' : 'unique' })
+            });
+            data = await resp.json();
+        } catch (e) { resp = null; data = { error: 'Connexion interrompue.', code: 'reseau' }; }
+        if (resp && resp.ok && !data.error) return data;
+        const passager = !resp || ['surcharge', 'quota', 'reseau'].includes(data.code);
+        if (!passager) throw new Error(data.error || 'Erreur IA');
+        if (essai >= attentes.length) throw new Error((data.error || "L'IA est indisponible.") + " Tu peux remplir la fiche à la main : « Enregistrer » fonctionne sans l'IA.");
+        for (let sec = attentes[essai]; sec > 0; sec--) {
+            res.style.color = '#c77c00';
+            res.textContent = `⏳ L'IA est très sollicitée — nouvelle tentative dans ${sec} s (${essai + 1}/${attentes.length})…`;
+            await new Promise(ok => setTimeout(ok, 1000));
+        }
+        res.style.color = '#888'; res.textContent = 'Nouvelle tentative…';
+    }
+}
+
 window.analyserProduitIA = async () => {
     const res = document.getElementById('ia-res');
     const modeLot = document.getElementById('ia-mode-lot').checked;
@@ -5520,19 +5532,17 @@ window.analyserProduitIA = async () => {
     btn.disabled = true; btn.textContent = '⏳ Analyse...';
     res.style.color = '#888'; res.textContent = modeLot ? `L'IA regarde les ${fichiers.length} photos séparément...` : (fichiers.length > 1 ? `L'IA regarde les ${fichiers.length} photos...` : 'L\'IA regarde la photo...');
     try {
-        const images = await Promise.all(fichiers.map(f => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve({ data: reader.result.split(',')[1], media_type: f.type || 'image/jpeg' });
-            reader.onerror = reject;
-            reader.readAsDataURL(f);
-        })));
-        const resp = await fetch('/api/analyser-produit', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (sessionStorage.getItem('cmkt_admin_token') || '') },
-            body: JSON.stringify({ images, mode: modeLot ? 'lot' : 'unique' })
-        });
-        const data = await resp.json();
-        if (!resp.ok || data.error) throw new Error(data.error || 'Erreur IA');
-
+        // Photos réduites (1024 px) : envoi rapide et requêtes légères (une photo de téléphone pèse 3 à 8 Mo).
+        const images = await Promise.all(fichiers.map(async f => { const p = await preparerImagePhoto(f, 1024, 0.8); return { data: p.base64, media_type: 'image/jpeg' }; }));
+        // Mode « produits différents » : lots de 4 photos, un après l'autre. Chaque lot est réessayé seul si l'IA est surchargée.
+        const taille = modeLot ? 4 : 8, groupes = [];
+        for (let k = 0; k < images.length; k += taille) groupes.push(images.slice(k, k + taille));
+        let data = modeLot ? [] : null;
+        for (let g = 0; g < groupes.length; g++) {
+            if (groupes.length > 1) { res.style.color = '#888'; res.textContent = `L'IA regarde les photos… lot ${g + 1}/${groupes.length}`; }
+            const part = await appelAnalyseIA(groupes[g], modeLot, res);
+            if (modeLot) data = data.concat(Array.isArray(part) ? part : (part.produits || [])); else data = part;
+        }
         if (modeLot) {
             const liste = Array.isArray(data) ? data : (data.produits || []);
             afficherResultatsLot(liste, fichiers);
@@ -5544,7 +5554,9 @@ window.analyserProduitIA = async () => {
             res.style.color = '#3FA66B'; res.textContent = '✅ Nom, catégorie et description pré-remplis — vérifie et ajoute le prix + la quantité.';
         }
     } catch (e) {
-        res.style.color = '#D9534F'; res.textContent = '❌ ' + e.message;
+        res.style.color = '#D9534F';
+        res.textContent = '❌ ' + (e.message === 'format' ? 'Une des photos est illisible (format non pris en charge) : essaie une photo JPG ou PNG.'
+            : e.message === 'trop-grande' ? 'Une des photos est trop lourde (25 Mo maximum).' : e.message);
     }
     btn.disabled = false; btn.textContent = "🤖 Analyser avec l'IA";
 };
