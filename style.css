@@ -891,3 +891,11 @@ body.mode-recherche .section-hdr > div { flex-wrap: wrap; }
 
 /* Rappel discret de la règle de livraison dans le panier (le détail est dans les conditions et dans le formulaire après paiement) */
 .livraison-regle-note { font-size: 0.78rem; line-height: 1.45; color: var(--text3); padding: 2px 4px 0; text-align: left; }
+
+/* ===== ANTI-DOUBLONS (panneau admin) ===== */
+.doublon-alerte { background: #fff6e5; border: 1px solid #f0c36d; color: #7a4a00; border-radius: 10px; padding: 10px 12px; font-size: 0.85rem; }
+.doublon-rouge { background: #fdecea; border-color: #f1a9a0; color: #8a1f11; }
+.doublon-titre { font-weight: 800; margin-bottom: 4px; }
+.doublon-ligne { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 4px 0; font-size: 0.85rem; }
+.doublon-btn { border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 8px; padding: 3px 10px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.doublon-note { font-size: 0.78rem; font-weight: 700; color: #b45309; }

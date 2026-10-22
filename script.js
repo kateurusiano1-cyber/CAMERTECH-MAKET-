@@ -4328,14 +4328,14 @@ async function rafraichirProduits() {
 
 // Appelle la route serveur admin-action (protégée par jeton admin) au lieu
 // d'écrire directement dans Supabase depuis le navigateur avec la clé anon.
-async function adminAction(ressource, action, { id, payload } = {}) {
+async function adminAction(ressource, action, { id, payload, forcer } = {}) {
     const resp = await fetch('/api/admin-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (sessionStorage.getItem('cmkt_admin_token') || '') },
-        body: JSON.stringify({ ressource, action, id, payload })
+        body: JSON.stringify({ ressource, action, id, payload, forcer })
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'Erreur admin');
+    if (!resp.ok) { const err = new Error(data.error || 'Erreur admin'); err.code = data.code; err.doublons = data.doublons; throw err; }
     return data;
 }
 
@@ -4426,7 +4426,8 @@ async function afficherPanneauAdmin() {
             <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
                 <h2 id="prod-form-title" style="font-size:1rem;margin-bottom:16px">➕ Ajouter un Produit</h2>
                 <div style="display:flex;flex-direction:column;gap:10px">
-                    <input type="text" id="p-name" placeholder="Nom du produit *" class="adm-input">
+                    <input type="text" id="p-name" placeholder="Nom du produit *" class="adm-input" autocomplete="off">
+                    <div id="p-doublon" class="doublon-alerte" style="display:none"></div>
                     <textarea id="p-desc" placeholder="Description" rows="2" class="adm-input"></textarea>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                         <select id="p-cat" class="adm-input"><option value="Téléphonie">📱 Téléphonie</option><option value="Accessoires">🎧 Accessoires</option><option value="Électronique">💻 Électronique</option><option value="Réseau">📡 Réseau</option><option value="Gaming">🎮 Gaming</option><option value="Autre">📦 Autre</option></select>
@@ -5497,6 +5498,91 @@ window.resetAdminImg = () => {
     const c=document.getElementById('ia-mode-lot'); if(c)c.checked=false;
 };
 
+// ===== ANTI-DOUBLONS (ajout de produits dans le panneau admin) =====
+// Avertit dès la saisie du nom, demande confirmation avant l'ajout, et le serveur contrôle aussi (voir api/admin-action.js).
+const doublonsPour = (nom, ignorerId) => (window.CMKT_DOUBLONS ? window.CMKT_DOUBLONS.trouverDoublons(nom, window._prods || [], { ignorerId }) : []);
+const phraseProduit = (p) => `${p.name} · ${p.category || '—'} · ${p.resale_price != null ? fmt(p.resale_price) + ' FCFA' : '—'} · ${p.quantity === 0 ? 'rupture' : 'stock ' + (p.quantity != null ? p.quantity : '—')}`;
+
+function majAlerteDoublon() {
+    const zone = document.getElementById('p-doublon'), champ = document.getElementById('p-name');
+    if (!zone || !champ) return;
+    const d = doublonsPour(champ.value, typeof editingId !== 'undefined' ? editingId : null);
+    if (!d.length) { zone.style.display = 'none'; zone.replaceChildren(); return; }
+    const identique = d[0].niveau === 'identique';
+    zone.style.display = 'block'; zone.className = 'doublon-alerte' + (identique ? ' doublon-rouge' : '');
+    const titre = document.createElement('div'); titre.className = 'doublon-titre';
+    titre.textContent = identique ? '⛔ Cet article est déjà sur le site' : '⚠️ Article très ressemblant déjà sur le site : vérifie que c’est bien un autre produit';
+    zone.replaceChildren(titre);
+    d.slice(0, 3).forEach(x => {
+        const l = document.createElement('div'); l.className = 'doublon-ligne';
+        l.append(document.createTextNode('« ' + phraseProduit(x.produit) + ' »'));
+        if (x.produit.id != null) { const b = document.createElement('button'); b.type = 'button'; b.className = 'doublon-btn'; b.textContent = '✏️ Ouvrir ce produit'; b.onclick = () => chargerEditProduit(x.produit.id); l.append(b); }
+        zone.append(l);
+    });
+}
+
+// Demande confirmation si le nom ressemble à un produit déjà présent. Renvoie true si on peut ajouter quand même.
+function confirmerDoublon(nom, ignorerId, doublons) {
+    const d = doublons || doublonsPour(nom, ignorerId);
+    if (!d.length) return Promise.resolve(true);
+    return new Promise(fini => {
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const ov = el('div', 'photo-overlay'); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+        const feuille = el('div', 'photo-sheet'), corps = el('div', 'photo-body');
+        const identique = d[0].niveau === 'identique';
+        const fermer = (reponse) => { document.removeEventListener('keydown', surTouche); ov.remove(); fini(reponse); };
+        function surTouche(e) { if (e.key === 'Escape') fermer(false); }
+        document.addEventListener('keydown', surTouche);
+        corps.append(el('h3', null, identique ? '⛔ Cet article existe déjà' : '⚠️ Article très ressemblant déjà présent'),
+            el('p', 'photo-note', identique ? 'Un produit identique est déjà sur le site :' : 'Ce produit ressemble à ceci, déjà sur le site :'));
+        d.slice(0, 3).forEach(x => {
+            const l = el('div', 'doublon-ligne', '« ' + phraseProduit(x.produit) + ' »');
+            if (x.produit.id != null) { const b = el('button', 'doublon-btn', '✏️ Ouvrir'); b.type = 'button'; b.onclick = () => { fermer(false); chargerEditProduit(x.produit.id); }; l.append(b); }
+            corps.append(l);
+        });
+        corps.append(el('p', 'photo-note', `Ajouter quand même « ${nom} » ?`));
+        const rang = el('div', 'photo-choix');
+        const non = el('button', 'photo-btn photo-btn-main', 'Ne pas ajouter'); non.type = 'button'; non.onclick = () => fermer(false);
+        const oui = el('button', 'photo-btn', 'Ajouter quand même (c’est un autre produit)'); oui.type = 'button'; oui.onclick = () => fermer(true);
+        rang.append(non, oui); corps.append(rang);
+        feuille.append(corps); ov.append(feuille); document.body.append(ov); non.focus();
+    });
+}
+
+// Ajoute le produit ; si le serveur trouve un doublon que la liste affichée ne montrait pas (autre onglet, ajout très récent), redemande confirmation.
+async function insererProduitAvecControle(payload, forcerDeja) {
+    try { return await adminAction('products', 'insert', { payload, forcer: forcerDeja === true }); }
+    catch (e) {
+        if (e.code === 'doublon' && !forcerDeja) {
+            const d = (e.doublons || []).map(x => ({ produit: x, niveau: x.niveau }));
+            if (await confirmerDoublon(payload.name, null, d)) return adminAction('products', 'insert', { payload, forcer: true });
+            const annule = new Error('Ajout annulé : cet article existe déjà.'); annule.annule = true; throw annule;
+        }
+        throw e;
+    }
+}
+
+// Mode lot : signale, fiche par fiche, les articles déjà sur le site ou déjà présents ailleurs dans le même lot.
+function marquerDoublonsLot() {
+    if (!window.CMKT_DOUBLONS) return;
+    const champs = [];
+    for (let i = 0; document.getElementById('ia-lot-name-' + i); i++) champs.push(document.getElementById('ia-lot-name-' + i));
+    champs.forEach((champ, i) => {
+        let note = champ.parentElement.querySelector('.doublon-note');
+        if (!note) { note = document.createElement('div'); note.className = 'doublon-note'; champ.insertAdjacentElement('afterend', note); }
+        const d = doublonsPour(champ.value, null);
+        let texte = '';
+        if (d.length) texte = (d[0].niveau === 'identique' ? '⛔ Déjà sur le site : « ' : '⚠️ Ressemble à un produit du site : « ') + d[0].produit.name + ' »';
+        else for (let j = 0; j < i; j++) { if (window.CMKT_DOUBLONS.comparer(champ.value, champs[j].value)) { texte = `⚠️ Ressemble à la fiche n°${j + 1} de ce lot`; break; } }
+        note.textContent = texte; note.style.display = texte ? 'block' : 'none';
+    });
+}
+document.addEventListener('input', (e) => {
+    const id = e.target && e.target.id;
+    if (id === 'p-name') { clearTimeout(window._tDoublon); window._tDoublon = setTimeout(majAlerteDoublon, 250); }
+    else if (id && id.startsWith('ia-lot-name-')) { clearTimeout(window._tDoublonLot); window._tDoublonLot = setTimeout(marquerDoublonsLot, 250); }
+});
+
 // Appelle l'analyse IA. Si l'IA est très sollicitée ou si la limite est atteinte, réessaie seule (3 fois, avec compte à rebours).
 async function appelAnalyseIA(images, modeLot, res) {
     const attentes = [8, 15, 25];   // secondes avant chaque nouvelle tentative
@@ -5545,10 +5631,10 @@ window.analyserProduitIA = async () => {
         }
         if (modeLot) {
             const liste = Array.isArray(data) ? data : (data.produits || []);
-            afficherResultatsLot(liste, fichiers);
+            afficherResultatsLot(liste, fichiers); marquerDoublonsLot();
             res.style.color = '#3FA66B'; res.textContent = `✅ ${liste.length} produit(s) détecté(s) — complète le prix et la quantité de chacun ci-dessous.`;
         } else {
-            if (data.name) document.getElementById('p-name').value = data.name;
+            if (data.name) { document.getElementById('p-name').value = data.name; majAlerteDoublon(); }
             if (data.description) document.getElementById('p-desc').value = data.description;
             if (data.category) document.getElementById('p-cat').value = data.category;
             res.style.color = '#3FA66B'; res.textContent = '✅ Nom, catégorie et description pré-remplis — vérifie et ajoute le prix + la quantité.';
@@ -5607,14 +5693,21 @@ window.validerProduitLot = async (i) => {
     if (!achat || achat <= 0) { res.style.color = '#D9534F'; res.textContent = '❌ Prix d\'achat requis'; return; }
     if (!vente || vente <= 0) { res.style.color = '#D9534F'; res.textContent = '❌ Prix de vente requis'; return; }
     if (!qte || qte < 0) { res.style.color = '#D9534F'; res.textContent = '❌ Quantité requise'; return; }
+    let forcer = false;
+    const dejaLa = doublonsPour(name, null);
+    if (dejaLa.length) {
+        if (!(await confirmerDoublon(name, null, dejaLa))) { res.style.color = '#c77c00'; res.textContent = 'Ajout annulé : cet article existe déjà.'; return; }
+        forcer = true;
+    }
     btn.disabled = true; btn.textContent = '⏳ Ajout...';
     try {
         const fichier = window._iaLotFichiers[i];
         const imageUrl = fichier ? await uploadImage(fichier) : null;
-        await adminAction('products', 'insert', { payload: {
+        const reponse = await insererProduitAvecControle({
             name, description: desc, category: cat,
             purchase_price: achat, resale_price: vente, quantity: qte, image_url: imageUrl
-        }});
+        }, forcer);
+        if (reponse && reponse.data) window._prods = [reponse.data, ...(window._prods || [])];   // visible tout de suite pour les fiches suivantes du lot
         res.style.color = '#3FA66B'; res.textContent = '✅ Produit ajouté !';
         btn.textContent = '✅ Ajouté'; btn.style.background = '#888'; btn.disabled = true;
         rafraichirProduits();
@@ -5630,7 +5723,7 @@ window.validerProduitLot = async (i) => {
             }
         }, 900);
     } catch (e) {
-        res.style.color = '#D9534F'; res.textContent = '❌ ' + e.message;
+        res.style.color = e.annule ? '#c77c00' : '#D9534F'; res.textContent = (e.annule ? '' : '❌ ') + e.message;
         btn.disabled = false; btn.textContent = '✅ Ajouter ce produit';
     }
 };
@@ -5642,13 +5735,21 @@ window.sauvegarderProduit = async () => {
     const achat=parseFloat(document.getElementById('p-achat').value);
     const vente=parseFloat(document.getElementById('p-vente').value);
     if(!name||!qty||!achat||!vente){msg.style.color='#D9534F';msg.textContent='❌ Remplissez les champs obligatoires';return;}
+    // Anti-doublon : si un produit identique ou très ressemblant existe déjà, on demande confirmation avant d'ajouter.
+    let forcer = false;
+    const dejaLa = doublonsPour(name, editingId);
+    if (dejaLa.length) {
+        if (!(await confirmerDoublon(name, editingId, dejaLa))) { msg.style.color = '#c77c00'; msg.textContent = editingId ? 'Modification annulée : ce nom existe déjà.' : 'Ajout annulé : cet article existe déjà.'; return; }
+        forcer = true;
+    }
     msg.style.color='#888';msg.textContent='Enregistrement...';
     let imageUrl=document.getElementById('p-img-url').value.trim();
     if(selectedFile){try{imageUrl=await uploadImage(selectedFile);}catch(e){msg.style.color='#D9534F';msg.textContent='❌ Upload: '+e.message;return;}}
     const prod={name,description:document.getElementById('p-desc').value.trim()||null,category:document.getElementById('p-cat').value,quantity:qty,purchase_price:achat,resale_price:vente,image_url:imageUrl||null,promo_active:document.getElementById('p-promo-chk').checked,promo_prix:parseFloat(document.getElementById('p-promo').value)||null,flash_active:document.getElementById('p-flash-chk').checked,flash_fin:document.getElementById('p-flash-fin').value?new Date(document.getElementById('p-flash-fin').value).toISOString():null};
     try {
-        await (editingId ? adminAction('products','update',{id:editingId,payload:prod}) : adminAction('products','insert',{payload:prod}));
-    } catch(e) { msg.style.color='#D9534F'; msg.textContent='❌ '+e.message; return; }
+        const reponse = await (editingId ? adminAction('products','update',{id:editingId,payload:prod}) : insererProduitAvecControle(prod, forcer));
+        if (!editingId && reponse && reponse.data) window._prods = [reponse.data, ...(window._prods || [])];   // visible tout de suite pour le contrôle des doublons suivants
+    } catch(e) { msg.style.color = e.annule ? '#c77c00' : '#D9534F'; msg.textContent = (e.annule ? '' : '❌ ') + e.message; return; }
     msg.style.color='#3FA66B';msg.textContent='✅ Enregistré !';
     annulerEdit();
     rafraichirProduits();
@@ -5658,7 +5759,7 @@ window.chargerEditProduit = id => {
     const p=window._prods.find(x=>x.id===id); if(!p)return;
     editingId=id;
     document.getElementById('prod-form-title').textContent='✏️ Modifier le produit';
-    document.getElementById('p-name').value=p.name;
+    document.getElementById('p-name').value=p.name; majAlerteDoublon();
     document.getElementById('p-desc').value=p.description||'';
     document.getElementById('p-cat').value=p.category;
     document.getElementById('p-qty').value=p.quantity;
@@ -5682,7 +5783,7 @@ window.annulerEdit = () => {
     const w=document.getElementById('adm-img-preview');if(w)w.style.display='none';
     const ex=document.getElementById('adm-img-extra');if(ex)ex.innerHTML='';
     const ia=document.getElementById('ia-res');if(ia)ia.textContent='';
-    const t=document.getElementById('prod-form-title');if(t)t.textContent='➕ Ajouter un Produit';
+    const t=document.getElementById('prod-form-title');if(t)t.textContent='➕ Ajouter un Produit'; majAlerteDoublon();
     const b=document.getElementById('btn-annuler-edit');if(b)b.style.display='none';
 };
 

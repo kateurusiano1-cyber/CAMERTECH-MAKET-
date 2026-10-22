@@ -28,6 +28,8 @@ const { synchroniserStatut } = require('./_lib/telegram');
 const { calculerStats } = require('./_lib/demandesStats');
 const CONFIG = require('../config.js');
 
+const { trouverDoublons } = require('../doublons.js');
+
 const TABLE_REELLE = { bannieres: 'bannières' }; // nom réel de la table en base
 
 module.exports = async (req, res) => {
@@ -44,7 +46,7 @@ module.exports = async (req, res) => {
 
     try {
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-        const { ressource, action, id, payload } = body || {};
+        const { ressource, action, id, payload, forcer } = body || {};
         const table = TABLE_REELLE[ressource] || ressource;
 
         // utilisateurs : lecture seule, pour le tableau de bord admin
@@ -80,6 +82,19 @@ module.exports = async (req, res) => {
         }
 
         if (ressource === 'products' && action === 'insert') {
+            // Contrôle anti-doublon (filet de sécurité : le panneau admin avertit déjà avant l'envoi).
+            // `forcer: true` = l'administrateur a vu l'avertissement et confirme l'ajout.
+            if (forcer !== true) {
+                const { data: existants } = await supabase.from('products').select('id,name,category,resale_price,quantity');
+                const doublons = trouverDoublons(payload && payload.name, existants || []);
+                if (doublons.length) {
+                    return res.status(409).json({
+                        code: 'doublon',
+                        error: `Cet article semble déjà présent : « ${doublons[0].produit.name} ».`,
+                        doublons: doublons.map(d => ({ id: d.produit.id, name: d.produit.name, category: d.produit.category, resale_price: d.produit.resale_price, quantity: d.produit.quantity, niveau: d.niveau }))
+                    });
+                }
+            }
             const { data, error } = await supabase.from('products').insert([payload]).select().single();
             if (error) throw error;
             return res.status(200).json({ data });
