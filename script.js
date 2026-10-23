@@ -4428,6 +4428,7 @@ async function afficherPanneauAdmin() {
                 <div style="display:flex;flex-direction:column;gap:10px">
                     <input type="text" id="p-name" placeholder="Nom du produit *" class="adm-input" autocomplete="off">
                     <div id="p-doublon" class="doublon-alerte" style="display:none"></div>
+                    <div id="p-doublon-photo" class="doublon-alerte" style="display:none"></div>
                     <textarea id="p-desc" placeholder="Description" rows="2" class="adm-input"></textarea>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                         <select id="p-cat" class="adm-input"><option value="Téléphonie">📱 Téléphonie</option><option value="Accessoires">🎧 Accessoires</option><option value="Électronique">💻 Électronique</option><option value="Réseau">📡 Réseau</option><option value="Gaming">🎮 Gaming</option><option value="Autre">📦 Autre</option></select>
@@ -4473,7 +4474,10 @@ async function afficherPanneauAdmin() {
                 </div>
             </div>
             <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px">
-                <h2 style="font-size:1rem;margin-bottom:14px">📦 Produits (<span id="prods-count">${(prods||[]).length}</span>)</h2>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+                    <h2 style="font-size:1rem;margin:0">📦 Produits (<span id="prods-count">${(prods||[]).length}</span>)</h2>
+                    <button type="button" class="doublon-btn" style="padding:7px 12px;color:#1a6b3c" onclick="ouvrirScanDoublons()">🔎 Scanner les doublons</button>
+                </div>
                 <div style="overflow-x:auto">
                     <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
                         <thead><tr>${['Nom','Catégorie','Stock','Prix','Statut','Actions'].map(h=>`<th style="color:#888;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0f0;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px">${h}</th>`).join('')}</tr></thead>
@@ -5450,6 +5454,7 @@ window.handleDragLeaveImages = (e) => {
 };
 
 function renderAdminImgThumbs() {
+    majAlertePhoto();   // vérifie si la photo choisie existe déjà sur le site
     if (!selectedFilesAll.length) {
         document.getElementById('adm-img-preview').style.display = 'none';
         document.getElementById('adm-img-extra').innerHTML = '';
@@ -5533,10 +5538,11 @@ function confirmerDoublon(nom, ignorerId, doublons) {
         const fermer = (reponse) => { document.removeEventListener('keydown', surTouche); ov.remove(); fini(reponse); };
         function surTouche(e) { if (e.key === 'Escape') fermer(false); }
         document.addEventListener('keydown', surTouche);
-        corps.append(el('h3', null, identique ? '⛔ Cet article existe déjà' : '⚠️ Article très ressemblant déjà présent'),
-            el('p', 'photo-note', identique ? 'Un produit identique est déjà sur le site :' : 'Ce produit ressemble à ceci, déjà sur le site :'));
+        const niv = d[0].niveau;
+        corps.append(el('h3', null, niv === 'identique' ? '⛔ Cet article existe déjà' : niv === 'photo' ? '📷 Cette photo existe déjà sur le site' : '⚠️ Article très ressemblant déjà présent'),
+            el('p', 'photo-note', niv === 'identique' ? 'Un produit identique est déjà sur le site :' : niv === 'photo' ? 'Un produit du site utilise une photo identique ou très ressemblante :' : 'Ce produit ressemble à ceci, déjà sur le site :'));
         d.slice(0, 3).forEach(x => {
-            const l = el('div', 'doublon-ligne', '« ' + phraseProduit(x.produit) + ' »');
+            const l = el('div', 'doublon-ligne', '« ' + phraseProduit(x.produit) + ' »' + (x.niveau === 'photo' ? ' — photo ' + (x.distance <= window.CMKT_DOUBLONS.SEUIL_PHOTO_IDENTIQUE ? 'quasi identique' : 'ressemblante') : ''));
             if (x.produit.id != null) { const b = el('button', 'doublon-btn', '✏️ Ouvrir'); b.type = 'button'; b.onclick = () => { fermer(false); chargerEditProduit(x.produit.id); }; l.append(b); }
             corps.append(l);
         });
@@ -5582,6 +5588,175 @@ document.addEventListener('input', (e) => {
     if (id === 'p-name') { clearTimeout(window._tDoublon); window._tDoublon = setTimeout(majAlerteDoublon, 250); }
     else if (id && id.startsWith('ia-lot-name-')) { clearTimeout(window._tDoublonLot); window._tDoublonLot = setTimeout(marquerDoublonsLot, 250); }
 });
+
+// ===== ANTI-DOUBLONS : PHOTOS ET SCAN DU CATALOGUE =====
+// Empreinte visuelle d'une image (dHash 16×16) : deux photos du même article, même recompressées ou redimensionnées,
+// ont des empreintes presque identiques. Calculée dans le navigateur et gardée en mémoire (par adresse de photo).
+const CLE_EMPREINTES = 'cmkt_empreintes_v1', CLE_IGNORES = 'cmkt_doublons_ignores_v1';
+window._empreintes = (() => { try { return JSON.parse(localStorage.getItem(CLE_EMPREINTES) || '{}'); } catch (e) { return {}; } })();
+window._empreintesEchecs = new Set();
+window._jetonPhoto = 0;
+function sauverEmpreintes() {
+    try {
+        const cles = Object.keys(window._empreintes);
+        if (cles.length > 800) cles.slice(0, cles.length - 800).forEach(k => delete window._empreintes[k]);
+        localStorage.setItem(CLE_EMPREINTES, JSON.stringify(window._empreintes));
+    } catch (e) {}
+}
+function empreinteImage(img) {
+    const reduire = (src, l, h) => { const c = document.createElement('canvas'); c.width = l; c.height = h; const x = c.getContext('2d', { willReadFrequently: true }); x.fillStyle = '#fff'; x.fillRect(0, 0, l, h); x.drawImage(src, 0, 0, l, h); return c; };
+    const petit = reduire(reduire(img, 136, 128), 17, 16);   // réduction en 2 temps : moyenne plus fidèle
+    const d = petit.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, 17, 16).data;
+    const g = (i, j) => { const k = (j * 17 + i) * 4; return 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]; };
+    let bits = '';
+    for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) bits += g(i, j) > g(i + 1, j) ? '1' : '0';
+    let hex = ''; for (let k = 0; k < 256; k += 4) hex += parseInt(bits.slice(k, k + 4), 2).toString(16);
+    return hex;
+}
+function chargerImageCors(url) {
+    return new Promise((ok, ko) => {
+        const i = new Image(); i.crossOrigin = 'anonymous';
+        const t = setTimeout(() => ko(new Error('délai')), 15000);
+        i.onload = () => { clearTimeout(t); ok(i); }; i.onerror = () => { clearTimeout(t); ko(new Error('image')); };
+        i.src = url;
+    });
+}
+async function empreinteUrl(url) {
+    if (!url) return null;
+    if (window._empreintes[url]) return window._empreintes[url];
+    if (window._empreintesEchecs.has(url)) return null;
+    try { const h = empreinteImage(await chargerImageCors(url)); window._empreintes[url] = h; return h; }
+    catch (e) { window._empreintesEchecs.add(url); return null; }
+}
+async function empreinteFichier(fichier) {
+    const url = URL.createObjectURL(fichier);
+    try {
+        const img = await new Promise((ok, ko) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ko(new Error('image')); im.src = url; });
+        return empreinteImage(img);
+    } catch (e) { return null; } finally { URL.revokeObjectURL(url); }
+}
+// Calcule les empreintes manquantes des photos du catalogue (6 à la fois). `progres(fait, total)` alimente la barre d'avancement.
+async function empreintesCatalogue(progres) {
+    const urls = [...new Set((window._prods || []).map(p => String(p.image_url || '').trim()).filter(Boolean))];
+    const file = urls.slice(); let fait = 0;
+    const travailleur = async () => { while (file.length) { await empreinteUrl(file.shift()); fait++; if (progres) progres(fait, urls.length); } };
+    await Promise.all(Array.from({ length: 6 }, travailleur));
+    sauverEmpreintes();
+    return window._empreintes;
+}
+// Produits du site dont la photo ressemble à ce fichier (meilleure approximation d'abord).
+async function doublonsPhoto(fichier, ignorerId) {
+    if (!fichier || !window.CMKT_DOUBLONS) return [];
+    try {
+        const h = await empreinteFichier(fichier); if (!h) return [];
+        await Promise.race([empreintesCatalogue(), new Promise(ok => setTimeout(ok, 20000))]);   // au pire, on continue sans la comparaison
+        const trouves = [];
+        (window._prods || []).forEach(p => {
+            if (ignorerId != null && p.id === ignorerId) return;
+            const hp = window._empreintes[String(p.image_url || '').trim()]; if (!hp) return;
+            const dist = window.CMKT_DOUBLONS.distanceEmpreintes(h, hp);
+            if (dist <= window.CMKT_DOUBLONS.SEUIL_PHOTO_PROCHE) trouves.push({ produit: p, niveau: 'photo', distance: dist });
+        });
+        return trouves.sort((a, b) => a.distance - b.distance).slice(0, 3);
+    } catch (e) { return []; }
+}
+// Encadré sous le champ photo du formulaire : « cette photo ressemble à celle de … »
+async function majAlertePhoto() {
+    const zone = document.getElementById('p-doublon-photo'); if (!zone) return;
+    const jeton = ++window._jetonPhoto;
+    if (!selectedFilesAll.length) { zone.style.display = 'none'; zone.replaceChildren(); return; }
+    zone.className = 'doublon-alerte'; zone.style.display = 'block'; zone.textContent = '🔎 Vérification de la photo…';
+    const resultats = (await Promise.all(selectedFilesAll.map(f => doublonsPhoto(f, editingId)))).flat();
+    if (jeton !== window._jetonPhoto) return;   // la sélection a changé entre-temps
+    const liste = resultats.filter((x, k, t) => t.findIndex(y => y.produit.id === x.produit.id) === k).slice(0, 3);
+    if (!liste.length) { zone.style.display = 'none'; zone.replaceChildren(); return; }
+    const identique = liste[0].distance <= window.CMKT_DOUBLONS.SEUIL_PHOTO_IDENTIQUE;
+    zone.className = 'doublon-alerte' + (identique ? ' doublon-rouge' : '');
+    const titre = document.createElement('div'); titre.className = 'doublon-titre';
+    titre.textContent = identique ? '📷 Cette photo est déjà utilisée sur le site' : '📷 Cette photo ressemble à celle d’un produit déjà sur le site';
+    zone.replaceChildren(titre);
+    liste.forEach(x => {
+        const l = document.createElement('div'); l.className = 'doublon-ligne'; l.append(document.createTextNode('« ' + phraseProduit(x.produit) + ' »'));
+        if (x.produit.id != null) { const b = document.createElement('button'); b.type = 'button'; b.className = 'doublon-btn'; b.textContent = '✏️ Ouvrir ce produit'; b.onclick = () => chargerEditProduit(x.produit.id); l.append(b); }
+        zone.append(l);
+    });
+}
+// Mode lot : signale les photos déjà sur le site ou en double dans le même lot.
+async function marquerDoublonsPhotosLot() {
+    const fichiers = window._iaLotFichiers || []; if (!fichiers.length || !window.CMKT_DOUBLONS) return;
+    const hashes = await Promise.all(fichiers.map(f => f ? empreinteFichier(f) : null));
+    for (let i = 0; i < fichiers.length; i++) {
+        const champ = document.getElementById('ia-lot-name-' + i); if (!champ) continue;
+        const sur = await doublonsPhoto(fichiers[i], null);
+        let texte = '';
+        if (sur.length) texte = (sur[0].distance <= window.CMKT_DOUBLONS.SEUIL_PHOTO_IDENTIQUE ? '📷 Photo déjà utilisée par « ' : '📷 Photo ressemblante à celle de « ') + sur[0].produit.name + ' »';
+        else for (let j = 0; j < i; j++) { if (hashes[i] && hashes[j] && window.CMKT_DOUBLONS.distanceEmpreintes(hashes[i], hashes[j]) <= window.CMKT_DOUBLONS.SEUIL_PHOTO_IDENTIQUE) { texte = `📷 Photo quasi identique à celle de la fiche n°${j + 1} de ce lot`; break; } }
+        let note = champ.parentElement.querySelector('.doublon-note-photo');
+        if (!note) { note = document.createElement('div'); note.className = 'doublon-note doublon-note-photo'; champ.parentElement.append(note); }
+        note.textContent = texte; note.style.display = texte ? 'block' : 'none';
+    }
+}
+
+// Scan de tout le catalogue : noms, photos (même fichier ou visuellement identiques), descriptions, prix.
+function ouvrirScanDoublons() {
+    if (document.getElementById('scan-doublons') || !window.CMKT_DOUBLONS) return;
+    const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+    const lireIgnores = () => { try { return new Set(JSON.parse(localStorage.getItem(CLE_IGNORES) || '[]')); } catch (e) { return new Set(); } };
+    const signature = ids => ids.map(String).sort().join('|');
+    const ancienScroll = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    const ov = el('div', 'photo-overlay'); ov.id = 'scan-doublons'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+    const feuille = el('div', 'photo-sheet doublon-large'), tete = el('div', 'photo-head');
+    const btnX = el('button', 'photo-x', '✕'); btnX.type = 'button'; btnX.setAttribute('aria-label', 'Fermer');
+    tete.append(el('h3', null, '🔎 Scan des doublons'), btnX);
+    const corps = el('div', 'photo-body'); feuille.append(tete, corps); ov.append(feuille); document.body.append(ov);
+    let ferme = false;
+    const fermer = () => { ferme = true; document.removeEventListener('keydown', surTouche); document.body.style.overflow = ancienScroll; ov.remove(); };
+    function surTouche(e) { if (e.key === 'Escape') fermer(); }
+    document.addEventListener('keydown', surTouche); btnX.onclick = fermer;
+
+    async function supprimer(p) {
+        if (!confirm(`Supprimer définitivement « ${p.name} » ?`)) return;
+        try { await adminAction('products', 'delete', { id: p.id }); window._prods = (window._prods || []).filter(x => x.id !== p.id); rendre(); if (typeof rafraichirProduits === 'function') rafraichirProduits(); }
+        catch (e) { alert('Suppression impossible : ' + e.message); }
+    }
+    function rendre() {
+        if (ferme) return;
+        const prods = window._prods || [];
+        const parId = new Map(prods.map(p => [p.id, p]));
+        const ignores = lireIgnores();
+        const groupes = window.CMKT_DOUBLONS.scannerCatalogue(prods, window._empreintes).filter(g => !ignores.has(signature(g.ids)));
+        const avecPhoto = prods.filter(p => p.image_url);
+        const lues = avecPhoto.filter(p => window._empreintes[String(p.image_url).trim()]).length;
+        corps.replaceChildren(el('p', 'photo-note', `${prods.length} produits analysés · ${lues} photos comparées${avecPhoto.length > lues ? ` · ${avecPhoto.length - lues} photo(s) illisible(s) (comparées par adresse seulement)` : ''}`));
+        if (!groupes.length) { corps.append(el('div', 'photo-ico', '✅'), el('p', 'photo-etat', 'Aucun doublon trouvé dans ton catalogue.')); }
+        groupes.forEach((g, n) => {
+            const carte = el('div', 'scan-carte');
+            carte.append(el('div', 'doublon-titre', `Groupe ${n + 1} · ${g.confiance} · ${g.raisons.join(' · ')}`));
+            g.ids.map(id => parId.get(id)).filter(Boolean).sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || ''))).forEach(p => {
+                const ligne = el('div', 'scan-ligne');
+                const vignette = p.image_url ? Object.assign(el('img', 'scan-vignette'), { src: p.image_url, alt: '', loading: 'lazy' }) : el('span', 'scan-vignette scan-vide', '📦');
+                const infos = el('div', 'scan-infos'); infos.append(el('b', null, p.name), el('span', null, `${p.category || '—'} · ${p.resale_price != null ? fmt(p.resale_price) + ' FCFA' : '—'} · ${p.quantity === 0 ? 'rupture' : 'stock ' + (p.quantity != null ? p.quantity : '—')}${p.created_at ? ' · ajouté le ' + String(p.created_at).slice(0, 10) : ''}`));
+                const ouvrir = el('button', 'doublon-btn', '✏️ Ouvrir'); ouvrir.type = 'button'; ouvrir.onclick = () => { fermer(); chargerEditProduit(p.id); };
+                const sup = el('button', 'doublon-btn scan-danger', '🗑️ Supprimer'); sup.type = 'button'; sup.onclick = () => supprimer(p);
+                ligne.append(vignette, infos, ouvrir, sup); carte.append(ligne);
+            });
+            const diff = el('button', 'doublon-btn', 'Ce sont des produits différents (ne plus signaler)'); diff.type = 'button';
+            diff.onclick = () => { const s = lireIgnores(); s.add(signature(g.ids)); try { localStorage.setItem(CLE_IGNORES, JSON.stringify([...s])); } catch (e) {} rendre(); };
+            carte.append(diff); corps.append(carte);
+        });
+        const relancer = el('button', 'photo-btn', '🔄 Relancer le scan'); relancer.type = 'button'; relancer.onclick = demarrer; corps.append(relancer);
+    }
+    async function demarrer() {
+        const barre = el('div', 'scan-barre'), rempli = el('div', 'scan-barre-rempli'); barre.append(rempli);
+        const texte = el('p', 'photo-etat', 'Comparaison des photos du catalogue…');
+        corps.replaceChildren(el('div', 'photo-spinner'), texte, barre);
+        window._empreintesEchecs.clear();
+        await empreintesCatalogue((fait, total) => { if (ferme) return; rempli.style.width = Math.round(100 * fait / Math.max(1, total)) + '%'; texte.textContent = `Comparaison des photos du catalogue… ${fait}/${total}`; });
+        rendre();
+    }
+    demarrer();
+}
+window.ouvrirScanDoublons = ouvrirScanDoublons;
 
 // Appelle l'analyse IA. Si l'IA est très sollicitée ou si la limite est atteinte, réessaie seule (3 fois, avec compte à rebours).
 async function appelAnalyseIA(images, modeLot, res) {
@@ -5631,7 +5806,7 @@ window.analyserProduitIA = async () => {
         }
         if (modeLot) {
             const liste = Array.isArray(data) ? data : (data.produits || []);
-            afficherResultatsLot(liste, fichiers); marquerDoublonsLot();
+            afficherResultatsLot(liste, fichiers); marquerDoublonsLot(); marquerDoublonsPhotosLot();
             res.style.color = '#3FA66B'; res.textContent = `✅ ${liste.length} produit(s) détecté(s) — complète le prix et la quantité de chacun ci-dessous.`;
         } else {
             if (data.name) { document.getElementById('p-name').value = data.name; majAlerteDoublon(); }
@@ -5694,7 +5869,11 @@ window.validerProduitLot = async (i) => {
     if (!vente || vente <= 0) { res.style.color = '#D9534F'; res.textContent = '❌ Prix de vente requis'; return; }
     if (!qte || qte < 0) { res.style.color = '#D9534F'; res.textContent = '❌ Quantité requise'; return; }
     let forcer = false;
-    const dejaLa = doublonsPour(name, null);
+    res.style.color = '#888'; res.textContent = '🔎 Vérification des doublons…';
+    const parNom = doublonsPour(name, null);
+    const parPhoto = (await doublonsPhoto((window._iaLotFichiers || [])[i], null)).filter(x => !parNom.some(y => y.produit.id === x.produit.id));
+    const dejaLa = [...parNom, ...parPhoto];
+    res.textContent = '';
     if (dejaLa.length) {
         if (!(await confirmerDoublon(name, null, dejaLa))) { res.style.color = '#c77c00'; res.textContent = 'Ajout annulé : cet article existe déjà.'; return; }
         forcer = true;
@@ -5737,7 +5916,11 @@ window.sauvegarderProduit = async () => {
     if(!name||!qty||!achat||!vente){msg.style.color='#D9534F';msg.textContent='❌ Remplissez les champs obligatoires';return;}
     // Anti-doublon : si un produit identique ou très ressemblant existe déjà, on demande confirmation avant d'ajouter.
     let forcer = false;
-    const dejaLa = doublonsPour(name, editingId);
+    msg.style.color = '#888'; msg.textContent = '🔎 Vérification des doublons…';
+    const parNom = doublonsPour(name, editingId);
+    const parPhoto = (await Promise.all(selectedFilesAll.map(f => doublonsPhoto(f, editingId)))).flat()
+        .filter((x, k, t) => t.findIndex(y => y.produit.id === x.produit.id) === k && !parNom.some(y => y.produit.id === x.produit.id));
+    const dejaLa = [...parNom, ...parPhoto];
     if (dejaLa.length) {
         if (!(await confirmerDoublon(name, editingId, dejaLa))) { msg.style.color = '#c77c00'; msg.textContent = editingId ? 'Modification annulée : ce nom existe déjà.' : 'Ajout annulé : cet article existe déjà.'; return; }
         forcer = true;
@@ -5783,7 +5966,7 @@ window.annulerEdit = () => {
     const w=document.getElementById('adm-img-preview');if(w)w.style.display='none';
     const ex=document.getElementById('adm-img-extra');if(ex)ex.innerHTML='';
     const ia=document.getElementById('ia-res');if(ia)ia.textContent='';
-    const t=document.getElementById('prod-form-title');if(t)t.textContent='➕ Ajouter un Produit'; majAlerteDoublon();
+    const t=document.getElementById('prod-form-title');if(t)t.textContent='➕ Ajouter un Produit'; majAlerteDoublon(); majAlertePhoto();
     const b=document.getElementById('btn-annuler-edit');if(b)b.style.display='none';
 };
 

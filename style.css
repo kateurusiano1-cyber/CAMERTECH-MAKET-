@@ -899,3 +899,15 @@ body.mode-recherche .section-hdr > div { flex-wrap: wrap; }
 .doublon-ligne { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 4px 0; font-size: 0.85rem; }
 .doublon-btn { border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 8px; padding: 3px 10px; font-weight: 700; cursor: pointer; font-family: inherit; }
 .doublon-note { font-size: 0.78rem; font-weight: 700; color: #b45309; }
+
+/* ===== SCAN DES DOUBLONS ===== */
+.doublon-large { width: min(760px, 100%); }
+.scan-carte { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.scan-ligne { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.scan-vignette { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: var(--bg); flex-shrink: 0; }
+.scan-vide { display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+.scan-infos { display: flex; flex-direction: column; flex: 1; min-width: 160px; font-size: 0.85rem; }
+.scan-infos span { color: var(--text3); font-size: 0.78rem; }
+.scan-danger { color: #b42318; }
+.scan-barre { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.scan-barre-rempli { height: 100%; width: 0; background: var(--green); transition: width 0.2s; }
