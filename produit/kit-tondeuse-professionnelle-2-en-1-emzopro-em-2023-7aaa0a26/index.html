@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        // Fix : certains navigateurs/WebView (ex. XOS sur Infinix/Tecno/itel) ignorent
+        // "width=device-width" et calculent un viewport erroné (souvent 980px) au lieu
+        // de la vraie largeur d'écran. On détecte l'écart et on force la vraie valeur
+        // AVANT le premier rendu, en remplaçant le mot-clé par un chiffre exact.
+        (function () {
+            try {
+                var vp = document.querySelector('meta[name="viewport"]');
+                var reel = window.screen && window.screen.width;
+                if (vp && reel && window.innerWidth > reel + 40) {
+                    vp.setAttribute('content', 'width=' + reel + ', initial-scale=1.0, maximum-scale=1.0');
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <title>Kit Tondeuse Professionnelle 2 en 1 EMZOPRO… — 7 499 FCFA | Kapmaket Douala</title>
+    <meta name="description" content="Tondeuse de cheveux sans fil rechargeable 2 en 1, idéale pour des coupes de précision à la maison ou en salon. Livraison à Douala, paiement Mobile Money…">
+    <meta name="keywords" content="kapmaket, achat tech Cameroun, boutique en ligne Douala, smartphone Douala, accessoires électroniques Cameroun, mobile money, livraison Douala">
+    <meta name="author" content="Kapmaket">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://www.kapmaket.shop/produit/kit-tondeuse-professionnelle-2-en-1-emzopro-em-2023-7aaa0a26">
+    <link rel="manifest" href="/manifest.json" id="pwa-manifest-link">
+    <meta name="theme-color" content="#0E7C4A" id="pwa-theme-color">
+    <!-- Icône du site : onglet du navigateur, barre d'adresse, favoris, barre latérale. Sans ces lignes
+         (et sans favicon.ico), le navigateur n'a pas d'icône à afficher et montre un globe gris. -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+    <link rel="apple-touch-icon" href="/icon-192.png" id="pwa-apple-icon">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Kapmaket" id="pwa-apple-title">
+    <script>
+        // PWA distincte pour l'espace admin (manifest, icône, couleur, nom
+        // propres) — doit s'exécuter tôt, avant que le navigateur évalue
+        // l'installabilité de la page.
+        if (window.location.pathname.replace(/\//g,'') === 'admin-cmr2025') {
+            document.getElementById('pwa-manifest-link').setAttribute('href', '/manifest-admin.json');
+            document.getElementById('pwa-theme-color').setAttribute('content', '#C62828');
+            document.getElementById('pwa-apple-icon').setAttribute('href', '/icon-admin-192.png');
+            document.getElementById('pwa-apple-title').setAttribute('content', 'KM Admin');
+        }
+    </script>
+
+    <!-- Open Graph / réseaux sociaux -->
+    <meta property="og:type" content="product">
+    <meta property="og:site_name" content="Kapmaket">
+    <meta property="og:title" content="Kit Tondeuse Professionnelle 2 en 1 EMZOPRO… — 7 499 FCFA | Kapmaket Douala">
+    <meta property="og:description" content="Tondeuse de cheveux sans fil rechargeable 2 en 1, idéale pour des coupes de précision à la maison ou en salon. Livraison à Douala, paiement Mobile Money, retrait en agence. Achetez sur Kapmaket.">
+    <meta property="og:image" content="https://czrxdtacgbaccdsctlxv.supabase.co/storage/v1/object/public/images/1792814091682-as4ucj7c67q.webp">
+    <meta property="og:url" content="https://www.kapmaket.shop/produit/kit-tondeuse-professionnelle-2-en-1-emzopro-em-2023-7aaa0a26">
+    <meta property="og:locale" content="fr_FR">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Kit Tondeuse Professionnelle 2 en 1 EMZOPRO… — 7 499 FCFA | Kapmaket Douala">
+    <meta name="twitter:description" content="Tondeuse de cheveux sans fil rechargeable 2 en 1, idéale pour des coupes de précision à la maison ou en salon. Livraison à Douala, paiement Mobile Money, retrait en agence. Achetez sur Kapmaket.">
+    <meta name="twitter:image" content="https://czrxdtacgbaccdsctlxv.supabase.co/storage/v1/object/public/images/1792814091682-as4ucj7c67q.webp">
+
+    <link rel="stylesheet" href="/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <!-- Version de la bibliothèque de connexion volontairement figée : les versions plus récentes ont un bug connu sur mobile. À ne changer qu'après test de la connexion sur téléphone. -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, confirmPasswordReset, verifyPasswordResetCode, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
+        const firebaseConfig = {
+            apiKey: "AIzaSyCTIOt_TEhQnfhIkLiDIu2HjjhSzAMH9iE",
+            authDomain: "camertech-maket.firebaseapp.com",
+            projectId: "camertech-maket",
+            storageBucket: "camertech-maket.firebasestorage.app",
+            messagingSenderId: "54602735777",
+            appId: "1:54602735777:web:21dd6c4b25133d325a50e0"
+        };
+        const firebaseApp = initializeApp(firebaseConfig);
+        window.firebaseAuth = getAuth(firebaseApp);
+        window.googleProvider = new GoogleAuthProvider();
+        window.fbSignInWithPopup = signInWithPopup;
+        window.fbSignInWithEmail = signInWithEmailAndPassword;
+        window.fbCreateUserWithEmail = createUserWithEmailAndPassword;
+        window.fbSendPasswordResetEmail = sendPasswordResetEmail;
+        window.fbConfirmPasswordReset = confirmPasswordReset;
+        window.fbVerifyPasswordResetCode = verifyPasswordResetCode;
+        window.fbSignOut = signOut;
+        window.fbOnAuthStateChanged = onAuthStateChanged;
+    </script>
+
+    <!-- Schema.org : identité de l'entreprise, lu par Google et les IA (AEO/GEO) -->
+    <script type="application/ld+json" id="schema-produit">{"@context":"https://schema.org","@type":"Product","name":"Kit Tondeuse Professionnelle 2 en 1 EMZOPRO EM-2023","description":"Tondeuse de cheveux sans fil rechargeable 2 en 1, idéale pour des coupes de précision à la maison ou en salon.","sku":"7a01b021-d224-4e9f-b44e-fe197aaa0a26","category":"Électronique","image":["https://czrxdtacgbaccdsctlxv.supabase.co/storage/v1/object/public/images/1792814091682-as4ucj7c67q.webp"],"itemCondition":"https://schema.org/NewCondition","offers":{"@type":"Offer","url":"https://www.kapmaket.shop/produit/kit-tondeuse-professionnelle-2-en-1-emzopro-em-2023-7aaa0a26","priceCurrency":"XAF","price":7499,"availability":"https://schema.org/InStock","seller":{"@type":"Organization","name":"Kapmaket","url":"https://www.kapmaket.shop/"}}}</script>
+    <script type="application/ld+json" id="schema-fil">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Accueil","item":"https://www.kapmaket.shop/"},{"@type":"ListItem","position":2,"name":"Kit Tondeuse Professionnelle 2 en 1 EMZOPRO EM-2023","item":"https://www.kapmaket.shop/produit/kit-tondeuse-professionnelle-2-en-1-emzopro-em-2023-7aaa0a26"}]}</script>
+</head>
+<body>
+<div id="seo-produit" class="sr-only">
+    <nav aria-label="Fil d'Ariane"><a href="/">Accueil</a> › Électronique › Kit Tondeuse Professionnelle 2 en 1 EMZOPRO EM-2023</nav>
+    <h1>Kit Tondeuse Professionnelle 2 en 1 EMZOPRO EM-2023</h1>
+    <img src="https://czrxdtacgbaccdsctlxv.supabase.co/storage/v1/object/public/images/1792814091682-as4ucj7c67q.webp" alt="Kit Tondeuse Professionnelle 2 en 1 EMZOPRO EM-2023" width="400" height="400">
+    <p>Tondeuse de cheveux sans fil rechargeable 2 en 1, idéale pour des coupes de précision à la maison ou en salon.</p>
+    <p>Prix : 7 499 FCFA — en stock</p>
+    <p>Livraison à Douala, paiement Mobile Money (MTN, Orange), retrait en agence.</p>
+    <p><a href="/">Voir tous les produits Kapmaket</a></p>
+</div>
+
+<!-- SIDEBAR OVERLAY -->
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+<!-- SIDEBAR -->
+<aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+        <div style="display:flex;align-items:center;gap:10px">
+            <img src="/logo-panier.png" alt="Logo" class="sidebar-logo">
+            <span style="color:white;font-weight:700;font-size:0.9rem">Kapmaket</span>
+        </div>
+        <button class="sidebar-close" id="sidebar-close">✕</button>
+    </div>
+    <nav class="sidebar-nav">
+        <a class="sidebar-link" id="sl-accueil" data-i18n="nav_accueil">🏠 Accueil</a>
+        <a class="sidebar-link" id="sl-flash" data-i18n="nav_flash">⚡ Ventes Flash</a>
+        <a class="sidebar-link" id="sl-combo" data-i18n="nav_combo" style="font-weight:700;color:var(--orange)">🎁 Flash Combo</a>
+        <a class="sidebar-link" id="sl-promo" data-i18n="nav_promo">🏷️ Promotions</a>
+        <a class="sidebar-link" id="sl-nouveautes" data-i18n="nav_nouveautes">🆕 Nouveautés</a>
+        <a class="sidebar-link" id="sl-meilleures" data-i18n="nav_meilleures">⭐ Meilleures ventes</a>
+        <div class="sidebar-sep" data-i18n="sep_categories">Catégories</div>
+        <a class="sidebar-link" id="sl-tel" data-i18n="cat_telephonie_ic">📱 Téléphonie</a>
+        <a class="sidebar-link" id="sl-acc" data-i18n="cat_accessoires_ic">🎧 Accessoires</a>
+        <a class="sidebar-link" id="sl-elec" data-i18n="cat_electronique_ic">💻 Électronique</a>
+        <a class="sidebar-link" id="sl-res" data-i18n="cat_reseau_ic">📡 Réseau</a>
+        <a class="sidebar-link" id="sl-gam" data-i18n="cat_gaming_ic">🎮 Gaming</a>
+        <div class="sidebar-sep" data-i18n="sep_services">Services</div>
+        <a class="sidebar-link" id="sl-suivi" data-i18n="nav_suivi">🚚 Suivi de commande</a>
+        <a class="sidebar-link" id="sl-loc" data-i18n="nav_loc">🏪 Localisation boutique</a>
+        <a class="sidebar-link" id="sl-retour" data-i18n="nav_retour">🔄 Politique de retour</a>
+        <a class="sidebar-link" id="sl-telecharger-app" style="font-weight:700;color:var(--green)">📲 Télécharger l'app</a>
+        <a class="sidebar-link" id="sl-politique" data-i18n="nav_politique">🔒 Politique de confidentialité</a>
+        <a class="sidebar-link" id="sl-cgu" data-i18n="nav_cgu">📜 Conditions d'utilisation</a>
+        <a class="sidebar-link" href="https://wa.me/237699781160" target="_blank" data-i18n="nav_contact">📞 Nous contacter</a>
+        <div class="sidebar-sep" data-i18n="sep_preferences">Préférences</div>
+        <div class="sidebar-pref">
+            <span data-i18n="pref_langue">🌍 Langue</span>
+            <div class="lang-switch">
+                <button class="lang-btn active" id="btn-fr">FR</button>
+                <button class="lang-btn" id="btn-en">EN</button>
+            </div>
+        </div>
+        <div class="sidebar-pref">
+            <span data-i18n="pref_sombre">🌙 Mode sombre</span>
+            <label class="toggle-switch">
+                <input type="checkbox" id="theme-toggle" aria-label="Activer le mode sombre">
+                <span class="toggle-thumb"></span>
+            </label>
+        </div>
+        <div class="sidebar-pref" style="flex-direction:column;align-items:flex-start;gap:6px">
+            <span data-i18n="pref_zone">📍 Ma zone</span>
+            <select id="sidebar-zone" class="small-select" aria-label="Choisir ma zone de livraison">
+                <option value="" data-i18n="choisir">Choisir...</option>
+                <optgroup label="Zones livrées">
+                    <option value="Akwa">Akwa</option>
+                    <option value="Bonamoussadi">Bonamoussadi</option>
+                    <option value="Ndokoti">Ndokoti</option>
+                    <option value="PK14">PK14</option>
+                    <option value="Makepe">Makepe</option>
+                    <option value="Bassa">Bassa</option>
+                    <option value="Logbaba">Logbaba</option>
+                    <option value="Deido">Deido</option>
+                    <option value="Bonaberi">Bonaberi</option>
+                    <option value="Bonanjo">Bonanjo</option>
+                    <option value="Bali">Bali</option>
+                    <option value="New-Bell">New-Bell</option>
+                    <option value="Bépanda">Bépanda</option>
+                    <option value="Ndogpassi">Ndogpassi</option>
+                    <option value="Ndogbong">Ndogbong</option>
+                    <option value="Cité SIC">Cité SIC</option>
+                    <option value="Kotto">Kotto</option>
+                    <option value="PK8">PK8</option>
+                    <option value="PK9">PK9</option>
+                    <option value="PK10">PK10</option>
+                    <option value="PK12">PK12</option>
+                    <option value="PK16">PK16</option>
+                    <option value="PK21">PK21</option>
+                    <option value="Logpom">Logpom</option>
+                    <option value="Yassa">Yassa</option>
+                    <option value="Village">Village</option>
+                    <option value="Bonapriso">Bonapriso</option>
+                    <option value="Japoma">Japoma</option>
+                    <option value="Nyalla">Nyalla</option>
+                    <option value="Zone Industrielle Bassa">Zone Industrielle Bassa</option>
+                    <option value="Cité des Palmiers">Cité des Palmiers</option>
+                </optgroup>
+                <optgroup label="Autres quartiers (retrait agence)">
+                    <option value="Grand Moulin">Grand Moulin</option>
+                    <option value="Youpwe">Youpwe</option>
+                    <option value="Bonendale">Bonendale</option>
+                    <option value="Bwana Kumbo">Bwana Kumbo</option>
+                    <option value="Denver">Denver</option>
+                    <option value="Congelcam">Congelcam</option>
+                    <option value="Ngodi Bakoko">Ngodi Bakoko</option>
+                    <option value="Bonaloka">Bonaloka</option>
+                    <option value="Madagascar">Madagascar</option>
+                    <option value="Bonamikengue">Bonamikengue</option>
+                    <option value="Soppo Priso">Soppo Priso</option>
+                    <option value="Makea">Makea</option>
+                </optgroup>
+                <option value="retrait" data-i18n="retrait_gratuit">🏪 Retrait gratuit</option>
+            </select>
+        </div>
+        <div class="sidebar-pref" style="flex-direction:column;align-items:flex-start;gap:6px">
+            <span data-i18n="pref_prixmax">💰 Prix max (FCFA)</span>
+            <input type="number" id="prix-max-filter" placeholder="ex: 50000" class="small-input">
+        </div>
+    </nav>
+</aside>
+
+<!-- BANNIÈRE DÉFILANTE -->
+<div id="banniere-top" class="banniere-top" style="display:none">
+    <div id="banniere-text" class="banniere-text"></div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+<div class="header-inner">
+    <div id="flash-combo-bar" style="display:none">
+        <span class="flash-combo-eclair">⚡</span>
+        <div id="flash-combo-mini-produits"></div>
+        <span id="flash-combo-texte"></span>
+        <span id="flash-combo-timer"></span>
+    </div>
+    <div class="header-main">
+        <div class="header-left">
+            <button class="hamburger" id="hamburger">☰</button>
+            <div class="logo-zone">
+                <img src="/logo-panier.png" alt="Logo" class="logo-img">
+                <div class="logo-text">
+                    <span class="logo-name"><span class="logo-t">Kapmaket</span></span>
+                    <span class="logo-sub">L'accès simple au télécom</span>
+                </div>
+            </div>
+        </div>
+        <div class="header-search">
+            <div style="position:relative" class="header-search-full">
+                <input type="text" id="search-bar" placeholder="🔎 Rechercher un produit..." class="search-input" data-i18n-ph="rechercher_ph" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+                <button id="btn-recherche-photo" title="Rechercher par photo" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.15rem;padding:4px">📷</button>
+                <input type="file" id="input-recherche-photo" accept="image/*" capture="environment" style="display:none">
+                <div id="search-suggest" class="search-suggest" role="listbox" hidden></div>
+            </div>
+            <p class="header-search-tip" style="font-size:0.68rem;color:var(--text3);margin:3px 2px 0">📷 Astuce : prends une photo d'un article, on te propose des produits similaires.</p>
+            <button id="search-compact-btn" class="search-compact-btn" title="Rechercher" aria-label="Rechercher">🔎</button>
+        </div>
+        <div class="header-right">
+            <div id="user-zone" style="display:none;align-items:center;gap:8px;position:relative">
+                <span id="user-nom" class="user-nom" style="cursor:pointer" title="Mon compte"></span>
+                <button class="btn-icon glass" id="btn-fidelite-favoris" title="Mes favoris & points fidélité">🤍</button>
+                <button class="btn-icon glass" id="btn-commandes" title="Mes commandes">📋</button>
+                <div id="user-menu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-hover);min-width:170px;z-index:50;overflow:hidden">
+                    <div id="user-menu-nom" style="padding:10px 14px;font-size:0.82rem;font-weight:700;color:var(--text);border-bottom:1px solid var(--border)"></div>
+                    <button id="btn-logout" style="width:100%;text-align:left;background:none;border:none;padding:11px 14px;font-size:0.85rem;color:var(--danger);cursor:pointer;font-family:var(--font-body);display:flex;align-items:center;gap:8px">⏻ Déconnexion</button>
+                </div>
+            </div>
+            <button id="btn-install-pwa" class="btn-icon-svg" title="Installer l'application" style="display:none">
+                <svg width="30" height="30" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <clipPath id="clipCercleInstall"><circle cx="50" cy="50" r="48"/></clipPath>
+                    </defs>
+                    <circle cx="50" cy="50" r="48" fill="var(--green-light)"/>
+                    <g clip-path="url(#clipCercleInstall)">
+                        <polygon points="55,15 100,60 100,100 40,100 15,75" fill="var(--green-dark)" opacity="0.55"/>
+                    </g>
+                    <path d="M35 42 L50 58 L65 42" stroke="white" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    <line x1="50" y1="20" x2="50" y2="55" stroke="white" stroke-width="9" stroke-linecap="round"/>
+                    <line x1="30" y1="72" x2="70" y2="72" stroke="white" stroke-width="9" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <button class="btn-connexion" id="btn-auth-show" data-i18n="btn_connexion">👤 Connexion</button>
+            <button class="btn-panier" id="panier-btn" style="display:none">
+                🛒 <span class="panier-badge" id="panier-count">0</span>
+            </button>
+        </div>
+    </div>
+    <div class="cat-bar">
+        <button class="cat-pill glass active" data-cat="tous" data-i18n="cat_tous">Tous</button>
+        <button class="cat-pill glass" data-cat="Téléphonie" data-i18n="cat_telephonie_ic">📱 Téléphonie</button>
+        <button class="cat-pill glass" data-cat="Accessoires" data-i18n="cat_accessoires_ic">🎧 Accessoires</button>
+        <button class="cat-pill glass" data-cat="Électronique" data-i18n="cat_electronique_ic">💻 Électronique</button>
+        <button class="cat-pill glass" data-cat="Réseau" data-i18n="cat_reseau_ic">📡 Réseau</button>
+        <button class="cat-pill glass" data-cat="Gaming" data-i18n="cat_gaming_ic">🎮 Gaming</button>
+        <button class="cat-pill glass" data-cat="Autre" data-i18n="cat_autre_ic">📦 Autre</button>
+    </div>
+</div>
+</header>
+
+<main>
+    <!-- SLIDER -->
+    <div class="slider-wrap" id="slider-wrap">
+        <div class="slider-track" id="slider-track">
+            <div class="slide slide-default">
+                <div class="slide-inner">
+                    <div class="slide-tag">🔥 BIENVENUE</div>
+                    <h2>Les meilleurs produits<br><span>Tech au Cameroun</span></h2>
+                    <p>Livraison rapide à Douala • Qualité garantie</p>
+                    <button class="slide-btn" id="slide-btn-decouvrir">Découvrir →</button>
+                </div>
+            </div>
+        </div>
+        <button class="slider-arrow slider-prev" id="slider-prev">‹</button>
+        <button class="slider-arrow slider-next" id="slider-next">›</button>
+        <div class="slider-dots" id="slider-dots"></div>
+    </div>
+
+    <!-- TUILES -->
+    <div class="tuiles-grid" id="tuiles-grid">
+        <div class="tuile t1" data-cat="Téléphonie"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Téléphonie" alt="Téléphonie"></div><span data-i18n="cat_telephonie">Téléphonie</span></div>
+        <div class="tuile t2" data-cat="Accessoires"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Accessoires" alt="Accessoires"></div><span data-i18n="cat_accessoires">Accessoires</span></div>
+        <div class="tuile t3" data-cat="Électronique"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Électronique" alt="Électronique"></div><span data-i18n="cat_electronique">Électronique</span></div>
+        <div class="tuile t4" data-cat="Gaming"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Gaming" alt="Gaming"></div><span data-i18n="cat_gaming">Gaming</span></div>
+        <div class="tuile t5" data-cat="Réseau"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Réseau" alt="Réseau"></div><span data-i18n="cat_reseau">Réseau</span></div>
+        <div class="tuile t-flash" data-action="flash"><div class="tuile-photo-wrap"><img class="tuile-photo" data-cat-img="Flash" alt="Flash"></div><span data-i18n="cat_flash">Flash</span></div>
+    </div>
+
+    <!-- FLASH -->
+    <section id="flash-section" style="display:none" class="section">
+        <div class="section-hdr">
+            <h2 data-i18n="titre_flash">⚡ Ventes Flash</h2>
+            <span id="flash-timer" class="flash-badge"></span>
+        </div>
+        <div id="flash-grid" class="grid"></div>
+    </section>
+
+    <!-- PRODUITS -->
+    <section class="section" id="produits">
+        <div class="section-hdr">
+            <h2 data-i18n="titre_produits">🛒 Nos Produits</h2>
+            <div style="display:flex;align-items:center;gap:10px">
+                <button type="button" id="btn-fin-recherche" class="btn-fin-recherche" data-i18n="effacer_recherche">✕ Effacer la recherche</button>
+                <span id="prod-count" class="count-tag"></span>
+                <div id="vue-toggle" role="group" aria-label="Mode d'affichage">
+                    <button id="btn-vue-grille" type="button" class="vue-btn active" onclick="changerVueProduits('grille')" title="Affichage en grille" aria-label="Affichage en grille">▦</button>
+                    <button id="btn-vue-liste" type="button" class="vue-btn" onclick="changerVueProduits('liste')" title="Affichage en liste" aria-label="Affichage en liste">☰</button>
+                </div>
+            </div>
+        </div>
+        <div id="loader" class="loader" data-i18n="chargement">Chargement...</div>
+        <div id="product-grid" class="grid"></div>
+    </section>
+</main>
+
+<footer class="footer">
+    <div class="footer-inner">
+        <div style="display:flex;align-items:center;gap:12px">
+            <img src="/logo-panier.png" alt="Logo Kapmaket" style="height:44px;width:44px;border-radius:50%">
+            <div><div style="font-weight:700">Kapmaket</div><div style="font-size:0.8rem" data-i18n="footer_sub">Votre boutique tech à Douala</div></div>
+        </div>
+        <div class="footer-links">
+            <a href="https://wa.me/237699781160" target="_blank">📱 699 781 160</a>
+            <a href="https://wa.me/237653756167" target="_blank">📱 653 756 167</a>
+            <a href="#" onclick="event.preventDefault(); openOverlay('politique-overlay')" style="text-decoration:underline">Politique de confidentialité</a> · <a href="#" onclick="event.preventDefault(); openOverlay('cgu-overlay')" style="text-decoration:underline">Conditions d'utilisation</a>
+        </div>
+    </div>
+    <div class="footer-copy" data-i18n="footer_copy">© 2026 Kapmaket — Douala, Cameroun</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px">
+        <img src="/logo-kertech.png" alt="Logo K.E.R TECH" style="height:32px;width:32px;object-fit:contain;border-radius:6px">
+        <span style="font-size:1.15rem;color:#fff">Développé par <strong style="color:#FF6B1A">K.E.R TECH</strong></span>
+    </div>
+</footer>
+
+<!-- WIDGET D'AIDE (FAQ automatique) -->
+<button id="chat-widget-btn" title="Besoin d'aide ?">💬</button>
+<div id="chat-widget-panel" style="display:none">
+    <div id="chat-widget-header">
+        <div>
+            <div style="font-weight:700">💬 Assistant Kapmaket</div>
+            <div style="font-size:0.72rem;opacity:0.9">Réponses instantanées</div>
+        </div>
+        <button id="chat-widget-close" aria-label="Fermer">✕</button>
+    </div>
+    <div id="chat-widget-messages"></div>
+    <div id="chat-widget-input-row">
+        <input type="text" id="chat-widget-input" placeholder="Pose ta question...">
+        <button id="chat-widget-send" aria-label="Envoyer">➤</button>
+    </div>
+</div>
+
+<!-- MODAL AUTH -->
+<div class="modal-overlay" id="auth-overlay" style="display:none">
+    <div class="modal modal-auth">
+        <button class="modal-x" id="auth-close">✕</button>
+        <div class="auth-tabs">
+            <button class="atab active" id="atab-login" data-i18n="tab_connexion">Connexion</button>
+            <button class="atab" id="atab-reg" data-i18n="tab_inscription">Inscription</button>
+        </div>
+        <div id="form-login">
+            <h3 data-i18n="titre_connexion">👤 Connexion</h3>
+            <input type="email" id="login-email" placeholder="Adresse email" data-i18n-ph="ph_email">
+            <div class="pwd-wrap"><input type="password" id="login-mdp" placeholder="Mot de passe" data-i18n-ph="ph_mdp"><button type="button" class="pwd-toggle" data-target="login-mdp">👁</button></div>
+            <button class="btn-green" id="btn-login" data-i18n="btn_se_connecter">Se connecter</button>
+            <p class="form-err" id="login-err"></p>
+            <button type="button" id="btn-mdp-oublie" data-i18n="btn_mdp_oublie" style="background:none;border:none;color:var(--green);font-size:0.85rem;margin-top:8px;cursor:pointer;text-decoration:underline">Mot de passe oublié ?</button>
+            <div style="display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--text3);font-size:0.8rem">
+                <div style="flex:1;height:1px;background:var(--border)"></div><span data-i18n="ou">ou</span><div style="flex:1;height:1px;background:var(--border)"></div>
+            </div>
+            <div style="display:flex;justify-content:center;margin-top:2px">
+                <button type="button" id="btn-google-login" aria-label="Continuer avec Google" title="Continuer avec Google" style="width:52px;height:52px;background:white;border:1.5px solid var(--border);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .2s,transform .15s,box-shadow .2s" onmouseover="this.style.borderColor='var(--green)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+                    <svg width="22" height="22" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.71A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.71V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.04l2.99-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l2.99 2.33C4.66 5.16 6.65 3.58 9 3.58z"/></svg>
+                </button>
+            </div>
+        </div>
+        <div id="form-reg" style="display:none">
+            <h3 data-i18n="titre_creer_compte">📝 Créer un compte</h3>
+            <input type="text" id="reg-nom" placeholder="Nom complet *" data-i18n-ph="ph_nom">
+            <input type="email" id="reg-email" placeholder="Email *" data-i18n-ph="ph_email_req">
+            <input type="tel" id="reg-tel" placeholder="Téléphone (9 chiffres) — pour la livraison *" maxlength="9" data-i18n-ph="ph_tel_livraison">
+            <div class="pwd-wrap"><input type="password" id="reg-mdp" placeholder="Mot de passe *" data-i18n-ph="ph_mdp_req"><button type="button" class="pwd-toggle" data-target="reg-mdp">👁</button></div>
+            <div class="pwd-wrap"><input type="password" id="reg-mdp2" placeholder="Confirmer mot de passe *" data-i18n-ph="ph_confirmer_mdp"><button type="button" class="pwd-toggle" data-target="reg-mdp2">👁</button></div>
+            <label style="display:flex;align-items:flex-start;gap:8px;font-size:0.8rem;color:var(--text2);margin:10px 0;cursor:pointer;width:100%;box-sizing:border-box;text-align:left">
+                <input type="checkbox" id="reg-politique" style="width:16px;height:16px;margin-top:2px;flex-shrink:0">
+                <span style="flex:1"><span data-i18n="txt_accepte_politique">J'ai lu et j'accepte la</span> <a href="#" id="lien-politique-reg" data-i18n="lien_politique" style="color:var(--green);text-decoration:underline">politique de confidentialité</a> <span data-i18n="txt_et_les">et les</span> <a href="#" id="lien-cgu-reg" data-i18n="lien_cgu" style="color:var(--green);text-decoration:underline">conditions d'utilisation</a> *</span>
+            </label>
+            <button class="btn-green" id="btn-register" data-i18n="btn_creer_compte">Créer mon compte</button>
+            <p class="form-err" id="reg-err"></p>
+            <div style="display:flex;align-items:center;gap:10px;margin:16px 0 10px;color:var(--text3);font-size:0.8rem">
+                <div style="flex:1;height:1px;background:var(--border)"></div><span data-i18n="ou">ou</span><div style="flex:1;height:1px;background:var(--border)"></div>
+            </div>
+            <div style="display:flex;justify-content:center">
+                <button type="button" id="btn-google-login-reg" aria-label="S'inscrire avec Google" title="S'inscrire avec Google" style="width:52px;height:52px;background:white;border:1.5px solid var(--border);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .2s,box-shadow .2s" onmouseover="this.style.borderColor='var(--green)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+                    <svg width="22" height="22" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.71A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.71V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.04l2.99-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l2.99 2.33C4.66 5.16 6.65 3.58 9 3.58z"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL TELEPHONE MANQUANT (première connexion Google) -->
+<div class="modal-overlay" id="tel-manquant-overlay" style="display:none">
+    <div class="modal modal-auth">
+        <h3 data-i18n="titre_tel_manquant">📞 Un dernier détail</h3>
+        <p style="color:var(--text3);font-size:0.88rem;margin-bottom:12px" data-i18n="txt_tel_manquant">Ton numéro de téléphone nous sert uniquement pour organiser la livraison de tes commandes.</p>
+        <input type="tel" id="tel-manquant-input" placeholder="Téléphone (9 chiffres)" maxlength="9" data-i18n-ph="ph_tel">
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:0.8rem;color:var(--text2);margin:10px 0;cursor:pointer;width:100%;box-sizing:border-box;text-align:left">
+            <input type="checkbox" id="tel-manquant-politique" style="width:16px;height:16px;margin-top:2px;flex-shrink:0">
+            <span style="flex:1"><span data-i18n="txt_accepte_politique">J'ai lu et j'accepte la</span> <a href="#" id="lien-politique-tel" data-i18n="lien_politique" style="color:var(--green);text-decoration:underline">politique de confidentialité</a> <span data-i18n="txt_et_les">et les</span> <a href="#" id="lien-cgu-tel" data-i18n="lien_cgu" style="color:var(--green);text-decoration:underline">conditions d'utilisation</a> *</span>
+        </label>
+        <button class="btn-green" id="btn-tel-manquant-confirmer" data-i18n="btn_continuer">Continuer</button>
+        <p class="form-err" id="tel-manquant-err"></p>
+    </div>
+</div>
+
+<!-- MODAL POLITIQUE DE CONFIDENTIALITE -->
+<div class="modal-overlay" id="politique-overlay" style="display:none">
+    <div class="modal modal-auth" style="max-width:560px">
+        <button class="modal-x" onclick="closeOverlay('politique-overlay')">✕</button>
+        <h3>🔒 Politique de confidentialité</h3>
+        <p class="legal-maj">Dernière mise à jour : 15 octobre 2026 · Version 2 (remplace les versions précédentes)</p>
+        <div class="legal-corps">
+            <div class="legal-resume">
+                <strong>En résumé</strong>
+                <ul>
+                    <li>Nous collectons ce qu'il faut pour traiter tes commandes, te livrer et faire fonctionner le site.</li>
+                    <li>Nous ne vendons jamais tes données et nous ne faisons pas de publicité ciblée.</li>
+                    <li>Si tu parles à notre <strong>assistant virtuel</strong>, tes messages sont envoyés à <strong>un service d'intelligence artificielle tiers</strong> pour fabriquer la réponse. Ne lui donne jamais de mot de passe, de code reçu par SMS ni de numéro de carte.</li>
+                    <li>Pour livrer ta commande, ton <strong>nom, ton téléphone et le contenu de ta commande</strong> sont partagés avec notre équipe et nos livreurs dans une messagerie privée.</li>
+                    <li>Tu peux demander à voir, corriger ou supprimer tes données à tout moment, sur WhatsApp.</li>
+                </ul>
+            </div>
+
+            <div class="legal-nouveau">
+                <strong>🆕 Ce qui change avec la mise à jour du 15 octobre 2026</strong>
+                <ul>
+                    <li><strong>Assistant virtuel (IA).</strong> Il répond à tes questions sur les produits, la livraison, le paiement et ta commande. Ce que tu lui écris est envoyé à notre service d'intelligence artificielle tiers avec notre catalogue et nos règles. Il peut se tromper : le prix et la disponibilité définitifs sont ceux du panier.</li>
+                    <li><strong>Statistiques de la demande.</strong> Pour savoir ce que les clients cherchent, nous enregistrons <strong>de façon anonyme</strong> les questions posées à l'assistant (voir le détail plus bas). Aucun nom, aucun numéro.</li>
+                    <li><strong>Livraison suivie par l'équipe.</strong> Quand une commande est payée, un message est envoyé dans un <strong>groupe de messagerie privé</strong> réunissant l'équipe Kapmaket et les livreurs. Le livreur qui la prend est enregistré avec la commande, et tu peux recevoir une notification « en route » puis « livrée ».</li>
+                    <li><strong>Mémoire de la discussion.</strong> Ta conversation avec l'assistant est gardée dans ton navigateur (jusqu'à ta déconnexion si tu as un compte, 24 h sinon). Le bouton ↺ l'efface.</li>
+                    <li><strong>Messages d'accueil.</strong> Le site peut afficher un message de bienvenue écrit par l'équipe et t'inviter à essayer l'assistant. Pour ne pas te les répéter sans arrêt, ton navigateur garde de petits repères (dates d'affichage, refus).</li>
+                    <li><strong>Précision importante :</strong> lorsque tu es connecté(e), ton identifiant de visite est <strong>relié à ton compte</strong>. Ton activité sur le site (pages vues, produits consultés, recherches) peut donc être rattachée à toi.</li>
+                </ul>
+            </div>
+
+            <h4>1. Qui est responsable de tes données ?</h4>
+            <p><strong>K.E.R TECH</strong>, qui exploite la boutique en ligne <strong>Kapmaket</strong> (Douala, PK14, Cameroun). Pour toute question ou demande : WhatsApp au <strong>699 781 160</strong> ou <strong>653 756 167</strong>.</p>
+
+            <h4>2. Quelles données, et pourquoi ?</h4>
+            <p><strong>👤 Ton compte.</strong> Nom, e-mail, téléphone, points de fidélité, date à laquelle tu as accepté nos règles. Si tu te connectes avec Google, Google nous transmet ton nom et ton e-mail. Ton mot de passe est géré par notre service d'authentification sécurisé : nous ne le voyons jamais. <em>Pourquoi :</em> créer et sécuriser ton compte, te contacter au sujet de tes commandes, gérer la fidélité (1 point par 1 000 FCFA dépensés).</p>
+            <p><strong>📦 Tes commandes.</strong> Code de commande, articles, montant, zone de livraison ou retrait, endroit précis de dépôt, numéro WhatsApp de livraison et tes choix (numéro sur WhatsApp, appels acceptés à tout moment), date d'acceptation de la règle de livraison, note éventuelle, statut, dates, référence de paiement, nom du livreur, facture, demandes de retour (avec ton motif). <em>Pourquoi :</em> traiter et livrer ta commande, facturer, gérer les retours et réclamations, respecter nos obligations comptables.</p>
+            <p><strong>💳 Paiement.</strong> Il est traité par <strong>notre prestataire de paiement sécurisé</strong> (Mobile Money, carte, virement, USDT). Tu saisis tes informations de paiement chez ce prestataire, pas chez nous. Nous recevons seulement la confirmation (statut, montant, référence) : <strong>nous ne stockons aucun numéro de carte ni code secret</strong>.</p>
+            <p><strong>⭐ Tes avis.</strong> Ton nom (celui de ton compte), ta note, ton commentaire et ta photo éventuelle peuvent être <strong>affichés publiquement</strong> sous le produit, après validation par l'équipe.</p>
+            <p><strong>🔔 Notifications.</strong> Si tu les actives, nous enregistrons l'identifiant technique de ton appareil, relié à ton compte, pour t'informer du statut de tes commandes. Tu peux les désactiver à tout moment dans ton navigateur.</p>
+            <p><strong>👀 Ta visite.</strong> Même sans compte : un identifiant aléatoire gardé dans ton navigateur, le type de navigateur et d'appareil, le site d'où tu viens, d'éventuels paramètres de campagne, les pages vues et leur durée, les produits consultés, les ajouts au panier, les mots que tu tapes dans la barre de recherche et les catégories que tu ouvres. <em>Pourquoi :</em> retenir ton panier, comprendre comment le site est utilisé, améliorer notre offre. Ces données ne servent jamais à de la publicité et ne sont pas revendues.</p>
+            <p><strong>🤖 Assistant virtuel.</strong> Ce que tu écris (400 caractères maximum par message) et les derniers échanges de la conversation sont envoyés à notre service d'intelligence artificielle tiers pour générer la réponse. De notre côté, un <strong>journal anonyme</strong> garde : la date, ta question « nettoyée » (<strong>numéros de téléphone, e-mails et codes de commande masqués</strong>, 200 caractères maximum), le sujet, le produit cherché, le budget cité s'il y en a un, les produits proposés, le fait d'avoir été orienté vers WhatsApp, et l'identifiant aléatoire de visite. <strong>Pas de nom, pas de numéro de téléphone.</strong> <em>Pourquoi :</em> savoir ce que les clients recherchent et quels produits manquent.</p>
+            <p><strong>📷 Recherche par photo.</strong> L'image que tu envoies est transmise à notre service d'intelligence artificielle tiers pour reconnaître l'article. Nous ne la conservons pas.</p>
+            <p><strong>💬 WhatsApp.</strong> Si tu nous écris, tes messages sont aussi traités par WhatsApp (Meta), selon ses propres règles.</p>
+
+            <h4>3. Ce qui est gardé dans ton navigateur</h4>
+            <p>Ta langue, ton thème, ton panier, les produits vus récemment, tes préférences d'affichage (catégories), l'identifiant de visite, ton profil connecté (pour te garder connecté(e)), ta conversation avec l'assistant et les repères d'invitation et de message de bienvenue. <strong>Ce ne sont pas des cookies publicitaires et nous n'utilisons aucun traceur publicitaire.</strong> Tu peux tout effacer en vidant les données du site dans ton navigateur (ton panier repartira alors de zéro).</p>
+            <p>Pour s'afficher, le site charge aussi des éléments externes : polices de caractères, bibliothèques de code et service de connexion, fournis par des services externes. Ces services reçoivent ton adresse IP, comme pour n'importe quel site web.</p>
+
+            <h4>4. Qui peut voir tes données ?</h4>
+            <ul>
+                <li><strong>L'équipe Kapmaket</strong> (administrateurs).</li>
+                <li><strong>Les livreurs</strong>, via le groupe de messagerie privé : code de commande, nom, téléphone, articles, montant payé, zone de livraison ou retrait, endroit précis de dépôt, numéro WhatsApp de contact, note éventuelle. Tous les membres du groupe voient ces messages ; le service de messagerie traite aussi ces messages selon ses propres règles.</li>
+                <li><strong>Nos prestataires techniques</strong>, pour faire fonctionner le service : connexion et authentification, intelligence artificielle, paiement, base de données, hébergement, messagerie de l'équipe, polices et bibliothèques. Chacun applique ses propres règles de confidentialité.</li>
+                <li><strong>Les autorités</strong>, uniquement si la loi l'exige.</li>
+            </ul>
+            <p>Certains de ces prestataires ont leurs serveurs <strong>en dehors du Cameroun</strong> : tes données peuvent donc être traitées à l'étranger. <strong>Nous ne vendons pas tes données.</strong></p>
+
+            <h4>5. Combien de temps les gardons-nous ?</h4>
+            <ul>
+                <li><strong>Compte et commandes :</strong> tant que ton compte existe, puis le temps nécessaire à nos obligations légales et comptables (factures).</li>
+                <li><strong>Journal anonyme de l'assistant :</strong> 12 mois maximum, puis effacé automatiquement.</li>
+                <li><strong>Statistiques de visite :</strong> pas d'effacement automatique pour le moment ; elles sont gardées tant qu'elles servent à comprendre l'usage du site. Celles qui sont rattachées à ton compte sont effacées sur demande.</li>
+                <li><strong>Messages du groupe de messagerie :</strong> ils restent dans ce groupe privé tant qu'il existe.</li>
+                <li><strong>Dans ton navigateur :</strong> jusqu'à ce que tu les effaces (la conversation avec l'assistant : jusqu'à ta déconnexion, ou 24 h sans compte).</li>
+            </ul>
+
+            <h4>6. Tes droits</h4>
+            <p>Tu peux demander à <strong>accéder</strong> à tes données, les <strong>corriger</strong>, les <strong>supprimer</strong>, t'<strong>opposer</strong> à un usage, ou retirer ton accord (par exemple pour les notifications). Écris-nous sur WhatsApp (699 781 160 ou 653 756 167) : nous répondons dans les meilleurs délais. La suppression de ton compte efface ton profil ; certaines informations de commande peuvent être gardées lorsque la loi nous y oblige (comptabilité). Les données <strong>anonymes</strong> (journal de l'assistant, statistiques) ne peuvent pas être reliées à toi : nous ne pouvons donc pas les retrouver individuellement.</p>
+            <p>Tu peux aussi saisir l'autorité camerounaise chargée de la protection des données personnelles. Cette politique s'inscrit dans le cadre de la loi n° 2024/017 du 23 décembre 2024 relative à la protection des données à caractère personnel.</p>
+
+            <h4>7. Sécurité</h4>
+            <p>Les échanges avec le site sont chiffrés (HTTPS) et l'accès à tes données est réservé à l'équipe, protégé par des mots de passe et des règles d'accès. Aucun système n'est infaillible : si un incident grave touchait tes données, nous t'en informerions.</p>
+
+            <h4>8. Mineurs</h4>
+            <p>Le site s'adresse aux personnes majeures, ou à celles qui commandent avec l'accord d'un parent ou tuteur.</p>
+
+            <h4>9. Changements</h4>
+            <p>Nous mettons cette politique à jour quand nos pratiques changent (nouvelle fonction, nouveau prestataire). La date en haut indique la dernière mise à jour, et les changements importants sont annoncés sur le site.</p>
+
+            <p style="margin-top:16px">En créant un compte, tu confirmes avoir lu cette politique et nos <a href="#" onclick="event.preventDefault(); closeOverlay('politique-overlay'); openOverlay('cgu-overlay')" style="color:var(--green);text-decoration:underline">conditions d'utilisation</a>.</p>
+        </div>
+        <button class="btn-green" onclick="closeOverlay('politique-overlay')">J'ai compris</button>
+    </div>
+</div>
+
+<!-- MODAL CONDITIONS D'UTILISATION ET DE VENTE -->
+<div class="modal-overlay" id="cgu-overlay" style="display:none">
+    <div class="modal modal-auth" style="max-width:560px">
+        <button class="modal-x" onclick="closeOverlay('cgu-overlay')">✕</button>
+        <h3>📜 Conditions d'utilisation et de vente</h3>
+        <p class="legal-maj">Dernière mise à jour : 15 octobre 2026 · Version 2 (remplace les versions précédentes)</p>
+        <div class="legal-corps">
+            <div class="legal-resume">
+                <strong>En résumé</strong>
+                <ul>
+                    <li>Le <strong>montant exact à payer</strong> est toujours affiché dans ton panier avant de payer. Il peut différer de 1 FCFA du prix affiché sur la fiche du produit (arrondi).</li>
+                    <li>Une commande n'est <strong>validée qu'après confirmation du paiement</strong>.</li>
+                    <li>Certains produits sont des <strong>copies</strong> ou des <strong>copies certifiées</strong> : c'est indiqué sur chaque fiche, et le prix en tient compte.</li>
+                    <li>Notre <strong>assistant virtuel</strong> est une IA : elle peut se tromper et ses conseils ne t'engagent pas à acheter.</li>
+                </ul>
+            </div>
+
+            <h4>1. Qui sommes-nous ?</h4>
+            <p>Le site Kapmaket est exploité par <strong>K.E.R TECH</strong> (Douala, PK14, Cameroun). Contact : WhatsApp 699 781 160 ou 653 756 167. En utilisant le site ou en passant commande, tu acceptes ces conditions ainsi que notre <a href="#" onclick="event.preventDefault(); closeOverlay('cgu-overlay'); openOverlay('politique-overlay')" style="color:var(--green);text-decoration:underline">politique de confidentialité</a>.</p>
+
+            <h4>2. Ton compte</h4>
+            <p>Tu peux parcourir le site sans compte, et réserver ou commander avec ton nom et ton téléphone. Un compte donne accès à l'historique, aux factures, aux retours, aux avis et aux points de fidélité. Les informations que tu donnes doivent être exactes. Garde ton mot de passe pour toi : tu es responsable de l'usage de ton compte. Le site s'adresse aux personnes majeures ou à celles qui commandent avec l'accord d'un parent ou tuteur.</p>
+
+            <h4>3. Les produits</h4>
+            <p>Certains produits sont des <strong>originaux</strong>, d'autres des <strong>copies certifiées</strong> ou des <strong>copies</strong>. La différence se traduit par le <strong>prix</strong>, qui varie selon la qualité ; elle est indiquée sur la fiche du produit. Les articles vendus <strong>sans nom de marque</strong> ne sont pas forcément des copies, mais leurs possibilités de remboursement sont plus limitées en cas de réclamation. Les photos et descriptions sont données à titre indicatif : en cas de doute, écris-nous avant d'acheter.</p>
+
+            <h4>4. Prix et paiement</h4>
+            <p>Les prix sont en <strong>FCFA</strong>. Pour des raisons d'affichage, un prix peut apparaître <strong>1 FCFA en dessous</strong> du montant réellement payé (par exemple 14 999 sur la fiche et 15 000 au paiement). Cette différence apparaît dans ton panier sur la ligne <strong>« Ajustement d'arrondi »</strong> : le montant exact à payer est celui du <strong>« Total à payer »</strong>, affiché avant que tu paies.</p>
+            <p>Le paiement se fait via <strong>notre prestataire de paiement sécurisé</strong> (Mobile Money, carte, virement, USDT). La commande est <strong>validée uniquement après confirmation du paiement</strong> par ce prestataire. Si le montant reçu ne correspond pas à celui de ta commande, elle <strong>n'est pas validée automatiquement</strong> : l'équipe vérifie le paiement et te contacte. Dans ce cas, <strong>ne paie pas une deuxième fois</strong> avant de nous avoir écrit sur WhatsApp.</p>
+            <p>Tu peux aussi <strong>réserver sans payer</strong> : les articles sont mis de côté par l'équipe, mais la commande n'est confirmée qu'après paiement.</p>
+
+            <h4>5. Livraison et retrait</h4>
+            <p>La livraison à domicile coûte <strong>1 000 FCFA</strong> dans les quartiers de Douala proposés dans le panier au moment où tu choisis ta zone. Pour les autres zones, le <strong>retrait en agence est gratuit</strong> ; une commande à retirer doit l'être dans les <strong>7 jours</strong> suivant sa validation. <strong>Aucun délai de livraison précis n'est garanti.</strong> Tu peux suivre ta commande avec son code (menu « Suivi de commande ») : validée, en préparation, en route, livrée. Vérifie ton colis à la réception.</p>
+            <p><strong>Livraison à domicile : informations à donner et absence du client.</strong> Après ton paiement, tu indiques l'endroit précis où déposer ta commande (un lieu connu, par exemple « Bonamoussadi, Glacier Moderne ») et un numéro WhatsApp pour te joindre. Si tu n'es pas présent <strong>5 minutes après l'heure du rendez-vous</strong> fixé avec le livreur, la commande retourne à l'agence : tu dois venir la récupérer sur place dans les <strong>7 jours</strong>. Elle n'est alors <strong>plus remboursable</strong> et la politique de retour ne s'applique plus, sauf faute de Kapmaket. En validant le formulaire de livraison, tu acceptes cette règle.</p>
+
+            <h4>6. Retours</h4>
+            <p>Tu as <strong>7 jours</strong> après réception pour demander un retour, selon les conditions de notre <a href="#" onclick="event.preventDefault(); closeOverlay('cgu-overlay'); openOverlay('retour-overlay')" style="color:var(--green);text-decoration:underline">politique de retour</a>.</p>
+
+            <h4>7. Promotions, Flash Combo et fidélité</h4>
+            <p>Un <strong>Flash Combo</strong> doit être acheté <strong>en entier</strong> (produit principal + accessoires choisis) pour bénéficier du prix réduit : retirer un article du kit annule la réduction. Ces offres dépendent du <strong>stock disponible</strong> et de la <strong>durée affichée</strong>. Les <strong>codes promo</strong> et les offres Flash Combo <strong>ne sont pas cumulables</strong>. Tu gagnes <strong>1 point de fidélité tous les 1 000 FCFA dépensés</strong>, dès qu'une commande est validée.</p>
+
+            <h4>8. Assistant virtuel (IA)</h4>
+            <ul>
+                <li>C'est un programme informatique, pas une personne. Il s'appuie sur notre catalogue et nos règles, mais <strong>il peut se tromper</strong>.</li>
+                <li>Le <strong>prix et la disponibilité qui comptent sont ceux affichés dans le panier</strong>, pas ceux cités dans la conversation.</li>
+                <li>Ses conseils ne sont pas une promesse ni une garantie, et ne t'obligent pas à acheter.</li>
+                <li>Ne lui donne <strong>jamais</strong> de mot de passe, de code reçu par SMS, de numéro de carte ou d'autres informations sensibles.</li>
+                <li>Pour une réclamation, un problème de paiement ou une demande précise, contacte l'équipe sur WhatsApp : l'assistant peut te donner le lien avec un résumé de votre échange.</li>
+                <li>Le traitement de tes messages est expliqué dans la politique de confidentialité.</li>
+            </ul>
+
+            <h4>9. Avis et contenus que tu publies</h4>
+            <p>Ton avis doit être honnête et respectueux (pas d'insultes, pas de publicité, pas d'informations personnelles sur d'autres personnes). Il est vérifié par l'équipe avant d'être affiché sous le produit, avec ton nom, et nous pouvons le refuser ou le retirer s'il ne respecte pas ces règles.</p>
+
+            <h4>10. Ce qui est interdit</h4>
+            <p>Fournir de fausses informations, usurper l'identité de quelqu'un, tenter d'accéder à des données ou à des espaces qui ne sont pas les tiens, perturber le site (par exemple par des envois automatiques massifs), détourner l'assistant, ou utiliser le site pour de la fraude. Nous pouvons suspendre ou supprimer un compte en cas d'abus.</p>
+
+            <h4>11. Propriété intellectuelle</h4>
+            <p>Le nom Kapmaket, le logo, les textes, les images et le design du site appartiennent à K.E.R TECH ou à leurs propriétaires. Tu ne peux pas les copier ou les réutiliser sans accord écrit.</p>
+
+            <h4>12. Responsabilité</h4>
+            <p>Nous faisons au mieux pour que le site fonctionne, mais nous ne pouvons pas garantir qu'il soit toujours disponible ni sans erreur. Nous ne sommes pas responsables des services extérieurs que nous utilisons (paiement, connexion, messagerie, hébergement) en cas de panne de leur côté, dans la limite de ce que la loi permet.</p>
+
+            <h4>13. Changements et droit applicable</h4>
+            <p>Nous pouvons modifier ces conditions ; la date en haut indique la dernière mise à jour et les changements importants sont annoncés sur le site. Ces conditions sont régies par le <strong>droit camerounais</strong>. En cas de désaccord, nous cherchons d'abord une solution à l'amiable avec toi, par WhatsApp.</p>
+        </div>
+        <button class="btn-green" onclick="closeOverlay('cgu-overlay')">J'ai compris</button>
+    </div>
+</div>
+
+<!-- MODAL MOT DE PASSE OUBLIE -->
+<div class="modal-overlay" id="reset-overlay" style="display:none">
+    <div class="modal modal-auth">
+        <button class="modal-x" id="reset-close">✕</button>
+        <h3 data-i18n="titre_mdp_oublie">🔑 Mot de passe oublié</h3>
+        <p style="color:var(--text3);font-size:0.85rem;margin-bottom:12px" data-i18n="txt_mdp_oublie">Entre ton email, on t'envoie un lien pour choisir un nouveau mot de passe.</p>
+        <input type="email" id="reset-email" placeholder="Ton adresse email">
+        <button class="btn-green" id="btn-reset-envoyer">Envoyer le lien</button>
+        <p class="form-err" id="reset-err1"></p>
+    </div>
+</div>
+
+<!-- MODAL CONFIRMATION NOUVEAU MOT DE PASSE (arrivée depuis le lien email) -->
+<div class="modal-overlay" id="confirm-reset-overlay" style="display:none">
+    <div class="modal modal-auth">
+        <h3>🔑 Choisis ton nouveau mot de passe</h3>
+        <div class="pwd-wrap"><input type="password" id="confirm-reset-mdp1" placeholder="Nouveau mot de passe"><button type="button" class="pwd-toggle" data-target="confirm-reset-mdp1">👁</button></div>
+        <div class="pwd-wrap"><input type="password" id="confirm-reset-mdp2" placeholder="Confirmer le mot de passe"><button type="button" class="pwd-toggle" data-target="confirm-reset-mdp2">👁</button></div>
+        <button class="btn-green" id="btn-confirm-reset">Valider le nouveau mot de passe</button>
+        <p class="form-err" id="confirm-reset-err"></p>
+    </div>
+</div>
+
+<!-- MODAL POLITIQUE DE RETOUR -->
+<div class="modal-overlay" id="retour-overlay" style="display:none">
+    <div class="modal modal-auth" style="max-width:480px">
+        <button class="modal-x" onclick="closeOverlay('retour-overlay')">✕</button>
+        <h3>🔄 Politique de retour</h3>
+        <div style="color:var(--text2);font-size:0.9rem;line-height:1.7;text-align:left;margin:12px 0">
+            <p><strong>Délai :</strong> tu as <strong>7 jours</strong> après réception pour demander un retour.</p>
+            <p><strong>Conditions :</strong> le produit doit être non ouvert, non utilisé, dans son emballage d'origine, et accompagné du code de commande.</p>
+            <p><strong>Cas acceptés :</strong> produit défectueux, erreur de commande de notre part, produit différent de la description.</p>
+            <p><strong>Livraison non réceptionnée :</strong> si tu es absent 5 minutes après l'heure du rendez-vous fixé avec le livreur, ta commande retourne à l'agence, à récupérer sous 7 jours. Elle n'est alors plus remboursable et cette politique de retour ne s'applique plus, sauf faute de Kapmaket.</p>
+            <p><strong>Comment faire :</strong> va dans "Mes commandes", trouve la commande concernée, clique sur "Demander un retour", ou contacte-nous directement par WhatsApp.</p>
+        </div>
+        <a href="https://wa.me/237699781160?text=Bonjour%2C%20je%20souhaite%20faire%20une%20demande%20de%20retour" target="_blank" class="btn-green" style="display:block;text-align:center;text-decoration:none">📱 Contacter par WhatsApp</a>
+    </div>
+</div>
+
+<!-- MODAL DEMANDE DE RETOUR -->
+<div class="modal-overlay" id="demande-retour-overlay" style="display:none">
+    <div class="modal modal-auth">
+        <button class="modal-x" onclick="closeOverlay('demande-retour-overlay')">✕</button>
+        <h3>🔄 Demander un retour</h3>
+        <p style="color:var(--text3);font-size:0.85rem;margin-bottom:10px">Commande : <span id="retour-code-affiche" style="font-weight:700"></span></p>
+        <textarea id="retour-motif" placeholder="Explique le motif de ton retour..." rows="3" class="adm-input" style="width:100%;box-sizing:border-box"></textarea>
+        <button class="btn-green" id="btn-envoyer-retour" style="margin-top:10px">Envoyer la demande</button>
+        <p class="form-err" id="retour-err"></p>
+    </div>
+</div>
+
+<!-- MODAL PRODUIT -->
+<div class="modal-overlay" id="prod-overlay" style="display:none">
+    <div class="modal modal-prod">
+        <button class="modal-x" id="prod-close">✕</button>
+        <div class="prod-img-wrap">
+            <img id="prod-img" src="" alt="" style="display:none">
+            <div id="prod-flash-tag" class="prod-flash-tag" style="display:none">⚡ FLASH</div>
+        </div>
+        <div class="prod-body">
+            <span id="prod-cat-tag" class="cat-tag-badge"></span>
+            <div id="prod-new-tag" class="new-tag" style="display:none">🆕 Nouveau</div>
+            <h2 id="prod-name"></h2>
+            <p id="prod-desc" class="prod-desc"></p>
+            <div id="prod-prix-barre" class="prix-barre" style="display:none"></div>
+            <div id="prod-price" class="prod-price"></div>
+            <p id="prod-stock" class="prod-stock"></p>
+            <div id="prod-low-tag" class="low-tag" style="display:none">⚠️ Stock faible</div>
+            <div id="feedback-produit-zone"></div>
+            <button id="btn-favori-prod" class="btn-favori-prod">🤍 Ajouter aux favoris</button>
+            <div id="prod-actions" class="prod-actions" style="display:none">
+                <div class="qty-box">
+                    <button id="qty-minus">−</button>
+                    <span id="qty-val">1</span>
+                    <button id="qty-plus">+</button>
+                </div>
+                <button class="btn-green btn-cart" id="btn-add-cart">🛒 Ajouter au panier</button>
+            </div>
+            <p id="prod-login-hint" class="login-hint" style="display:none">Connectez-vous pour commander</p>
+            <a id="prod-wa" href="#" target="_blank" class="btn-wa" style="font-size:0.8rem">📱 Une question ? Contacte-nous sur WhatsApp</a>
+            <div id="cross-sell-zone"></div>
+            <div id="avis-zone"></div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PANIER -->
+<div class="modal-overlay" id="panier-overlay" style="display:none">
+    <div class="modal modal-panier">
+        <button class="modal-x" id="panier-close">✕</button>
+        <h2 data-i18n="titre_panier">🛒 Mon Panier</h2>
+        <div id="panier-items"></div>
+        <button id="btn-reserver" style="width:100%;background:none;border:1.5px dashed var(--green);color:var(--green);padding:12px;border-radius:var(--radius-sm);font-weight:600;cursor:pointer;font-family:var(--font-body);font-size:0.85rem;margin-bottom:4px">📌 Réserver ma commande (sans payer maintenant)</button>
+        <p style="font-size:0.7rem;color:var(--text3);margin:0 0 14px;text-align:center">Tes articles sont mis de côté avec un code, sans payer tout de suite — tu les retrouveras dans "Mes Commandes" pour payer quand tu veux.</p>
+        <div class="livraison-box">
+            <label data-i18n="label_zone">📍 Zone de livraison</label>
+            <select id="zone-select" aria-label="Choisir votre zone de livraison">
+                <option value="" data-i18n="choisir_zone">-- Choisir votre zone --</option>
+                <optgroup label="Zones livrées — 1 000 FCFA">
+                    <option value="Akwa">Akwa — 1 000 FCFA</option>
+                    <option value="Bonamoussadi">Bonamoussadi — 1 000 FCFA</option>
+                    <option value="Ndokoti">Ndokoti — 1 000 FCFA</option>
+                    <option value="PK14">PK14 — 1 000 FCFA</option>
+                    <option value="Makepe">Makepe — 1 000 FCFA</option>
+                    <option value="Bassa">Bassa — 1 000 FCFA</option>
+                    <option value="Logbaba">Logbaba — 1 000 FCFA</option>
+                    <option value="Deido">Deido — 1 000 FCFA</option>
+                    <option value="Bonaberi">Bonaberi — 1 000 FCFA</option>
+                    <option value="Bonanjo">Bonanjo — 1 000 FCFA</option>
+                    <option value="Bali">Bali — 1 000 FCFA</option>
+                    <option value="New-Bell">New-Bell — 1 000 FCFA</option>
+                    <option value="Bépanda">Bépanda — 1 000 FCFA</option>
+                    <option value="Ndogpassi">Ndogpassi — 1 000 FCFA</option>
+                    <option value="Ndogbong">Ndogbong — 1 000 FCFA</option>
+                    <option value="Cité SIC">Cité SIC — 1 000 FCFA</option>
+                    <option value="Kotto">Kotto — 1 000 FCFA</option>
+                    <option value="PK8">PK8 — 1 000 FCFA</option>
+                    <option value="PK9">PK9 — 1 000 FCFA</option>
+                    <option value="PK10">PK10 — 1 000 FCFA</option>
+                    <option value="PK12">PK12 — 1 000 FCFA</option>
+                    <option value="PK16">PK16 — 1 000 FCFA</option>
+                    <option value="PK21">PK21 — 1 000 FCFA</option>
+                    <option value="Logpom">Logpom — 1 000 FCFA</option>
+                    <option value="Yassa">Yassa — 1 000 FCFA</option>
+                    <option value="Village">Village — 1 000 FCFA</option>
+                    <option value="Bonapriso">Bonapriso — 1 000 FCFA</option>
+                    <option value="Japoma">Japoma — 1 000 FCFA</option>
+                    <option value="Nyalla">Nyalla — 1 000 FCFA</option>
+                    <option value="Zone Industrielle Bassa">Zone Industrielle Bassa — 1 000 FCFA</option>
+                    <option value="Cité des Palmiers">Cité des Palmiers — 1 000 FCFA</option>
+                </optgroup>
+                <optgroup label="Autres quartiers de Douala — retrait en agence">
+                    <option value="Grand Moulin">Grand Moulin</option>
+                    <option value="Youpwe">Youpwe</option>
+                    <option value="Bonendale">Bonendale</option>
+                    <option value="Bwana Kumbo">Bwana Kumbo</option>
+                    <option value="Denver">Denver</option>
+                    <option value="Congelcam">Congelcam</option>
+                    <option value="Ngodi Bakoko">Ngodi Bakoko</option>
+                    <option value="Bonaloka">Bonaloka</option>
+                    <option value="Madagascar">Madagascar</option>
+                    <option value="Bonamikengue">Bonamikengue</option>
+                    <option value="Soppo Priso">Soppo Priso</option>
+                    <option value="Makea">Makea</option>
+                </optgroup>
+                <option value="retrait">🏪 Retrait en boutique — GRATUIT</option>
+            </select>
+            <div id="livraison-info" style="display:none" class="livraison-info"></div>
+            <div id="zone-warning" style="display:none" class="livraison-info lv-warn"></div>
+            <div id="livraison-regle" style="display:none" class="livraison-regle-note"></div>
+        </div>
+        <div class="promo-box" style="display:flex;gap:8px;margin:12px 0 4px">
+            <input id="promo-input" placeholder="Code promo (optionnel)" style="flex:1;padding:10px 12px;border-radius:var(--radius-sm);border:1.5px solid var(--border);font-family:var(--font-body);text-transform:uppercase">
+            <button id="btn-appliquer-promo" style="background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:0 16px;font-weight:600;cursor:pointer;font-size:0.85rem;white-space:nowrap">Appliquer</button>
+        </div>
+        <p id="promo-message" style="font-size:0.78rem;margin:0 0 10px;min-height:14px"></p>
+        <div id="panier-totaux"></div>
+        <textarea id="note-cmd" placeholder="Note pour la commande (optionnel)..." rows="2" data-i18n-ph="ph_note"></textarea>
+        <button class="btn-green" id="btn-payer" style="display:none" data-i18n="btn_payer">💳 Payer maintenant (Mobile Money)</button>
+        <button class="btn-outline" id="btn-reserver" style="display:none" data-i18n="btn_reserver">📋 Réserver (paiement à la livraison)</button>
+    </div>
+</div>
+
+<!-- MODAL PAIEMENT -->
+<div class="modal-overlay" id="pay-overlay" style="display:none">
+    <div class="modal modal-pay">
+        <button class="modal-x" id="pay-close">✕</button>
+        <div class="pay-header">
+            <div style="font-size:2.5rem;margin-bottom:8px">💳</div>
+            <h2>Paiement Mobile Money</h2>
+            <p style="color:var(--text3);font-size:0.85rem">Paiement sécurisé</p>
+        </div>
+        <div id="pay-amount" class="pay-amount"></div>
+        <div class="pay-methods" id="pay-methods-h2h">
+            <button class="pay-method active" data-op="MTN" id="pay-mtn">
+                <span style="font-size:1.4rem;display:block;margin-bottom:4px">📱</span>MTN MoMo
+            </button>
+            <button class="pay-method" data-op="ORANGE" id="pay-orange">
+                <span style="font-size:1.4rem;display:block;margin-bottom:4px">🟠</span>Orange Money
+            </button>
+        </div>
+        <div class="pay-form">
+            <div id="pay-tel-wrap">
+                <label>Numéro de téléphone</label>
+                <input type="tel" id="pay-tel" placeholder="6XXXXXXXX" maxlength="9">
+            </div>
+            <button class="btn-green" id="btn-pay-confirm">Payer maintenant</button>
+            <p id="pay-status" class="pay-status"></p>
+        </div>
+    </div>
+</div>
+
+<!-- WIDGET DE PAIEMENT (mode 'widget' uniquement — iframe intégrée, pas de redirection externe) -->
+<div id="ikeepay-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:9999;display:none;align-items:center;justify-content:center">
+    <div style="position:relative;width:100%;max-width:450px;height:100%;max-height:90vh;padding:8px">
+        <button id="ikeepay-close" style="position:absolute;top:-2.2rem;right:0.5rem;background:none;border:none;color:#fff;font-size:1.6rem;cursor:pointer;line-height:1">✕</button>
+        <iframe id="ikeepay-iframe" src="" allowtransparency="true" style="border:none;width:100%;height:100%;border-radius:16px;background:transparent"></iframe>
+    </div>
+</div>
+
+<!-- MODAL CODE -->
+<div class="modal-overlay" id="code-overlay" style="display:none">
+    <div class="modal modal-code">
+        <h2>✅ Commande confirmée !</h2>
+        <p style="color:var(--text3)">Votre code de commande :</p>
+        <div id="code-display" class="code-display"></div>
+        <div id="code-recap"></div>
+        <button class="btn-green" id="btn-copier">📋 Copier le code</button>
+        <button class="btn-outline" id="btn-fermer-code" style="margin-top:10px;width:100%">Fermer</button>
+    </div>
+</div>
+
+<!-- MODAL SUCCES PAIEMENT -->
+<div class="modal-overlay" id="success-overlay" style="display:none">
+    <div class="modal modal-code">
+        <h2>✅ Merci pour votre paiement !</h2>
+        <p style="color:var(--text3)">Votre commande est validée.</p>
+        <div id="success-code-display" class="code-display"></div>
+        <div id="success-anim"></div>
+        <div id="success-recap"></div>
+        <div id="success-agence-msg" class="livraison-info lv-ok" style="margin-top:14px;text-align:left"></div>
+        <div id="invite-nudge-success" style="display:none;background:#f0fff4;border:1px solid #d4f4dd;border-radius:10px;padding:12px;margin-top:14px;text-align:left">
+            <p style="font-size:0.82rem;font-weight:600;margin-bottom:6px">💡 Envie de suivre tes prochaines commandes plus facilement ?</p>
+            <p style="font-size:0.76rem;color:var(--text3);margin-bottom:8px">Crée un compte — tes infos sont déjà pré-remplies, ça prend 10 secondes.</p>
+            <button class="btn-green" onclick="ouvrirSignupApresInvite()" style="width:100%;font-size:0.85rem;padding:10px">Créer mon compte</button>
+        </div>
+        <button class="btn-green" id="btn-copier-success" style="margin-top:14px">📋 Copier le code</button>
+        <a id="success-wa" href="#" target="_blank" class="btn-outline" style="display:block;text-align:center;margin-top:10px;text-decoration:none">📱 Contacter par WhatsApp</a>
+        <button class="btn-outline" id="btn-fermer-success" style="margin-top:10px;width:100%">Fermer</button>
+    </div>
+</div>
+
+<!-- MODAL RESERVATION -->
+<div class="modal-overlay" id="reservation-overlay" style="display:none">
+    <div class="modal modal-code">
+        <h2>📌 Commande réservée !</h2>
+        <p style="color:var(--text3)">Ton code de réservation (garde-le précieusement) :</p>
+        <div id="reservation-code-display" class="code-display"></div>
+        <p style="color:var(--text3);font-size:0.8rem;margin-top:10px">Aucun paiement effectué pour l'instant. Présente ce code en boutique ou finalise le paiement plus tard depuis "Mes Commandes".</p>
+        <div id="invite-nudge-reservation" style="display:none;background:#f0fff4;border:1px solid #d4f4dd;border-radius:10px;padding:12px;margin-top:14px;text-align:left">
+            <p style="font-size:0.82rem;font-weight:600;margin-bottom:6px">💡 Envie de suivre cette réservation plus facilement ?</p>
+            <p style="font-size:0.76rem;color:var(--text3);margin-bottom:8px">Crée un compte — tes infos sont déjà pré-remplies, ça prend 10 secondes.</p>
+            <button class="btn-green" onclick="ouvrirSignupApresInvite()" style="width:100%;font-size:0.85rem;padding:10px">Créer mon compte</button>
+        </div>
+        <button class="btn-green" id="btn-copier-reservation" style="margin-top:14px">📋 Copier le code</button>
+        <button class="btn-outline" id="btn-fermer-reservation" style="margin-top:10px;width:100%">Fermer</button>
+    </div>
+</div>
+
+<!-- MODAL PRESENTATION TELECHARGEMENT APP -->
+<div class="modal-overlay" id="telecharger-app-overlay" style="display:none;z-index:5000">
+    <div class="modal" style="max-width:420px;text-align:center;padding:0;overflow:hidden">
+        <button class="modal-x" onclick="closeOverlay('telecharger-app-overlay')" style="z-index:5">✕</button>
+        <div style="background:linear-gradient(135deg,var(--green-dark),var(--green) 70%,var(--green-light));padding:36px 24px 28px;color:white">
+            <img src="/icon-192.png" alt="Logo" style="width:76px;height:76px;border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,0.25);margin-bottom:14px">
+            <h2 style="font-family:var(--font-title);font-size:1.3rem;margin:0">Kapmaket</h2>
+            <p style="opacity:0.9;font-size:0.85rem;margin-top:4px">Installe l'app pour une expérience plus rapide</p>
+        </div>
+        <div style="padding:24px">
+            <div style="text-align:left;display:flex;flex-direction:column;gap:14px;margin-bottom:22px">
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">⚡</span>
+                    <div><strong style="font-size:0.88rem">Plus rapide</strong><div style="color:var(--text3);font-size:0.78rem">Un raccourci direct sur ton écran d'accueil, sans passer par le navigateur.</div></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">🔔</span>
+                    <div><strong style="font-size:0.88rem">Alertes de commande</strong><div style="color:var(--text3);font-size:0.78rem">Sois prévenu dès que ta commande est confirmée ou livrée.</div></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">📶</span>
+                    <div><strong style="font-size:0.88rem">Fonctionne même hors ligne</strong><div style="color:var(--text3);font-size:0.78rem">Consulte le site même avec une connexion faible.</div></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:start">
+                    <span style="font-size:1.3rem">🆓</span>
+                    <div><strong style="font-size:0.88rem">100% gratuit</strong><div style="color:var(--text3);font-size:0.78rem">Aucun espace de stockage lourd, aucun paiement.</div></div>
+                </div>
+            </div>
+            <button id="btn-telecharger-app-principal" style="width:100%;background:linear-gradient(135deg,var(--orange),var(--orange-light));color:white;border:none;padding:16px;border-radius:var(--radius-pill);font-weight:800;font-size:1rem;cursor:pointer;font-family:var(--font-title);letter-spacing:0.3px;box-shadow:0 8px 22px rgba(255,107,26,0.4);animation:pulseTelecharger 1.8s infinite">⬇️ Télécharger maintenant</button>
+            <p id="telecharger-app-note" style="color:var(--text3);font-size:0.75rem;margin-top:12px"></p>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL SUIVI -->
+<div class="modal-overlay" id="suivi-overlay" style="display:none">
+    <div class="modal modal-code">
+        <button class="modal-x" id="suivi-close">✕</button>
+        <h2>🚚 Suivi de commande</h2>
+        <input type="text" id="suivi-input" placeholder="Entrez votre code (ex: CMT-ABC-1234)" style="margin:16px 0">
+        <button class="btn-green" id="btn-suivi">Rechercher</button>
+        <div id="suivi-result" style="margin-top:14px"></div>
+    </div>
+</div>
+
+<!-- MODAL LOCALISATION -->
+<div class="modal-overlay" id="loc-overlay" style="display:none">
+    <div class="modal modal-code">
+        <button class="modal-x" id="loc-close">✕</button>
+        <h2>🏪 Notre Boutique</h2>
+        <div class="loc-box">
+            <p>📍 <strong>Douala, Cameroun</strong></p>
+            <p>📞 699 781 160 / 653 756 167</p>
+            <p>⏰ Lun-Sam : 8h00 — 19h00</p>
+        </div>
+        <iframe src="https://maps.google.com/maps?q=Douala,Cameroun&output=embed" width="100%" height="220" style="border:0;border-radius:10px;margin-top:14px" loading="lazy"></iframe>
+        <a href="https://wa.me/237699781160" target="_blank" class="btn-green" style="display:block;text-align:center;margin-top:12px;text-decoration:none">📱 WhatsApp</a>
+    </div>
+</div>
+
+<!-- MODAL COMMANDES -->
+<div class="modal-overlay" id="cmds-overlay" style="display:none">
+    <div class="modal modal-histo">
+        <button class="modal-x" id="cmds-close">✕</button>
+        <h2>📋 Mes Commandes</h2>
+        <input type="text" id="cmd-search-client" placeholder="🔎 Rechercher par numéro de commande..." oninput="rechercherMesCommandes(this.value)" style="width:100%;background:var(--bg);border:1.5px solid var(--border);padding:10px 14px;color:var(--text);border-radius:9px;font-size:0.85rem;margin-bottom:14px;font-family:var(--font-body)">
+        <div id="cmds-list"></div>
+    </div>
+</div>
+
+<!-- PAGE ADMIN -->
+<div id="admin-page" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:3000;overflow-y:auto"></div>
+
+<script src="/config.js"></script>
+<script src="/doublons.js"></script>
+<script src="/script.js"></script>
+</body>
+</html>
