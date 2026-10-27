@@ -76,6 +76,25 @@ function couper(s, max) {
     return (dernierEspace > max * 0.6 ? cut.slice(0, dernierEspace) : cut).replace(/[ ,;:.-]+$/, '') + '…';
 }
 // JSON placé dans une balise <script> : on neutralise « < » pour qu'aucun texte ne puisse fermer la balise.
+// Marques courantes vendues par la boutique, reconnues dans le NOM du produit (jamais inventées : sans marque reconnue, on n'en déclare pas).
+const MARQUES = {
+    oraimo: 'Oraimo', xiaomi: 'Xiaomi', redmi: 'Xiaomi', poco: 'Xiaomi', samsung: 'Samsung', galaxy: 'Samsung',
+    apple: 'Apple', iphone: 'Apple', ipad: 'Apple', airpods: 'Apple', macbook: 'Apple', huawei: 'Huawei', honor: 'Honor',
+    tecno: 'Tecno', infinix: 'Infinix', itel: 'Itel', oppo: 'Oppo', realme: 'Realme', nokia: 'Nokia', motorola: 'Motorola', zte: 'ZTE',
+    sony: 'Sony', playstation: 'Sony', dualshock: 'Sony', xbox: 'Microsoft', microsoft: 'Microsoft', nintendo: 'Nintendo',
+    jbl: 'JBL', anker: 'Anker', baseus: 'Baseus', ugreen: 'Ugreen', hoco: 'Hoco', remax: 'Remax', havit: 'Havit', redragon: 'Redragon', razer: 'Razer',
+    'tp-link': 'TP-Link', tplink: 'TP-Link', logitech: 'Logitech', hp: 'HP', dell: 'Dell', lenovo: 'Lenovo', asus: 'Asus', lg: 'LG',
+    philips: 'Philips', hisense: 'Hisense', sandisk: 'SanDisk', kingston: 'Kingston', canon: 'Canon', epson: 'Epson'
+};
+function detecterMarque(nom) {
+    const mots = String(nom || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(Boolean);
+    for (const m of mots) if (MARQUES[m]) return MARQUES[m];
+    return null;
+}
+// Frais de livraison à domicile : lus dans config.js (une seule source), 1 000 FCFA si illisible.
+let FRAIS_LIVRAISON = 1000;
+try { const c = lireConfig(); if (Number(c.FRAIS_LIVRAISON) > 0) FRAIS_LIVRAISON = Number(c.FRAIS_LIVRAISON); } catch (e) { /* valeur par défaut */ }
+
 function jsonPourScript(obj) { return JSON.stringify(obj).replace(/</g, '\\u003c'); }
 function fmtPrix(n) { return Math.round(n).toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' '); }
 function urlImageValide(u) { return typeof u === 'string' && /^https:\/\//i.test(u) ? u : null; }
@@ -164,6 +183,7 @@ function fabriquerPage(modele, p) {
         name: nom,
         description: couper(description, 500),
         sku: String(p.id),
+        brand: detecterMarque(nom) ? { '@type': 'Brand', name: detecterMarque(nom) } : undefined,
         category: categorie || undefined,
         image: image ? [image] : undefined,
         itemCondition: 'https://schema.org/NewCondition',
@@ -173,7 +193,20 @@ function fabriquerPage(modele, p) {
             priceCurrency: 'XAF',
             price: prix,
             availability: enStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-            seller: { '@type': 'Organization', name: NOM_BOUTIQUE, url: SITE + '/' }
+            seller: { '@type': 'Organization', name: NOM_BOUTIQUE, url: SITE + '/' },
+            // Conformes à la politique affichée sur le site : retour sous 7 jours après réception (produit défectueux, erreur de commande,
+            // produit différent de la description) ; livraison à domicile payante dans les quartiers de Douala proposés dans le panier.
+            hasMerchantReturnPolicy: {
+                '@type': 'MerchantReturnPolicy',
+                applicableCountry: 'CM',
+                returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+                merchantReturnDays: 7
+            },
+            shippingDetails: {
+                '@type': 'OfferShippingDetails',
+                shippingRate: { '@type': 'MonetaryAmount', value: FRAIS_LIVRAISON, currency: 'XAF' },
+                shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'CM', addressRegion: 'LT' }
+            }
         }
     };
     const filLd = {
@@ -199,6 +232,8 @@ function fabriquerPage(modele, p) {
         '    <p>' + echapperHtml(description) + '</p>\n' +
         '    <p>Prix : ' + fmtPrix(prix) + ' FCFA — ' + (enStock ? 'en stock' : 'momentanément indisponible') + '</p>\n' +
         '    <p>Livraison à Douala, paiement Mobile Money (MTN, Orange), retrait en agence.</p>\n' +
+        '    <p>Livraison à domicile : ' + fmtPrix(FRAIS_LIVRAISON) + ' FCFA dans les quartiers de Douala proposés dans le panier ; retrait en agence gratuit. ' +
+        'Retour possible sous 7 jours après réception (produit défectueux, erreur de commande ou produit différent de la description).</p>\n' +
         '    <p><a href="/">Voir tous les produits ' + NOM_BOUTIQUE + '</a></p>\n' +
         '</div>';
     const reH1 = /<h1 class="sr-only" id="seo-accueil">[\s\S]*?<\/h1>/i;
