@@ -5,6 +5,7 @@
 // côté navigateur pour ne pas répéter l'appel à chaque fois.
 
 const { createClient } = require('@supabase/supabase-js');
+const { appelerGemini } = require('./_lib/gemini');
 const { circuitOuvert, signalerEchec, signalerSucces } = require('./_lib/circuitBreaker');
 
 module.exports = async (req, res) => {
@@ -36,26 +37,15 @@ module.exports = async (req, res) => {
 
     const prompt = `Traduis en anglais le nom et la description de ces ${produits.length} produits d'une boutique tech (garde les noms de marques et modèles tels quels, ex: "Samsung Galaxy A15" reste "Samsung Galaxy A15"). Réponds UNIQUEMENT avec un tableau JSON valide, sans aucun texte autour, un objet par produit, dans le MÊME ORDRE, exactement sous cette forme : {"id":"reprends l'id fourni tel quel","name":"nom traduit en anglais","description":"description traduite en anglais"}.\n\nProduits à traduire :\n${JSON.stringify(produits)}`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      }
-    );
-
-    const data = await response.json();
-    if (!response.ok) {
+    const parse = (texte) => { try { return JSON.parse(String(texte).replace(/```json|```/g, '').trim()); } catch (e) { return null; } };
+    const rep = await appelerGemini({ parts: [{ text: prompt }], usage: 'client', parse });   // appelée par les visiteurs (site en anglais) : modèle à gros quota
+    if (!rep.ok) {
+      console.error(`Traduction : IA indisponible (statut ${rep.statut}) — ${rep.message || ''}`);
+      if ([429, 502, 503, 504].includes(rep.statut)) return res.status(503).json({ error: "L'IA est très sollicitée en ce moment, réessaie dans quelques instants." });
       await signalerEchec(supabase, 'gemini');
-      console.error('Erreur API Gemini (traduire-produits):', data.error?.message || JSON.stringify(data));
       return res.status(500).json({ error: 'Erreur du service de traduction, réessaie.' });
     }
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const clean = text.replace(/```json|```/g, '').trim();
-    let parsed;
-    try { parsed = JSON.parse(clean); }
-    catch (e) { await signalerEchec(supabase, 'gemini'); return res.status(500).json({ error: "Réponse IA illisible, réessaie" }); }
+    let parsed = rep.valeur;
     if (!Array.isArray(parsed)) parsed = [parsed];
 
     await signalerSucces(supabase, 'gemini');

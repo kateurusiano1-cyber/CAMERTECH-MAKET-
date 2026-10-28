@@ -6,6 +6,7 @@
 // navigateur.
 
 const { createClient } = require('@supabase/supabase-js');
+const { appelerGemini } = require('./_lib/gemini');
 const { circuitOuvert, signalerEchec, signalerSucces } = require('./_lib/circuitBreaker');
 const { tropDeTentatives, signalerEchecTentative } = require('./_lib/rateLimit');
 
@@ -57,34 +58,17 @@ module.exports = async (req, res) => {
         const prompt = `Un client de Kapmaket (boutique tech au Cameroun) envoie la photo d'un article qu'il cherche. Identifie ce que montre la photo, puis trouve dans le catalogue ci-dessous les produits qui lui ressemblent le plus (même type d'article, même marque ou modèle si visible).
 ${catalogue.length ? `CATALOGUE (format : id | nom | catégorie) :\n${lignes}\n` : ''}Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, exactement sous cette forme : {"produit":"nom court de l'article vu sur la photo, en français","category":"une seule valeur parmi : ${CATEGORIES.join(', ')}","motscles":["3 à 6 mots-clés courts au singulier, en français puis en anglais si utile, ex : écouteur, earbuds, bluetooth, oraimo"],"ids":[${catalogue.length ? "ids du catalogue, du plus ressemblant au moins ressemblant, 0 à 8 maximum, recopiés exactement comme dans la liste ; [] si aucun produit du catalogue ne ressemble" : ''}]}`;
 
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                signal: AbortSignal.timeout(15000),   // on répond proprement plutôt que de laisser la plateforme couper
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: media_type || 'image/jpeg', data: image } }] }],
-                    generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
-                })
-            }
-        );
-
-        const data = await response.json();
-        if (!response.ok) {
-            await signalerEchec(supabase, 'gemini');
-            await signalerEchecTentative(supabase, cle, 20, 10);
-            console.error('Erreur API Gemini (recherche-photo):', data.error?.message || JSON.stringify(data));
+        const parse = (texte) => { try { return JSON.parse(String(texte).replace(/```json|```/g, '').trim()); } catch (e) { return null; } };
+        const rep = await appelerGemini({ parts: [{ text: prompt }, { inline_data: { mime_type: media_type || 'image/jpeg', data: image } }], usage: 'client', parse });
+        if (!rep.ok) {
+            console.error(`Recherche photo : IA indisponible (statut ${rep.statut}) — ${rep.message || ''}`);
+            // Une surcharge ou un quota épuisé n'est pas une panne : on ne déclenche pas le disjoncteur qui couperait aussi l'assistant.
+            if (![429, 503, 504, 502].includes(rep.statut)) await signalerEchec(supabase, 'gemini');
+            if ([429, 503, 504].includes(rep.statut)) return res.status(503).json({ error: 'La recherche par photo est très sollicitée en ce moment, réessaie dans quelques instants.' });
             return res.status(500).json({ error: 'Erreur du service de recherche, réessaie.' });
         }
-
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const clean = text.replace(/```json|```/g, '').trim();
-        let parsed;
-        try { parsed = JSON.parse(clean); }
-        catch (e) { await signalerEchec(supabase, 'gemini'); return res.status(500).json({ error: 'Résultat illisible, réessaie avec une autre photo' }); }
-
         await signalerSucces(supabase, 'gemini');
+        const parsed = rep.valeur;
         // On ne renvoie au navigateur que des valeurs vérifiées (ids du catalogue, catégorie connue, textes courts).
         const brut = parsed && typeof parsed === 'object' ? parsed : {};
         const idsValides = new Set(catalogue.map(c => c.id));

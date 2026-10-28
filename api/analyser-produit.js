@@ -5,44 +5,7 @@
 
 const { verifierRequeteAdmin } = require('./_lib/adminSession');
 
-// Modèles essayés dans l'ordre : si le premier est surchargé ou introuvable, on passe au suivant.
-// Modifiable sans toucher au code : variable GEMINI_MODELES (noms séparés par des virgules).
-const MODELES = (process.env.GEMINI_MODELES || 'gemini-3.6-flash,gemini-2.5-flash,gemini-2.5-flash-lite').split(',').map(s => s.trim()).filter(Boolean);
-const PAUSE_MS = Number(process.env.GEMINI_PAUSE_MS || 1500);
-const TRANSITOIRES = new Set([429, 500, 502, 503, 504]);
-const attendre = (ms) => new Promise(ok => setTimeout(ok, ms));
-
-// Appelle l'IA avec 2 essais par modèle (courte pause entre les deux) puis bascule sur le modèle suivant.
-// Une surcharge passagère (503, « forte demande ») ne bloque donc plus l'ajout d'un produit.
-// Budget total : 45 s, pour rester sous la durée maximale de la fonction (voir vercel.json).
-async function analyserAvecRepli(parts, parse) {
-    const debut = Date.now();
-    let derniere = { statut: 502, message: 'aucune réponse' };
-    for (const modele of MODELES) {
-        for (let essai = 0; essai < 2; essai++) {
-            if (Date.now() - debut > 45000) return { ok: false, ...derniere };
-            let resp, data;
-            try {
-                resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(20000),
-                    body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } })
-                });
-                data = await resp.json();
-            } catch (e) { derniere = { statut: 504, message: `${modele} : délai dépassé` }; if (essai === 0) await attendre(PAUSE_MS); continue; }
-            if (resp.ok) {
-                const valeur = parse(data.candidates?.[0]?.content?.parts?.[0]?.text || '');
-                if (valeur) return { ok: true, valeur, modele };
-                derniere = { statut: 502, message: `${modele} : réponse illisible` };
-                break;                                   // réponse inexploitable : modèle suivant
-            }
-            derniere = { statut: resp.status, message: `${modele} : ${data.error?.message || ''}`.slice(0, 200) };
-            if (resp.status === 404 || resp.status === 400) break;                // modèle inconnu ou requête refusée : modèle suivant
-            if (!TRANSITOIRES.has(resp.status)) return { ok: false, ...derniere };   // clé refusée, etc. : inutile d'insister
-            if (essai === 0) await attendre(PAUSE_MS);
-        }
-    }
-    return { ok: false, ...derniere };
-}
+const { appelerGemini } = require('./_lib/gemini');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -91,10 +54,11 @@ module.exports = async (req, res) => {
     ];
 
     const parse = (texte) => { try { return JSON.parse(String(texte).replace(/```json|```/g, '').trim()); } catch (e) { return null; } };
-    const r = await analyserAvecRepli(parts, parse);
+    const r = await appelerGemini({ parts, usage: 'admin', parse });
     if (!r.ok) {
       console.error(`Analyse produit impossible : statut ${r.statut} — ${r.message || ''}`);
-      if (r.statut === 429) return res.status(429).json({ code: 'quota', retry_apres: 60, error: "Limite de requêtes de l'IA atteinte. Réessaie dans environ 1 minute." });
+      if (r.statut === 429 && r.quotaJour) return res.status(429).json({ code: 'quota_jour', retry_apres: r.retryApres || 1800, error: "Le quota quotidien de l'IA est atteint. Remplis la fiche à la main, ou réessaie plus tard : il se remet à zéro chaque matin (vers 8 h ou 9 h au Cameroun)." });
+      if (r.statut === 429) return res.status(429).json({ code: 'quota', retry_apres: r.retryApres || 60, error: "Limite de requêtes de l'IA atteinte. Réessaie dans environ 1 minute." });
       if ([500, 502, 503, 504].includes(r.statut)) return res.status(503).json({ code: 'surcharge', retry_apres: 10, error: "L'IA est très sollicitée en ce moment (forte demande). Réessaie dans quelques instants." });
       return res.status(500).json({ code: 'erreur', error: "Analyse impossible pour le moment." });
     }

@@ -272,14 +272,14 @@ async function compresserImage(file) {
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 let w = img.width, h = img.height;
-                const max = 1600;
+                const max = 1000;
                 if (w > max || h > max) {
                     const r = Math.min(max/w, max/h);
                     w = Math.round(w*r); h = Math.round(h*r);
                 }
                 canvas.width = w; canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                canvas.toBlob(b => res(b), 'image/webp', 0.88);
+                canvas.toBlob(b => res(b), 'image/webp', 0.80);
             };
             img.src = e.target.result;
         };
@@ -290,7 +290,7 @@ async function compresserImage(file) {
 async function uploadImage(file) {
     const blob = await compresserImage(file);
     const name = Date.now() + '-' + Math.random().toString(36).substring(2) + '.webp';
-    const { data, error } = await db.storage.from(CONFIG.BUCKET).upload(name, blob, { contentType: 'image/webp' });
+    const { data, error } = await db.storage.from(CONFIG.BUCKET).upload(name, blob, { contentType: 'image/webp', cacheControl: '31536000' });
     if (error) throw error;
     return db.storage.from(CONFIG.BUCKET).getPublicUrl(data.path).data.publicUrl;
 }
@@ -791,7 +791,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupTuilesCategories() {
     document.querySelectorAll('.tuile-photo').forEach(img => {
         const url = CONFIG.CATEGORY_IMAGES && CONFIG.CATEGORY_IMAGES[img.dataset.catImg];
-        if (url) { img.src = url; img.style.display = 'block'; }
+        if (url) { img.loading = 'lazy'; img.decoding = 'async'; img.src = url; img.style.display = 'block'; }
         else { img.closest('.tuile-photo-wrap').style.display = 'none'; }
     });
 }
@@ -2167,7 +2167,7 @@ function initSlider(slidesData) {
                         <span>✅ Produits authentiques</span>
                     </div>
                 </div>
-                <div class="slide-media"><div class="slide-halo"></div><img src="${s.image_url}" class="slide-product-img img-blurup" loading="lazy" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
+                <div class="slide-media"><div class="slide-halo"></div><img src="${s.image_url}" class="slide-product-img img-blurup" ${i === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"'} decoding="async" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
             } else {
                 slide.className = 'slide slide-default';
                 slide.innerHTML = `<div class="slide-inner slide-inner-full">
@@ -4645,6 +4645,13 @@ async function afficherPanneauAdmin() {
                 <span id="admin-notif-statut" style="margin-left:10px;font-size:0.8rem;color:#888"></span>
             </div>
             <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
+                <h2 style="font-size:1rem;margin-bottom:6px">⚡ Vitesse du site : optimiser les images</h2>
+                <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Réduit les photos trop lourdes (plus de 120 Ko) à 1000 px maximum : le site s'affiche beaucoup plus vite sur téléphone. Les adresses des images ne changent pas, et chaque original est gardé dans le dossier « _originaux » du stockage.</p>
+                <button type="button" id="btn-opt-img" onclick="optimiserImagesSite()" style="background:#f0fff4;color:#3FA66B;border:1px solid #b7f5c8;padding:10px 18px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer">🔎 Analyser et optimiser mes images</button>
+                <div id="opt-img-barre" style="display:none;height:8px;border-radius:999px;background:#eef0ee;overflow:hidden;margin-top:12px"><div id="opt-img-rempli" style="height:100%;width:0;background:#3FA66B;transition:width .2s"></div></div>
+                <p id="opt-img-res" style="font-size:0.82rem;color:#888;margin-top:10px"></p>
+            </div>
+            <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
                 <h2 style="font-size:1rem;margin-bottom:6px">⚙️ Coordonnées de l'agence</h2>
                 <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Utilisées dans le message de succès paiement et le mot de passe oublié.</p>
                 <div style="display:flex;flex-direction:column;gap:10px">
@@ -5111,6 +5118,32 @@ window.filtrerProduitsPopup = () => {
 };
 
 // ===== PARAMETRES ADMIN =====
+// Optimise les photos trop lourdes du stockage (le serveur les redimensionne, une par une). Les originaux sont conservés.
+window.optimiserImagesSite = async () => {
+    const btn = document.getElementById('btn-opt-img'), res = document.getElementById('opt-img-res');
+    const barre = document.getElementById('opt-img-barre'), rempli = document.getElementById('opt-img-rempli');
+    const mo = (o) => (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+    btn.disabled = true; res.style.color = '#888'; res.textContent = '⏳ Analyse du stockage…';
+    try {
+        const liste = await adminAction('images', 'lister');
+        if (!liste.lourdes.length) { res.style.color = '#3FA66B'; res.textContent = `✅ Tes ${liste.total} images sont déjà légères (moins de 120 Ko chacune).`; btn.disabled = false; return; }
+        const poids = liste.lourdes.reduce((t, f) => t + f.taille, 0);
+        if (!confirm(`${liste.lourdes.length} image(s) trop lourde(s) sur ${liste.total} (${mo(poids)} au total).\n\nLes optimiser maintenant ? Les originaux restent dans le dossier « _originaux ».`)) { res.textContent = ''; btn.disabled = false; return; }
+        barre.style.display = 'block'; let avant = 0, apres = 0, faites = 0, ignorees = 0, echecs = 0;
+        for (const f of liste.lourdes) {
+            res.textContent = `⏳ Optimisation… ${faites + ignorees + echecs + 1}/${liste.lourdes.length}`;
+            try {
+                const r = await adminAction('images', 'optimiser', { payload: { path: f.path } });
+                if (r.ignore) { ignorees++; } else { faites++; avant += r.avant; apres += r.apres; }
+            } catch (e) { echecs++; }
+            rempli.style.width = Math.round(100 * (faites + ignorees + echecs) / liste.lourdes.length) + '%';
+        }
+        res.style.color = '#3FA66B';
+        res.textContent = `✅ ${faites} image(s) optimisée(s) : ${mo(avant)} → ${mo(apres)} (−${avant ? Math.round(100 * (avant - apres) / avant) : 0} %)${ignorees ? ` · ${ignorees} déjà correcte(s)` : ''}${echecs ? ` · ⚠️ ${echecs} échec(s), relance pour réessayer` : ''}. Les visiteurs voient les nouvelles versions au fil de la journée.`;
+    } catch (e) { res.style.color = '#D9534F'; res.textContent = '❌ ' + e.message; }
+    btn.disabled = false;
+};
+
 let paramCatFiles = {};
 window.previewParamCatImg = (input, slug) => {
     const file = input.files[0];

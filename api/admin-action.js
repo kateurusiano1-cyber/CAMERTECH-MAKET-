@@ -61,6 +61,46 @@ module.exports = async (req, res) => {
 
         // feedback_produits : lecture seule agrégée, pour le tableau de bord
         // admin (module de personnalisation en fiche produit).
+        // ===== IMAGES DU STOCKAGE : lister les photos lourdes, puis les optimiser une par une =====
+        // On remplace le fichier AU MÊME CHEMIN (les adresses ne changent pas) après en avoir gardé l'original dans « _originaux/ ».
+        if (ressource === 'images' && (action === 'lister' || action === 'optimiser')) {
+            const bucket = CONFIG.BUCKET, SEUIL = 120 * 1024, MAX_PX = 1000;
+            if (action === 'lister') {
+                const fichiers = [];
+                for (let debut = 0; ; debut += 500) {
+                    const { data, error } = await supabase.storage.from(bucket).list('', { limit: 500, offset: debut, sortBy: { column: 'name', order: 'asc' } });
+                    if (error) { console.error('Images : liste impossible :', error.message); return res.status(500).json({ error: 'Liste des images indisponible.' }); }
+                    (data || []).forEach(o => { if (o.metadata && o.metadata.size != null) fichiers.push({ path: o.name, taille: o.metadata.size, mime: o.metadata.mimetype || '' }); });
+                    if (!data || data.length < 500) break;
+                }
+                const images = fichiers.filter(f => /^image\//.test(f.mime));
+                return res.status(200).json({ success: true, total: images.length, lourdes: images.filter(f => f.taille > SEUIL).sort((x, y) => y.taille - x.taille) });
+            }
+            const chemin = String((payload && payload.path) || '');
+            if (!chemin || chemin.includes('..') || chemin.startsWith('/') || chemin.startsWith('_originaux')) return res.status(400).json({ error: 'Chemin invalide.' });
+            const { data: blob, error: errDl } = await supabase.storage.from(bucket).download(chemin);
+            if (errDl || !blob) return res.status(404).json({ error: 'Image introuvable.' });
+            const source = Buffer.from(await blob.arrayBuffer());
+            const sharp = require('sharp');
+            const meta = await sharp(source, { failOn: 'none' }).metadata();
+            if ((meta.pages || 1) > 1) return res.status(200).json({ success: true, ignore: 'animee' });
+            const ext = chemin.split('.').pop().toLowerCase();
+            let chaine = sharp(source, { failOn: 'none' }).rotate();
+            if (Math.max(meta.width || 0, meta.height || 0) > MAX_PX) chaine = chaine.resize({ width: (meta.width || 0) >= (meta.height || 0) ? MAX_PX : undefined, height: (meta.height || 0) > (meta.width || 0) ? MAX_PX : undefined, withoutEnlargement: true });
+            let type;
+            if (ext === 'webp') { chaine = chaine.webp({ quality: 78 }); type = 'image/webp'; }
+            else if (ext === 'jpg' || ext === 'jpeg') { chaine = chaine.jpeg({ quality: 80, mozjpeg: true }); type = 'image/jpeg'; }
+            else if (ext === 'png') { chaine = chaine.png({ palette: true, quality: 80, compressionLevel: 9 }); type = 'image/png'; }
+            else return res.status(200).json({ success: true, ignore: 'format' });
+            const sortie = await chaine.toBuffer();
+            if (sortie.length >= source.length * 0.9) return res.status(200).json({ success: true, ignore: 'deja-optimisee', avant: source.length, apres: source.length });
+            const { error: errCopie } = await supabase.storage.from(bucket).copy(chemin, '_originaux/' + chemin);
+            if (errCopie && !/exist/i.test(errCopie.message || '')) { console.error('Images : sauvegarde impossible :', errCopie.message); return res.status(500).json({ error: "Sauvegarde de l'original impossible : image laissée telle quelle." }); }
+            const { error: errUp } = await supabase.storage.from(bucket).upload(chemin, sortie, { contentType: type, upsert: true, cacheControl: '31536000' });
+            if (errUp) { console.error('Images : remplacement impossible :', errUp.message); return res.status(500).json({ error: 'Remplacement impossible.' }); }
+            return res.status(200).json({ success: true, avant: source.length, apres: sortie.length });
+        }
+
         if (ressource === 'feedback_produits' && action === 'stats') {
             const { data, error } = await supabase
                 .from('feedback_produits')
