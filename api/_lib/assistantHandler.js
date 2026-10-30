@@ -74,7 +74,7 @@ function politiques() {
         `Originaux ou copies : cela dépend du produit (original, copie certifiée ou copie) ; c'est indiqué sur chaque fiche produit et le prix varie en conséquence.`,
         `Retours/réclamations : depuis « Mes Commandes », bouton de demande de retour avec le motif ; un compte est nécessaire ; l'équipe recontacte le client.`,
         `Application : menu ☰ → « Télécharger l'app » (gratuit, sans store).`,
-        `Contact humain : WhatsApp au 699 781 160 ou 653 756 167.`
+        `Contact humain : WhatsApp au 653 75 61 67 (c'est le seul numéro du service client).`
     ].join('\n- ');
 }
 
