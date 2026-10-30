@@ -264,7 +264,7 @@ let slideIndex = 0, slideTimer = null, totalSlides = 1;
 let selectedNote = 0, avisFile = null;
 
 // ===== COMPRESSION IMAGE =====
-async function compresserImage(file) {
+async function compresserImage(file, maxPx = 1000, qualite = 0.80) {
     return new Promise(res => {
         const reader = new FileReader();
         reader.onload = e => {
@@ -272,14 +272,14 @@ async function compresserImage(file) {
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 let w = img.width, h = img.height;
-                const max = 1000;
+                const max = maxPx;
                 if (w > max || h > max) {
                     const r = Math.min(max/w, max/h);
                     w = Math.round(w*r); h = Math.round(h*r);
                 }
                 canvas.width = w; canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                canvas.toBlob(b => res(b), 'image/webp', 0.80);
+                canvas.toBlob(b => res(b), 'image/webp', qualite);
             };
             img.src = e.target.result;
         };
@@ -292,8 +292,21 @@ async function uploadImage(file) {
     const name = Date.now() + '-' + Math.random().toString(36).substring(2) + '.webp';
     const { data, error } = await db.storage.from(CONFIG.BUCKET).upload(name, blob, { contentType: 'image/webp', cacheControl: '31536000' });
     if (error) throw error;
+    try {   // miniature 400 px à côté de la photo (non bloquant : sans elle, le site retombe sur la photo d'origine)
+        const mini = await compresserImage(file, 400, 0.75);
+        await db.storage.from(CONFIG.BUCKET).upload(name.replace(/\.webp$/, '_t.webp'), mini, { contentType: 'image/webp', cacheControl: '31536000' });
+    } catch (e) {}
     return db.storage.from(CONFIG.BUCKET).getPublicUrl(data.path).data.publicUrl;
 }
+
+// Miniatures (400 px) : les cartes, le slider et les tuiles les affichent (~20 Ko au lieu de ~100 Ko par photo).
+// L'administrateur les active (Paramètres > optimiser les images) une fois créées ; sans miniature, le navigateur retombe sur la photo d'origine.
+window._miniatures = (() => { try { return localStorage.getItem('cmkt_miniatures') === '1'; } catch (e) { return false; } })();
+function nomMiniature(url) {
+    const m = /^(.*\/storage\/v1\/object\/public\/[^/]+\/)([^?#]+?)(\.(?:webp|jpe?g|png))(\?.*)?$/i.exec(String(url || ''));
+    return (!m || /_t$/.test(m[2])) ? null : m[1] + m[2] + '_t.webp' + (m[4] || '');
+}
+function srcMini(url) { return (window._miniatures && nomMiniature(url)) || url; }
 
 // ===== UTILITAIRES =====
 const isNew = d => (new Date() - new Date(d)) < 7*24*60*60*1000;
@@ -693,6 +706,60 @@ function closeOverlay(id) {
 }
 
 // ===== DOM READY =====
+// ===== FIREBASE (connexion des clients) : chargé à la demande =====
+// Avant, le site attendait le téléchargement de Firebase avant de s'afficher. Maintenant il n'est chargé que pour un client déjà connecté
+// (juste après l'affichage) ou au moment de se connecter, de payer ou de réinitialiser un mot de passe.
+let _fbPromesse = null;
+function chargerFirebase() {
+    if (!_fbPromesse) {
+        _fbPromesse = import('/firebase-init.js').then(() => { suivreEtatFirebase(); return true; }).catch((e) => { _fbPromesse = null; throw e; });
+    }
+    return _fbPromesse;
+}
+// Relais : les appels existants (window.fbSignInWithEmail(...), etc.) fonctionnent sans changement ; le vrai module remplace les relais une fois chargé.
+['fbSignInWithPopup', 'fbSignInWithEmail', 'fbCreateUserWithEmail', 'fbSendPasswordResetEmail', 'fbConfirmPasswordReset', 'fbVerifyPasswordResetCode', 'fbSignOut'].forEach((nom) => {
+    if (typeof window[nom] === 'function') return;
+    const relais = async (...args) => {
+        await chargerFirebase().catch(() => { throw { code: 'app/module-non-charge' }; });   // « connexion impossible, vérifie ton réseau » plutôt qu'une erreur technique
+        if (window[nom] === relais) throw { code: 'app/module-non-charge' };
+        if (args[0] === undefined) args[0] = window.firebaseAuth;
+        if (nom === 'fbSignInWithPopup' && args[1] === undefined) args[1] = window.googleProvider;
+        return window[nom](...args);
+    };
+    window[nom] = relais;
+});
+if (typeof window.fbOnAuthStateChanged !== 'function') {
+    const relaisEtat = (auth, cb) => {
+        let desabonner = null, annule = false;
+        chargerFirebase().then(() => {
+            if (annule) return;
+            if (window.fbOnAuthStateChanged === relaisEtat) { cb(null); return; }   // Firebase indisponible : on traite le visiteur comme déconnecté
+            desabonner = window.fbOnAuthStateChanged(window.firebaseAuth, cb);
+        }).catch(() => { if (!annule) cb(null); });
+        return () => { annule = true; if (desabonner) desabonner(); };
+    };
+    window.fbOnAuthStateChanged = relaisEtat;
+}
+// Garde l'affichage « connecté » synchronisé avec l'état réel de Firebase (session expirée, navigateur nettoyé, session révoquée…)
+// plutôt que de laisser le client le découvrir en pleine tentative de paiement.
+let _etatFirebaseSuivi = false;
+function suivreEtatFirebase() {
+    if (_etatFirebaseSuivi || typeof window.fbOnAuthStateChanged !== 'function' || !window.firebaseAuth) return;
+    _etatFirebaseSuivi = true;
+    window.fbOnAuthStateChanged(window.firebaseAuth, (fbUser) => {
+        if (!fbUser && currentUser) {
+            arreterEcoutePanier();
+            chatWidgetEffacerMemoire(); // la discussion de l'assistant s'arrête avec la session
+            currentUser = null;
+            localStorage.removeItem('cmkt_user');
+            $('user-zone').style.display = 'none';
+            $('user-menu').style.display = 'none';
+            $('btn-auth-show').style.display = '';
+            notifier('🔒 Ta session a expiré, reconnecte-toi pour continuer.', 'info');
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     setupPwa();
 
@@ -721,25 +788,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch(e) { localStorage.removeItem('cmkt_user'); }
 
-    // Garde l'affichage "connecté" synchronisé avec l'état réel de Firebase
-    // en continu (pas seulement au moment de payer) : si la session Firebase
-    // disparaît pendant que l'app tourne (nettoyage du navigateur, extension
-    // de confidentialité, session révoquée...) alors que le cache local
-    // pensait encore être connecté, on corrige l'affichage immédiatement
-    // plutôt que de laisser le client découvrir le problème en pleine
-    // tentative de paiement.
-    window.fbOnAuthStateChanged(window.firebaseAuth, (fbUser) => {
-        if (!fbUser && currentUser) {
-            arreterEcoutePanier();
-            chatWidgetEffacerMemoire(); // la discussion de l'assistant s'arrête avec la session
-            currentUser = null;
-            localStorage.removeItem('cmkt_user');
-            $('user-zone').style.display = 'none';
-            $('user-menu').style.display = 'none';
-            $('btn-auth-show').style.display = '';
-            notifier('🔒 Ta session a expiré, reconnecte-toi pour continuer.', 'info');
-        }
-    });
+    // Client déjà connecté (ou lien de réinitialisation dans l'adresse) : Firebase est chargé juste après l'affichage, sans le retarder.
+    if (localStorage.getItem('cmkt_user') || /[?&](mode|oobCode)=/.test(location.search)) (window.requestIdleCallback || ((f) => setTimeout(f, 800)))(() => { chargerFirebase().catch(() => {}); }, { timeout: 2500 });
 
     initTrackingVisiteur();
     setupChatWidget();
@@ -791,7 +841,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupTuilesCategories() {
     document.querySelectorAll('.tuile-photo').forEach(img => {
         const url = CONFIG.CATEGORY_IMAGES && CONFIG.CATEGORY_IMAGES[img.dataset.catImg];
-        if (url) { img.loading = 'lazy'; img.decoding = 'async'; img.src = url; img.style.display = 'block'; }
+        if (url) { img.loading = 'lazy'; img.decoding = 'async'; img.onerror = () => { img.onerror = null; img.src = url; }; img.src = srcMini(url); img.style.display = 'block'; }
         else { img.closest('.tuile-photo-wrap').style.display = 'none'; }
     });
 }
@@ -809,6 +859,7 @@ async function chargerParametres() {
             if (!valeur) return;
             if (cle === 'agence_adresse') CONFIG.AGENCE_ADRESSE = valeur;
             else if (cle === 'agence_tel') CONFIG.AGENCE_TEL = valeur;
+            else if (cle === 'miniatures_actives') { window._miniatures = (valeur === '1'); try { localStorage.setItem('cmkt_miniatures', valeur === '1' ? '1' : '0'); } catch (e) {} }
             else if (cle.startsWith('cat_img_')) {
                 const slug = cle.replace('cat_img_', '');
                 const cat = slugToCat[slug];
@@ -2167,7 +2218,7 @@ function initSlider(slidesData) {
                         <span>✅ Produits authentiques</span>
                     </div>
                 </div>
-                <div class="slide-media"><div class="slide-halo"></div><img src="${s.image_url}" class="slide-product-img img-blurup" ${i === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"'} decoding="async" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
+                <div class="slide-media"><div class="slide-halo"></div><img src="${srcMini(s.image_url)}" data-orig="${s.image_url}" onerror="this.onerror=null;this.src=this.dataset.orig" class="slide-product-img img-blurup" width="260" height="260" ${i === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"'} decoding="async" onload="this.classList.add('loaded')" alt="${s.titre||'Promotion'}"></div>`;
             } else {
                 slide.className = 'slide slide-default';
                 slide.innerHTML = `<div class="slide-inner slide-inner-full">
@@ -2793,7 +2844,7 @@ function renderProducts(products) {
         const txt = texteProduit(p);
         card.innerHTML = `
             <div class="card-img-wrap">
-                ${p.image_url ? `<img src="${p.image_url}" alt="${txt.name}" class="card-img img-blurup" loading="lazy" onload="this.classList.add('loaded')">` : '<div class="card-img-ph">📦</div>'}
+                ${p.image_url ? `<img src="${srcMini(p.image_url)}" data-orig="${p.image_url}" onerror="this.onerror=null;this.src=this.dataset.orig" alt="${txt.name}" class="card-img img-blurup" loading="lazy" onload="this.classList.add('loaded')">` : '<div class="card-img-ph">📦</div>'}
                 ${p.quantity < 5 && p.quantity > 0 ? `<span class="badge badge-low">${currentLang==='en'?'Low stock':'Stock faible'}</span>` : ''}
                 ${p.flash_active ? '<span class="badge badge-flash">⚡ FLASH</span>' : isNew(p.created_at) ? '<span class="badge badge-new">🆕</span>' : ''}
                 ${p.promo_active && !p.flash_active ? '<span class="badge badge-promo">🔥 PROMO</span>' : ''}
@@ -2848,7 +2899,7 @@ function chargerFlash(prods) {
         card.className = 'card';
         const prix = getPrix(p);
         card.innerHTML = `<div class="card-img-wrap">
-            ${p.image_url ? `<img src="${p.image_url}" alt="${texteProduit(p).name}" class="card-img img-blurup" loading="lazy" onload="this.classList.add('loaded')">` : '<div class="card-img-ph">📦</div>'}
+            ${p.image_url ? `<img src="${srcMini(p.image_url)}" data-orig="${p.image_url}" onerror="this.onerror=null;this.src=this.dataset.orig" alt="${texteProduit(p).name}" class="card-img img-blurup" loading="lazy" onload="this.classList.add('loaded')">` : '<div class="card-img-ph">📦</div>'}
             <span class="badge badge-flash">⚡ FLASH</span>
         </div>
         <div class="card-body">
@@ -4646,7 +4697,7 @@ async function afficherPanneauAdmin() {
             </div>
             <div style="background:#fff;border-radius:16px;border:1px solid #eef0ee;box-shadow:0 2px 10px rgba(20,40,25,0.05);padding:24px;margin-bottom:16px">
                 <h2 style="font-size:1rem;margin-bottom:6px">⚡ Vitesse du site : optimiser les images</h2>
-                <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Réduit les photos trop lourdes (plus de 120 Ko) à 1000 px maximum : le site s'affiche beaucoup plus vite sur téléphone. Les adresses des images ne changent pas, et chaque original est gardé dans le dossier « _originaux » du stockage.</p>
+                <p style="font-size:0.8rem;color:#888;margin-bottom:14px">Réduit les photos trop lourdes (plus de 120 Ko) à 1000 px maximum et crée une petite miniature de chaque photo pour les cartes, le slider et les tuiles : le site s'affiche beaucoup plus vite sur téléphone. Les adresses des images ne changent pas, et chaque original est gardé dans le dossier « _originaux » du stockage.</p>
                 <button type="button" id="btn-opt-img" onclick="optimiserImagesSite()" style="background:#f0fff4;color:#3FA66B;border:1px solid #b7f5c8;padding:10px 18px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer">🔎 Analyser et optimiser mes images</button>
                 <div id="opt-img-barre" style="display:none;height:8px;border-radius:999px;background:#eef0ee;overflow:hidden;margin-top:12px"><div id="opt-img-rempli" style="height:100%;width:0;background:#3FA66B;transition:width .2s"></div></div>
                 <p id="opt-img-res" style="font-size:0.82rem;color:#888;margin-top:10px"></p>
@@ -5126,20 +5177,28 @@ window.optimiserImagesSite = async () => {
     btn.disabled = true; res.style.color = '#888'; res.textContent = '⏳ Analyse du stockage…';
     try {
         const liste = await adminAction('images', 'lister');
-        if (!liste.lourdes.length) { res.style.color = '#3FA66B'; res.textContent = `✅ Tes ${liste.total} images sont déjà légères (moins de 120 Ko chacune).`; btn.disabled = false; return; }
-        const poids = liste.lourdes.reduce((t, f) => t + f.taille, 0);
-        if (!confirm(`${liste.lourdes.length} image(s) trop lourde(s) sur ${liste.total} (${mo(poids)} au total).\n\nLes optimiser maintenant ? Les originaux restent dans le dossier « _originaux ».`)) { res.textContent = ''; btn.disabled = false; return; }
-        barre.style.display = 'block'; let avant = 0, apres = 0, faites = 0, ignorees = 0, echecs = 0;
-        for (const f of liste.lourdes) {
-            res.textContent = `⏳ Optimisation… ${faites + ignorees + echecs + 1}/${liste.lourdes.length}`;
-            try {
-                const r = await adminAction('images', 'optimiser', { payload: { path: f.path } });
-                if (r.ignore) { ignorees++; } else { faites++; avant += r.avant; apres += r.apres; }
-            } catch (e) { echecs++; }
-            rempli.style.width = Math.round(100 * (faites + ignorees + echecs) / liste.lourdes.length) + '%';
+        const lourdes = liste.lourdes || [], aMini = liste.aMiniaturiser || [];
+        if (!lourdes.length && !aMini.length) {
+            await adminAction('parametres', 'upsert', { payload: [{ cle: 'miniatures_actives', valeur: '1' }] });
+            res.style.color = '#3FA66B'; res.textContent = `✅ Tes ${liste.total} images sont déjà légères et ont leur miniature.`; btn.disabled = false; return;
         }
-        res.style.color = '#3FA66B';
-        res.textContent = `✅ ${faites} image(s) optimisée(s) : ${mo(avant)} → ${mo(apres)} (−${avant ? Math.round(100 * (avant - apres) / avant) : 0} %)${ignorees ? ` · ${ignorees} déjà correcte(s)` : ''}${echecs ? ` · ⚠️ ${echecs} échec(s), relance pour réessayer` : ''}. Les visiteurs voient les nouvelles versions au fil de la journée.`;
+        const poids = lourdes.reduce((t, f) => t + f.taille, 0);
+        if (!confirm(`${lourdes.length} image(s) trop lourde(s) (${mo(poids)}) à réduire,\n${aMini.length} miniature(s) à créer pour les cartes, le slider et les tuiles.\n\nLancer maintenant ? Les originaux restent dans le dossier « _originaux ».`)) { res.textContent = ''; btn.disabled = false; return; }
+        barre.style.display = 'block'; const total = lourdes.length + aMini.length; let fait = 0, avant = 0, apres = 0, reduites = 0, minis = 0, echecs = 0;
+        const avance = () => { fait++; rempli.style.width = Math.round(100 * fait / Math.max(1, total)) + '%'; };
+        for (const f of lourdes) {
+            res.textContent = `⏳ Réduction des photos lourdes… ${fait + 1}/${total}`;
+            try { const r = await adminAction('images', 'optimiser', { payload: { path: f.path } }); if (!r.ignore) { reduites++; avant += r.avant; apres += r.apres; } } catch (e) { echecs++; }
+            avance();
+        }
+        for (const p of aMini) {
+            res.textContent = `⏳ Création des miniatures… ${fait + 1}/${total}`;
+            try { await adminAction('images', 'miniature', { payload: { path: p } }); minis++; } catch (e) { echecs++; }
+            avance();
+        }
+        if (!echecs) await adminAction('parametres', 'upsert', { payload: [{ cle: 'miniatures_actives', valeur: '1' }] });   // actif seulement si tout est prêt
+        res.style.color = echecs ? '#c77c00' : '#3FA66B';
+        res.textContent = `${echecs ? '⚠️' : '✅'} ${reduites} photo(s) réduite(s) (${mo(avant)} → ${mo(apres)}), ${minis} miniature(s) créée(s)${echecs ? ` · ${echecs} échec(s) : relance pour réessayer (les miniatures ne seront activées qu'une fois tout terminé)` : ' · miniatures activées sur le site'}.`;
     } catch (e) { res.style.color = '#D9534F'; res.textContent = '❌ ' + e.message; }
     btn.disabled = false;
 };

@@ -63,7 +63,7 @@ module.exports = async (req, res) => {
         // admin (module de personnalisation en fiche produit).
         // ===== IMAGES DU STOCKAGE : lister les photos lourdes, puis les optimiser une par une =====
         // On remplace le fichier AU MÊME CHEMIN (les adresses ne changent pas) après en avoir gardé l'original dans « _originaux/ ».
-        if (ressource === 'images' && (action === 'lister' || action === 'optimiser')) {
+        if (ressource === 'images' && (action === 'lister' || action === 'optimiser' || action === 'miniature')) {
             const bucket = CONFIG.BUCKET, SEUIL = 120 * 1024, MAX_PX = 1000;
             if (action === 'lister') {
                 const fichiers = [];
@@ -74,16 +74,29 @@ module.exports = async (req, res) => {
                     if (!data || data.length < 500) break;
                 }
                 const images = fichiers.filter(f => /^image\//.test(f.mime));
-                return res.status(200).json({ success: true, total: images.length, lourdes: images.filter(f => f.taille > SEUIL).sort((x, y) => y.taille - x.taille) });
+                const noms = new Set(images.map(f => f.path));
+                const originales = images.filter(f => !/_t\.webp$/.test(f.path));
+                // Miniatures (400 px) à créer : une pour chaque photo qui n'en a pas encore (même nom + « _t.webp »)
+                const aMiniaturiser = originales.filter(f => !noms.has(f.path.replace(/\.[^./]+$/, '') + '_t.webp')).map(f => f.path);
+                return res.status(200).json({ success: true, total: originales.length, lourdes: originales.filter(f => f.taille > SEUIL).sort((x, y) => y.taille - x.taille), aMiniaturiser });
             }
             const chemin = String((payload && payload.path) || '');
             if (!chemin || chemin.includes('..') || chemin.startsWith('/') || chemin.startsWith('_originaux')) return res.status(400).json({ error: 'Chemin invalide.' });
+            if (action === 'miniature' && /_t\.webp$/.test(chemin)) return res.status(400).json({ error: 'Cette image est déjà une miniature.' });
             const { data: blob, error: errDl } = await supabase.storage.from(bucket).download(chemin);
             if (errDl || !blob) return res.status(404).json({ error: 'Image introuvable.' });
             const source = Buffer.from(await blob.arrayBuffer());
             const sharp = require('sharp');
             const meta = await sharp(source, { failOn: 'none' }).metadata();
             if ((meta.pages || 1) > 1) return res.status(200).json({ success: true, ignore: 'animee' });
+            if (action === 'miniature') {
+                // Miniature 400 px (cartes, slider et tuiles du site) : ~20 Ko au lieu de ~100 Ko. Enregistrée à côté de la photo : « nom_t.webp ».
+                const petite = await sharp(source, { failOn: 'none' }).rotate().resize({ width: 400, height: 400, fit: 'inside', withoutEnlargement: true }).webp({ quality: 72 }).toBuffer();
+                const nomMini = chemin.replace(/\.[^./]+$/, '') + '_t.webp';
+                const { error: errMini } = await supabase.storage.from(bucket).upload(nomMini, petite, { contentType: 'image/webp', upsert: true, cacheControl: '31536000' });
+                if (errMini) { console.error('Images : miniature impossible :', errMini.message); return res.status(500).json({ error: 'Miniature impossible.' }); }
+                return res.status(200).json({ success: true, avant: source.length, apres: petite.length });
+            }
             const ext = chemin.split('.').pop().toLowerCase();
             let chaine = sharp(source, { failOn: 'none' }).rotate();
             if (Math.max(meta.width || 0, meta.height || 0) > MAX_PX) chaine = chaine.resize({ width: (meta.width || 0) >= (meta.height || 0) ? MAX_PX : undefined, height: (meta.height || 0) > (meta.width || 0) ? MAX_PX : undefined, withoutEnlargement: true });

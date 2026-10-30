@@ -168,9 +168,9 @@ input:checked + .toggle-thumb:before { transform: translateX(20px); }
     color: white; font-size: 1.5rem; cursor: pointer;
     box-shadow: 0 6px 18px rgba(255,107,26,0.5);
     display: flex; align-items: center; justify-content: center;
-    animation: chatWidgetPulse 2.6s ease-in-out infinite;
+    box-shadow: 0 6px 18px rgba(255,107,26,0.5);
 }
-@keyframes chatWidgetPulse { 0%,100% { box-shadow: 0 6px 18px rgba(255,107,26,0.5); } 50% { box-shadow: 0 6px 24px rgba(255,107,26,0.8); } }
+@keyframes chatWidgetPulse { 0%,100% { opacity: 0; } 50% { opacity: 1; } }   /* halo animé par transparence : fluide, sans recalcul d'ombre */
 
 #chat-widget-panel {
     position: fixed; bottom: 88px; right: 20px; z-index: 500;
@@ -216,7 +216,7 @@ input:checked + .toggle-thumb:before { transform: translateX(20px); }
 #chat-invite .ci-sous { font-size: 0.8rem; line-height: 1.4; opacity: 0.85; margin-bottom: 10px; }
 #chat-invite .ci-boutons { display: flex; gap: 8px; }
 #chat-invite button { flex: 1; padding: 9px 10px; border-radius: 10px; font-size: 0.8rem; font-weight: 700; cursor: pointer; font-family: var(--font-body); }
-#chat-invite .ci-oui { background: var(--orange); color: #fff; border: none; }
+#chat-invite .ci-oui { background: #C2410C; color: #fff; border: none; }   /* orange plus foncé : contraste 5,2:1 (l'ancien : 2,9:1) */
 #chat-invite .ci-non { background: transparent; color: var(--text); border: 1.5px solid rgba(128,128,128,0.4); }
 @media (max-width: 480px) {
     #chat-widget-btn { bottom: 14px; right: 14px; width: 50px; height: 50px; font-size: 1.3rem; }
@@ -382,9 +382,11 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 .slider-prev { left: 12px; }
 .slider-next { right: 12px; }
 .slider-arrow:hover { background: white; color: var(--orange); }
-.slider-dots { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 7px; }
-.slider-dot { width: 9px; height: 9px; border-radius: 2px; background: rgba(255,255,255,0.4); cursor: pointer; transition: all 0.2s; border: none; }
-.slider-dot.active { background: white; width: 22px; }
+.slider-dots { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); display: flex; gap: 0; }
+/* Points du slider : zone tactile de 26 px (norme d'accessibilité : 24 px minimum), le point visible reste petit */
+.slider-dot { width: 26px; height: 26px; position: relative; padding: 0; background: transparent; cursor: pointer; border: none; }
+.slider-dot::before { content: ''; position: absolute; top: 50%; left: 50%; width: 9px; height: 9px; border-radius: 2px; background: rgba(255,255,255,0.4); transform: translate(-50%, -50%); transition: background-color 0.2s, transform 0.2s; }
+.slider-dot.active::before { background: white; transform: translate(-50%, -50%) scaleX(2.4); }
 
 /* ===== TUILES ===== */
 .tuiles-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
@@ -473,8 +475,8 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
 [data-theme="dark"] .user-points { color: #f0c04d; }
 .card-img { width: 100%; height: 175px; object-fit: cover; display: block; background: var(--bg); transition: transform 0.6s var(--ease); }
 .card:hover .card-img { transform: scale(1.08); }
-.img-blurup { filter: blur(14px); transform: scale(1.04); transition: filter 0.4s ease, transform 0.4s ease; background: var(--bg); }
-.img-blurup.loaded { filter: blur(0); transform: scale(1); }
+.img-blurup { opacity: 0; transition: opacity 0.3s ease; background: var(--bg); }   /* fondu simple (le flou coûtait cher en calcul sur téléphone) */
+.img-blurup.loaded { opacity: 1; }
 .card-img-ph { width: 100%; height: 175px; display: flex; align-items: center; justify-content: center; font-size: 2rem; background: linear-gradient(135deg, var(--bg), var(--border)); color: var(--text3); opacity: 0.6; }
 .card-body { padding: 14px; }
 .card-cat { font-size: 0.64rem; color: var(--green); font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; font-family: var(--font-body); }
@@ -911,3 +913,7 @@ body.mode-recherche .section-hdr > div { flex-wrap: wrap; }
 .scan-danger { color: #b42318; }
 .scan-barre { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .scan-barre-rempli { height: 100%; width: 0; background: var(--green); transition: width 0.2s; }
+
+/* Halo du bouton de discussion : animé par transparence (fluide), au lieu d'une ombre recalculée à chaque image */
+#chat-widget-btn::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 6px 24px rgba(255,107,26,0.8); opacity: 0; animation: chatWidgetPulse 2.6s ease-in-out infinite; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { #chat-widget-btn::after { animation: none; } }
