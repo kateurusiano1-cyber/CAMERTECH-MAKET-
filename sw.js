@@ -5,11 +5,11 @@
 // servies depuis le cache, pour ne jamais afficher de stock/prix/statut
 // périmé au client.
 
-const CACHE_NOM = 'kapmaket-cache-v21';
+const CACHE_NOM = 'kapmaket-cache-v22';
 const FICHIERS_STATIQUES = [
     '/', '/index.html', '/style.css', '/script.js', '/config.js',
     '/logo.png', '/logo-panier.png', '/icon-192.png', '/icon-512.png', '/favicon.ico', '/favicon-32.png', '/manifest.json',
-    '/admin-cmr2025', '/manifest-admin.json', '/icon-admin-192.png', '/icon-admin-512.png'
+    '/admin-cmr2025', '/admin.html', '/admin-login.js', '/manifest-admin.json', '/icon-admin-192.png', '/icon-admin-512.png'
 ];
 
 self.addEventListener('install', (event) => {

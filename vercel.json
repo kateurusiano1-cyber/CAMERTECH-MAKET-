@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/admin-cmr2025",
-      "destination": "/index.html"
+      "destination": "/admin.html"
     },
     {
       "source": "/((?!api/)(?!.*\\.).*)",
@@ -28,6 +28,32 @@
         {
           "key": "Permissions-Policy",
           "value": "geolocation=(), microphone=(), payment=()"
+        }
+      ]
+    },
+    {
+      "source": "/admin.html",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/admin-cmr2025",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
         }
       ]
     },
@@ -143,6 +169,9 @@
   "functions": {
     "api/analyser-produit.js": {
       "maxDuration": 60
+    },
+    "api/admin-auth.js": {
+      "includeFiles": "api/_lib/admin/**"
     }
   }
 }

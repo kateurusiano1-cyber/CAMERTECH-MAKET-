@@ -4,7 +4,6 @@ const CONFIG = {
     BUCKET: "images",
     WA1: "237653756167",
     WA2: "237653756167",
-    ADMIN_PATH: "admin-cmr2025",
     // Clé publique VAPID (notifications push) — publique par nature, sans risque à exposer ici.
     VAPID_PUBLIC_KEY: "BN9iA4TgEDfv_Cfc1JrOdtfiU3z3jeCYiqw3BXh67M2LjJN1x6-1k-aoBj8W_6araz_RT52BX2B627a8ni9O-Bg",
     // Les identifiants admin ne sont plus ici : ils vivent uniquement côté

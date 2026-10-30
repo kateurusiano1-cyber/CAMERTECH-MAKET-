@@ -35,17 +35,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Kapmaket" id="pwa-apple-title">
-    <script>
-        // PWA distincte pour l'espace admin (manifest, icône, couleur, nom
-        // propres) — doit s'exécuter tôt, avant que le navigateur évalue
-        // l'installabilité de la page.
-        if (window.location.pathname.replace(/\//g,'') === 'admin-cmr2025') {
-            document.getElementById('pwa-manifest-link').setAttribute('href', '/manifest-admin.json');
-            document.getElementById('pwa-theme-color').setAttribute('content', '#C62828');
-            document.getElementById('pwa-apple-icon').setAttribute('href', '/icon-admin-192.png');
-            document.getElementById('pwa-apple-title').setAttribute('content', 'KM Admin');
-        }
-    </script>
 
     <!-- Open Graph / réseaux sociaux -->
     <meta property="og:type" content="website">
@@ -918,11 +907,7 @@
     </div>
 </div>
 
-<!-- PAGE ADMIN -->
-<div id="admin-page" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:3000;overflow-y:auto"></div>
-
 <script defer src="/config.js"></script>
-<script defer src="/doublons.js"></script>
 <script defer src="/script.js"></script>
 </body>
 </html>

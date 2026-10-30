@@ -14,7 +14,9 @@
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { tropDeTentatives, signalerEchecTentative, reinitialiserTentatives } = require('./_lib/rateLimit');
-const { creerToken } = require('./_lib/adminSession');
+const { creerToken, verifierRequeteAdmin } = require('./_lib/adminSession');
+const fs = require('fs');
+const path = require('path');
 
 function comparerEnTempsConstant(a, b) {
     const bufA = Buffer.from(String(a));
@@ -95,7 +97,28 @@ async function etape2(req, res, supabase) {
     return res.status(200).json({ token, id: otp.admin_id, wa: otp.wa });
 }
 
+// GET /api/admin-auth?bundle=1 : envoie le code du panneau admin (api/_lib/admin/admin-client.js)
+// UNIQUEMENT à un administrateur dont le jeton signé est valide. Ce code n'existe nulle part en
+// fichier public : sans jeton valide, la réponse est un 401 sans aucun contenu du panneau.
+function servirPanneau(req, res) {
+    res.setHeader('Cache-Control', 'no-store, private');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    const secret = process.env.ADMIN_SESSION_SECRET;
+    if (!secret) { res.setHeader('Content-Type', 'application/json'); return res.status(500).json({ error: 'Configuration serveur incomplète' }); }
+    if (!verifierRequeteAdmin(req, secret)) { res.setHeader('Content-Type', 'application/json'); return res.status(401).json({ error: 'Non autorisé' }); }
+    try {
+        const code = fs.readFileSync(path.join(__dirname, '_lib', 'admin', 'admin-client.js'), 'utf8');
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        return res.status(200).send(code);
+    } catch (e) {
+        console.error('Panneau admin introuvable:', e.message);
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(500).json({ error: 'Panneau indisponible' });
+    }
+}
+
 module.exports = async (req, res) => {
+    if (req.method === 'GET') return servirPanneau(req, res);
     res.setHeader('Content-Type', 'application/json');
     if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' });
 

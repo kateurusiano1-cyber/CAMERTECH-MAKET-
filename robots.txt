@@ -1,6 +1,5 @@
 User-agent: *
 Allow: /
-Disallow: /admin-cmr2025
 Disallow: /api/
 
 Sitemap: https://www.kapmaket.shop/sitemap.xml
