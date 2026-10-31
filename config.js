@@ -35,8 +35,8 @@ const CONFIG = {
         "Téléphonie": "https://images.unsplash.com/photo-1619287032765-de47edc49091?w=600&h=600&fit=crop&q=70&auto=format",
         "Accessoires": "https://images.unsplash.com/photo-1596628319258-c6f3f387a1ed?w=600&h=600&fit=crop&q=70&auto=format",
         "Électronique": "https://images.unsplash.com/photo-1584907797075-c5308ada266f?w=600&h=600&fit=crop&q=70&auto=format",
-        "Gaming": "",
-        "Réseau": "",
+        "Gaming": "https://images.unsplash.com/photo-1482855549413-2a6c9b1955a7?w=600&h=600&fit=crop&q=70&auto=format",
+        "Réseau": "https://images.unsplash.com/photo-1745847768408-b7b83796cae6?w=600&h=600&fit=crop&q=70&auto=format",
         "Flash": ""
     },
     // Petites photos qui remplacent les emojis (miniatures rondes) : emoji -> identifiant Unsplash.
@@ -45,7 +45,10 @@ const CONFIG = {
     ICON_PHOTOS: {
         "📱": { id: "photo-1619287032765-de47edc49091", alt: "Smartphone" },
         "🎧": { id: "photo-1596628319258-c6f3f387a1ed", alt: "Casque audio" },
-        "💻": { id: "photo-1584907797075-c5308ada266f", alt: "Ordinateur portable" }
+        "💻": { id: "photo-1584907797075-c5308ada266f", alt: "Ordinateur portable" },
+        "🎮": { id: "photo-1482855549413-2a6c9b1955a7", alt: "Manette de jeu" },
+        "📡": { id: "photo-1745847768408-b7b83796cae6", alt: "Routeur Wi-Fi" },
+        "📦": { id: "photo-1631010231931-d2c396b444ec", alt: "Colis" }
     }
 };
 
