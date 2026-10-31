@@ -48,7 +48,11 @@ const CONFIG = {
         "💻": { id: "photo-1584907797075-c5308ada266f", alt: "Ordinateur portable" },
         "🎮": { id: "photo-1482855549413-2a6c9b1955a7", alt: "Manette de jeu" },
         "📡": { id: "photo-1745847768408-b7b83796cae6", alt: "Routeur Wi-Fi" },
-        "📦": { id: "photo-1631010231931-d2c396b444ec", alt: "Colis" }
+        "📦": { id: "photo-1631010231931-d2c396b444ec", alt: "Colis" },
+        "🔎": { id: "photo-1626148749358-5b3b3f45b41a", alt: "Loupe de recherche" },
+        "🔍": { id: "photo-1626148749358-5b3b3f45b41a", alt: "Loupe de recherche" },
+        "📷": { id: "photo-1516852294404-5423eaa0d4a9", alt: "Appareil photo" },
+        "📞": { id: "photo-1499159058454-75067059248a", alt: "Téléphone" }
     }
 };
 

@@ -934,3 +934,11 @@ body.mode-recherche .section-hdr > div { flex-wrap: wrap; }
 [data-theme="dark"] .card, [data-theme="dark"] .cat-pill { border-color: rgba(255,255,255,0.08); }
 [data-theme="dark"] .cat-icon { box-shadow: 0 0 0 1px rgba(255,255,255,0.12); }
 @media (prefers-reduced-motion: reduce) { .card, .cat-pill, .card:hover, .cat-pill:hover { transition: none; transform: none; } }
+
+/* Icônes photo dans la barre de recherche et le pied de page */
+.search-ico { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; display: flex; align-items: center; z-index: 2; }
+.search-ico .cat-icon, .search-ico .cat-icon-fallback { width: 22px; height: 22px; margin: 0; font-size: 1rem; }
+.header-search-full .search-input { padding-left: 46px; }
+#btn-recherche-photo .cat-icon, #search-compact-btn .cat-icon { width: 26px; height: 26px; margin: 0; vertical-align: middle; }
+.header-search-tip .cat-icon { width: 16px; height: 16px; margin-right: 4px; vertical-align: -0.25em; }
+footer .cat-icon, .footer .cat-icon { width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; }
