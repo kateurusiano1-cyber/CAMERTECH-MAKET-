@@ -2798,6 +2798,8 @@ function renderProducts(products) {
                 ${p.promo_active && !p.flash_active ? '<span class="badge badge-promo">🔥 PROMO</span>' : ''}
                 ${pct ? `<span class="badge badge-pct">${pct}</span>` : ''}
                 <button class="btn-favori ${favorisIds.has(p.id)?'active':''}" data-id="${p.id}">${favorisIds.has(p.id)?'❤️':'🤍'}</button>
+                <button class="btn-partage-card" aria-label="${currentLang==='en'?'Share':'Partager'}" title="${currentLang==='en'?'Share':'Partager'}">🔗</button>
+                ${p.image_url ? `<button class="btn-agrandir-card" aria-label="${currentLang==='en'?'View full screen':'Voir en plein écran'}" title="${currentLang==='en'?'Full screen':'Plein écran'}">🔍</button>` : ''}
             </div>
             <div class="card-body">
                 <div class="card-cat">${catLabel(p.category)}</div>
@@ -2809,6 +2811,9 @@ function renderProducts(products) {
             </div>`;
         card.querySelector('.btn-acheter').onclick = e => { e.stopPropagation(); openModal(p.id); };
         card.querySelector('.btn-favori').onclick = e => { e.stopPropagation(); toggleFavori(p.id, e.currentTarget); };
+        card.querySelector('.btn-partage-card').onclick = e => { e.stopPropagation(); partagerProduit(p); };
+        const btnZoom = card.querySelector('.btn-agrandir-card');
+        if (btnZoom) btnZoom.onclick = e => { e.stopPropagation(); ouvrirPleinEcran(p); };
         card.onclick = () => openModal(p.id);
         card.dataset.trackId = p.id;
         card.dataset.trackNom = txt.name;
@@ -2912,7 +2917,10 @@ async function openModal(productId) {
         img.style.opacity = '0';
         img.onload = () => { img.style.opacity = '1'; };
         img.src = p.image_url; img.style.display = 'block';
-    } else img.style.display = 'none';
+        img.style.cursor = 'zoom-in'; img.onclick = () => ouvrirPleinEcran(p);
+    } else { img.style.display = 'none'; img.onclick = null; }
+    const indice = $('prod-zoom-hint'); if (indice) indice.style.display = p.image_url ? 'block' : 'none';
+    $('btn-partage-prod').onclick = () => partagerProduit(p);
     const waMsg = encodeURIComponent(`Bonjour Kapmaket, intéressé par : ${p.name} (${fmt(prix)} FCFA)`);
     $('prod-wa').href = `https://wa.me/${CONFIG.WA1}?text=${waMsg}`;
     // "Ajouter au panier" est maintenant disponible à tout le monde — la
@@ -4200,4 +4208,158 @@ async function envoyerDemandeRetour() {
         err.style.color='var(--success)'; err.textContent = '✅ Demande envoyée, on te recontacte rapidement.';
         setTimeout(() => closeOverlay('demande-retour-overlay'), 1500);
     } catch(e) { err.style.color='var(--danger)'; err.textContent = '❌ ' + e.message; }
+}
+
+// ===== PARTAGE D'UN ARTICLE + PHOTO EN PLEIN ÉCRAN =====
+// Le lien partagé est la page produit (/produit/nom-id) : elle s'ouvre directement sur l'article et,
+// une fois générée, fournit aux réseaux (WhatsApp, Facebook…) la photo, le prix et la description.
+const SITE_PARTAGE = 'https://www.kapmaket.shop';
+const trPartage = (fr, en) => currentLang === 'en' ? en : fr;
+function lienProduit(p) { return SITE_PARTAGE + '/produit/' + slugProduit(p); }
+function texteCourt(s, n) { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; }
+function messagePartage(p) {
+    const txt = texteProduit(p);
+    const promo = (p.promo_active || p.flash_active) && p.promo_prix;
+    const l = ['🛍️ ' + txt.name, '💰 ' + fmt(getPrix(p)) + ' FCFA' + (promo ? ' (' + trPartage('au lieu de ', 'instead of ') + fmt(p.resale_price) + ' FCFA)' : '')];
+    const d = texteCourt(txt.description, 140);
+    if (d) l.push(d);
+    l.push(trPartage('📍 Kapmaket, Douala · livraison rapide', '📍 Kapmaket, Douala · fast delivery'));
+    return l.join('\n');
+}
+async function copierLienProduit(p) {
+    const url = lienProduit(p);
+    try { await navigator.clipboard.writeText(url); }
+    catch (e) {
+        const t = document.createElement('textarea'); t.value = url; t.style.position = 'fixed'; t.style.opacity = '0';
+        document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (e2) {} t.remove();
+    }
+    notifier(trPartage('✅ Lien copié !', '✅ Link copied!'), 'success');
+}
+// Partage système (feuille de partage du téléphone : Instagram, TikTok, Messenger, SMS…), avec la photo si possible.
+async function partagerNatif(p, avecPhoto) {
+    const url = lienProduit(p), msg = messagePartage(p);
+    const data = { title: texteProduit(p).name, text: msg, url };
+    if (avecPhoto && p.image_url && navigator.canShare) {
+        try {
+            const r = await fetch(p.image_url, { mode: 'cors' });
+            const b = await r.blob();
+            const f = new File([b], 'article-kapmaket.' + ((b.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')), { type: b.type || 'image/jpeg' });
+            if (navigator.canShare({ files: [f] })) { data.files = [f]; data.text = msg + '\n👉 ' + url; delete data.url; }
+        } catch (e) { /* photo non récupérable : on partage le lien seul */ }
+    }
+    try { await navigator.share(data); }
+    catch (e) { if (!e || e.name !== 'AbortError') copierLienProduit(p); }
+}
+function fermerPartage() { const o = document.getElementById('partage-overlay'); if (o) o.remove(); }
+function partagerProduit(p) {
+    fermerPartage();
+    const txt = texteProduit(p), url = lienProduit(p), msg = messagePartage(p);
+    const promo = (p.promo_active || p.flash_active) && p.promo_prix;
+    const eu = encodeURIComponent;
+    const canaux = [
+        { cls: 'wa', ico: '💬', nom: 'WhatsApp', href: 'https://wa.me/?text=' + eu(msg + '\n👉 ' + url) },
+        { cls: 'fb', ico: '📘', nom: 'Facebook', href: 'https://www.facebook.com/sharer/sharer.php?u=' + eu(url) + '&quote=' + eu(txt.name + ' — ' + fmt(getPrix(p)) + ' FCFA') },
+        { cls: 'tg', ico: '✈️', nom: 'Telegram', href: 'https://t.me/share/url?url=' + eu(url) + '&text=' + eu(msg) },
+        { cls: 'x', ico: '𝕏', nom: 'X', href: 'https://twitter.com/intent/tweet?text=' + eu(msg) + '&url=' + eu(url) },
+        { cls: 'in', ico: '💼', nom: 'LinkedIn', href: 'https://www.linkedin.com/sharing/share-offsite/?url=' + eu(url) },
+        { cls: 'mail', ico: '✉️', nom: 'Email', href: 'mailto:?subject=' + eu(txt.name) + '&body=' + eu(msg + '\n\n' + url) },
+        { cls: 'sms', ico: '📩', nom: 'SMS', href: 'sms:?&body=' + eu(msg + '\n' + url) }
+    ];
+    const ov = document.createElement('div');
+    ov.id = 'partage-overlay'; ov.className = 'partage-overlay';
+    ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', trPartage('Partager cet article', 'Share this item'));
+    ov.innerHTML = `
+        <div class="partage-sheet">
+            <div class="partage-head"><strong>${trPartage('Partager cet article', 'Share this item')}</strong><button class="partage-x" aria-label="${trPartage('Fermer', 'Close')}">✕</button></div>
+            <div class="partage-apercu">
+                ${p.image_url ? `<img src="${echapperHtml(srcMini(p.image_url))}" alt="${echapperHtml(txt.name)}" onerror="this.onerror=null;this.src='${echapperHtml(p.image_url)}'">` : ''}
+                <div class="partage-apercu-txt">
+                    <div class="partage-nom">${echapperHtml(txt.name)}</div>
+                    <div class="partage-prix">${fmt(getPrix(p))} FCFA${promo ? ` <s>${fmt(p.resale_price)} FCFA</s>` : ''}</div>
+                    <div class="partage-desc">${echapperHtml(texteCourt(txt.description, 110))}</div>
+                </div>
+            </div>
+            <div class="partage-grille">
+                ${canaux.map(c => `<a class="partage-canal ${c.cls}" href="${c.href}" target="_blank" rel="noopener noreferrer"><span class="partage-ico">${c.ico}</span><span>${c.nom}</span></a>`).join('')}
+            </div>
+            ${navigator.share ? `<button class="partage-natif">${trPartage('📤 Partager avec la photo (autres applis)', '📤 Share with photo (other apps)')}</button>` : ''}
+            <div class="partage-lien"><input type="text" readonly value="${echapperHtml(url)}" aria-label="Lien de l'article"><button class="partage-copier">${trPartage('Copier le lien', 'Copy link')}</button></div>
+        </div>`;
+    const fermer = () => { fermerPartage(); document.removeEventListener('keydown', surEchap, true); };
+    // Échap ferme seulement la feuille de partage (pas la fiche produit en dessous)
+    const surEchap = e => { if (e.key === 'Escape') { e.stopImmediatePropagation(); fermer(); } };
+    document.addEventListener('keydown', surEchap, true);
+    ov.onclick = e => { if (e.target === ov) fermer(); };
+    ov.querySelector('.partage-x').onclick = fermer;
+    ov.querySelector('.partage-copier').onclick = () => copierLienProduit(p);
+    ov.querySelector('.partage-lien input').onfocus = e => e.target.select();
+    const bn = ov.querySelector('.partage-natif');
+    if (bn) bn.onclick = () => partagerNatif(p, true);
+    ov.querySelectorAll('.partage-canal').forEach(a => a.addEventListener('click', () => setTimeout(fermer, 150)));
+    document.body.appendChild(ov);
+}
+
+// --- Photo en plein écran : toucher/cliquer pour agrandir, pincer ou molette pour zoomer, glisser pour déplacer ---
+function fermerPleinEcran() {
+    const o = document.getElementById('lightbox');
+    if (!o) return;
+    document.body.style.overflow = o.dataset.overflow || '';
+    o.remove();
+    document.removeEventListener('keydown', fermerPleinEcran._esc, true);
+}
+function ouvrirPleinEcran(p) {
+    if (!p || !p.image_url) return;
+    fermerPleinEcran();
+    const txt = texteProduit(p);
+    const ov = document.createElement('div');
+    ov.id = 'lightbox'; ov.className = 'lightbox'; ov.dataset.overflow = document.body.style.overflow;
+    ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', txt.name);
+    ov.innerHTML = `
+        <div class="lb-bar">
+            <div class="lb-info"><strong>${echapperHtml(txt.name)}</strong><span>${fmt(getPrix(p))} FCFA</span></div>
+            <div class="lb-actions"><button class="lb-btn lb-partage" aria-label="${trPartage('Partager', 'Share')}">🔗</button><button class="lb-btn lb-fermer" aria-label="${trPartage('Fermer', 'Close')}">✕</button></div>
+        </div>
+        <div class="lb-stage"><div class="lb-spin"></div><img class="lb-img" alt="${echapperHtml(txt.name)}" draggable="false"></div>
+        <div class="lb-hint">${trPartage('Double-touche ou pince pour zoomer', 'Double-tap or pinch to zoom')}</div>`;
+    document.body.appendChild(ov);
+    document.body.style.overflow = 'hidden';
+    const stage = ov.querySelector('.lb-stage'), img = ov.querySelector('.lb-img'), spin = ov.querySelector('.lb-spin');
+    let s = 1, x = 0, y = 0, deplace = false;
+    const appliquer = () => { img.style.transform = `translate(${x}px, ${y}px) scale(${s})`; img.style.cursor = s > 1 ? 'grab' : 'zoom-in'; };
+    const zoomer = (ns, cx, cy) => {
+        ns = Math.max(1, Math.min(5, ns));
+        const r = stage.getBoundingClientRect(), ox = cx - (r.left + r.width / 2), oy = cy - (r.top + r.height / 2);
+        x = ox - (ox - x) * (ns / s); y = oy - (oy - y) * (ns / s); s = ns;
+        if (s === 1) { x = 0; y = 0; }
+        appliquer();
+    };
+    img.onload = () => { spin.style.display = 'none'; img.style.opacity = '1'; };
+    img.onerror = () => { spin.style.display = 'none'; img.src = srcMini(p.image_url); img.onerror = null; img.style.opacity = '1'; };
+    img.src = p.image_url;
+    const pts = new Map(); let dist0 = 0, s0 = 1, dernierTap = 0;
+    stage.addEventListener('pointerdown', e => { stage.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); deplace = false;
+        if (pts.size === 2) { const [a, b] = [...pts.values()]; dist0 = Math.hypot(a.x - b.x, a.y - b.y); s0 = s; } });
+    stage.addEventListener('pointermove', e => {
+        if (!pts.has(e.pointerId)) return;
+        const prev = pts.get(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pts.size === 2) { const [a, b] = [...pts.values()]; zoomer(s0 * Math.hypot(a.x - b.x, a.y - b.y) / (dist0 || 1), (a.x + b.x) / 2, (a.y + b.y) / 2); deplace = true; }
+        else if (s > 1) { x += e.clientX - prev.x; y += e.clientY - prev.y; deplace = true; appliquer(); }
+    });
+    const lever = e => { pts.delete(e.pointerId); if (pts.size < 2) dist0 = 0; };
+    stage.addEventListener('pointerup', e => {
+        const etaitDeplace = deplace; lever(e);
+        if (etaitDeplace) return;
+        const r = img.getBoundingClientRect();
+        const surPhoto = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+        if (!surPhoto) { fermerPleinEcran(); return; }                  // toucher le fond ferme
+        const t = Date.now();
+        if (t - dernierTap < 320) { zoomer(s > 1 ? 1 : 2.5, e.clientX, e.clientY); dernierTap = 0; } else dernierTap = t;
+    });
+    stage.addEventListener('pointercancel', lever);
+    stage.addEventListener('wheel', e => { e.preventDefault(); zoomer(s * (e.deltaY < 0 ? 1.15 : 0.87), e.clientX, e.clientY); }, { passive: false });
+    ov.querySelector('.lb-fermer').onclick = fermerPleinEcran;
+    ov.querySelector('.lb-partage').onclick = () => partagerProduit(p);
+    fermerPleinEcran._esc = e => { if (e.key === 'Escape') { e.stopImmediatePropagation(); fermerPleinEcran(); } };
+    document.addEventListener('keydown', fermerPleinEcran._esc, true);
+    appliquer();
 }
