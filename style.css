@@ -917,3 +917,20 @@ body.mode-recherche .section-hdr > div { flex-wrap: wrap; }
 /* Halo du bouton de discussion : animé par transparence (fluide), au lieu d'une ombre recalculée à chaque image */
 #chat-widget-btn::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 6px 24px rgba(255,107,26,0.8); opacity: 0; animation: chatWidgetPulse 2.6s ease-in-out infinite; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { #chat-widget-btn::after { animation: none; } }
+
+/* ===== STYLE PREMIUM : ombres douces, bordures fines, survol fluide, badges sobres ===== */
+.cat-icon { width: 1.35em; height: 1.35em; border-radius: 50%; object-fit: cover; vertical-align: -0.32em; margin-right: 6px; background: var(--bg); box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.18); }
+.cat-pill .cat-icon, .cat-pill .cat-icon-fallback { vertical-align: middle; }
+.cat-pill .cat-icon { width: 22px; height: 22px; margin-right: 7px; }
+.cat-pill { transition: all 0.2s ease; border: 1px solid rgba(0,0,0,0.06); }
+.cat-pill:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(16,24,40,0.08); }
+.card { border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 4px 12px rgba(16,24,40,0.05); transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+.card:hover { transform: translateY(-3px) scale(1.01); box-shadow: 0 10px 24px rgba(16,24,40,0.10); border-color: rgba(0,0,0,0.08); }
+.card:hover .card-img { transform: scale(1.04); }
+.card-body { padding: 16px; }
+.search-input { border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(16,24,40,0.05); transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+.search-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(26,92,42,0.12); }
+.badge { font-weight: 600; letter-spacing: 0.3px; box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+[data-theme="dark"] .card, [data-theme="dark"] .cat-pill { border-color: rgba(255,255,255,0.08); }
+[data-theme="dark"] .cat-icon { box-shadow: 0 0 0 1px rgba(255,255,255,0.12); }
+@media (prefers-reduced-motion: reduce) { .card, .cat-pill, .card:hover, .cat-pill:hover { transition: none; transform: none; } }

@@ -29,14 +29,23 @@ const CONFIG = {
         SERVICE_ID: "service_6pduwrq",
         TEMPLATE_ID: "template_acxekdc"
     },
-    // ⚠️ À compléter : URL d'une vraie photo pour chaque catégorie (depuis Unsplash/Pexels ou tes propres photos produits)
+    // Vraies photos des catégories (Unsplash, licence libre). Si l'admin téléverse une photo
+    // (Paramètres), elle remplace celle-ci. Pour changer une photo : coller une autre adresse ici.
     CATEGORY_IMAGES: {
-        "Téléphonie": "",
-        "Accessoires": "",
-        "Électronique": "",
+        "Téléphonie": "https://images.unsplash.com/photo-1619287032765-de47edc49091?w=600&h=600&fit=crop&q=70&auto=format",
+        "Accessoires": "https://images.unsplash.com/photo-1596628319258-c6f3f387a1ed?w=600&h=600&fit=crop&q=70&auto=format",
+        "Électronique": "https://images.unsplash.com/photo-1584907797075-c5308ada266f?w=600&h=600&fit=crop&q=70&auto=format",
         "Gaming": "",
         "Réseau": "",
         "Flash": ""
+    },
+    // Petites photos qui remplacent les emojis (miniatures rondes) : emoji -> identifiant Unsplash.
+    // Un emoji absent de cette liste reste un emoji. Si la photo ne charge pas, l'emoji revient.
+    // Pour en ajouter : coller l'identifiant "photo-XXXX" de l'adresse images.unsplash.com/photo-XXXX
+    ICON_PHOTOS: {
+        "📱": { id: "photo-1619287032765-de47edc49091", alt: "Smartphone" },
+        "🎧": { id: "photo-1596628319258-c6f3f387a1ed", alt: "Casque audio" },
+        "💻": { id: "photo-1584907797075-c5308ada266f", alt: "Ordinateur portable" }
     }
 };
 
