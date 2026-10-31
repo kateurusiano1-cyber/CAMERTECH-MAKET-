@@ -29,32 +29,14 @@ const CONFIG = {
         SERVICE_ID: "service_6pduwrq",
         TEMPLATE_ID: "template_acxekdc"
     },
-    // Vraies photos des catégories (Unsplash, licence libre). Si l'admin téléverse une photo
-    // (Paramètres), elle remplace celle-ci. Pour changer une photo : coller une autre adresse ici.
+    // ⚠️ À compléter : URL d'une vraie photo pour chaque catégorie (depuis Unsplash/Pexels ou tes propres photos produits)
     CATEGORY_IMAGES: {
-        "Téléphonie": "https://images.unsplash.com/photo-1619287032765-de47edc49091?w=600&h=600&fit=crop&q=70&auto=format",
-        "Accessoires": "https://images.unsplash.com/photo-1596628319258-c6f3f387a1ed?w=600&h=600&fit=crop&q=70&auto=format",
-        "Électronique": "https://images.unsplash.com/photo-1584907797075-c5308ada266f?w=600&h=600&fit=crop&q=70&auto=format",
-        "Gaming": "https://images.unsplash.com/photo-1482855549413-2a6c9b1955a7?w=600&h=600&fit=crop&q=70&auto=format",
-        "Réseau": "https://images.unsplash.com/photo-1745847768408-b7b83796cae6?w=600&h=600&fit=crop&q=70&auto=format",
+        "Téléphonie": "",
+        "Accessoires": "",
+        "Électronique": "",
+        "Gaming": "",
+        "Réseau": "",
         "Flash": ""
-    },
-    // Petites photos qui remplacent les emojis (miniatures rondes) : emoji -> identifiant Unsplash.
-    // Un emoji absent de cette liste reste un emoji. Si la photo ne charge pas, l'emoji revient.
-    // Pour en ajouter : coller l'identifiant "photo-XXXX" de l'adresse images.unsplash.com/photo-XXXX
-    ICON_PHOTOS: {
-        "📱": { id: "photo-1619287032765-de47edc49091", alt: "Smartphone" },
-        "🎧": { id: "photo-1596628319258-c6f3f387a1ed", alt: "Casque audio" },
-        "💻": { id: "photo-1584907797075-c5308ada266f", alt: "Ordinateur portable" },
-        "🎮": { id: "photo-1482855549413-2a6c9b1955a7", alt: "Manette de jeu" },
-        "📡": { id: "photo-1745847768408-b7b83796cae6", alt: "Routeur Wi-Fi" },
-        "📦": { id: "photo-1631010231931-d2c396b444ec", alt: "Colis" },
-        "🔎": { id: "photo-1626148749358-5b3b3f45b41a", alt: "Loupe de recherche" },
-        "🔍": { id: "photo-1626148749358-5b3b3f45b41a", alt: "Loupe de recherche" },
-        "📷": { id: "photo-1516852294404-5423eaa0d4a9", alt: "Appareil photo" },
-        "📞": { id: "photo-1499159058454-75067059248a", alt: "Téléphone" },
-        "🛒": { id: "photo-1601598505513-7489a6272d2a", alt: "Chariot d'achat" },
-        "🚚": { id: "photo-1579992822406-2092a7bd5a36", alt: "Camionnette de livraison" }
     }
 };
 

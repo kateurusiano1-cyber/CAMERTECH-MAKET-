@@ -5,7 +5,7 @@
 // servies depuis le cache, pour ne jamais afficher de stock/prix/statut
 // périmé au client.
 
-const CACHE_NOM = 'kapmaket-cache-v25';
+const CACHE_NOM = 'kapmaket-cache-v26';
 const FICHIERS_STATIQUES = [
     '/', '/index.html', '/style.css', '/script.js', '/config.js',
     '/logo.png', '/logo-panier.png', '/icon-192.png', '/icon-512.png', '/favicon.ico', '/favicon-32.png', '/manifest.json',

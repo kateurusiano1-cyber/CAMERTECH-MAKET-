@@ -916,7 +916,7 @@ const I18N = {
         nav_suivi: '🚚 Suivi de commande', nav_loc: '🏪 Localisation boutique', nav_contact: '📞 Nous contacter', nav_retour: '🔄 Politique de retour', nav_politique: '🔒 Politique de confidentialité',
         pref_langue: '🌍 Langue', pref_sombre: '🌙 Mode sombre', pref_zone: '📍 Ma zone', pref_prixmax: '💰 Prix max (FCFA)',
         choisir: 'Choisir...', retrait_gratuit: '🏪 Retrait gratuit',
-        rechercher_ph: 'Rechercher un produit...', btn_connexion: '👤 Connexion',
+        rechercher_ph: '🔎 Rechercher un produit...', btn_connexion: '👤 Connexion',
         titre_flash: '⚡ Ventes Flash', titre_produits: '🛒 Nos Produits', chargement: 'Chargement...',
         footer_sub: 'Votre boutique tech à Douala', footer_copy: '© {annee} Kapmaket — Douala, Cameroun',
         tab_connexion: 'Connexion', tab_inscription: 'Inscription', titre_connexion: '👤 Connexion',
@@ -945,7 +945,7 @@ const I18N = {
         nav_suivi: '🚚 Track Order', nav_loc: '🏪 Store Location', nav_contact: '📞 Contact Us', nav_retour: '🔄 Return Policy', nav_politique: '🔒 Privacy Policy',
         pref_langue: '🌍 Language', pref_sombre: '🌙 Dark Mode', pref_zone: '📍 My Area', pref_prixmax: '💰 Max Price (FCFA)',
         choisir: 'Choose...', retrait_gratuit: '🏪 Free pickup',
-        rechercher_ph: 'Search a product...', btn_connexion: '👤 Login',
+        rechercher_ph: '🔎 Search a product...', btn_connexion: '👤 Login',
         titre_flash: '⚡ Flash Sales', titre_produits: '🛒 Our Products', chargement: 'Loading...',
         footer_sub: 'Your tech shop in Douala', footer_copy: '© {annee} Kapmaket — Douala, Cameroon',
         tab_connexion: 'Login', tab_inscription: 'Sign up', titre_connexion: '👤 Login',
@@ -4201,65 +4201,3 @@ async function envoyerDemandeRetour() {
         setTimeout(() => closeOverlay('demande-retour-overlay'), 1500);
     } catch(e) { err.style.color='var(--danger)'; err.textContent = '❌ ' + e.message; }
 }
-
-// ===== EMOJIS → PETITES PHOTOS RÉELLES (Unsplash) =====
-// Remplace, dans tout le site, chaque emoji listé dans CONFIG.ICON_PHOTOS par une miniature ronde
-// <img class="cat-icon">. Si la photo ne charge pas, l'emoji d'origine est remis (jamais de cadre vide).
-function creerIconePhoto(emoji) {
-    const cfg = CONFIG.ICON_PHOTOS[emoji];
-    const base = 'https://images.unsplash.com/' + cfg.id + '?fit=crop&q=60&auto=format';
-    const img = document.createElement('img');
-    img.className = 'cat-icon';
-    img.src = base + '&w=48&h=48';
-    img.srcset = base + '&w=48&h=48 1x, ' + base + '&w=96&h=96 2x';
-    img.alt = cfg.alt; img.width = 22; img.height = 22;
-    img.loading = 'lazy'; img.decoding = 'async';
-    img.onerror = () => {
-        const s = document.createElement('span');
-        s.className = 'cat-icon-fallback'; s.setAttribute('data-no-photo', ''); s.textContent = emoji;
-        img.replaceWith(s);
-    };
-    return img;
-}
-function remplacerEmojisParPhotos(racine) {
-    const cles = Object.keys(CONFIG.ICON_PHOTOS || {});
-    if (!cles.length || !racine || !racine.textContent) return;
-    const re = new RegExp('(' + cles.join('|') + ')\\uFE0F?', 'g');
-    if (!re.test(racine.textContent)) return;
-    re.lastIndex = 0;
-    const walker = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT, {
-        acceptNode(n) {
-            const p = n.parentElement;
-            if (!p || p.closest('script,style,textarea,input,option,[data-no-photo]')) return NodeFilter.FILTER_REJECT;
-            re.lastIndex = 0;
-            return re.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-        }
-    });
-    const noeuds = []; while (walker.nextNode()) noeuds.push(walker.currentNode);
-    noeuds.forEach(n => {
-        const frag = document.createDocumentFragment(); let dernier = 0; re.lastIndex = 0; let m;
-        const txt = n.nodeValue;
-        while ((m = re.exec(txt))) {
-            if (m.index > dernier) frag.appendChild(document.createTextNode(txt.slice(dernier, m.index)));
-            frag.appendChild(creerIconePhoto(m[1]));
-            dernier = m.index + m[0].length;
-        }
-        if (dernier < txt.length) frag.appendChild(document.createTextNode(txt.slice(dernier)));
-        n.replaceWith(frag);
-    });
-}
-document.addEventListener('DOMContentLoaded', () => {
-    remplacerEmojisParPhotos(document.body);
-    let file = new Set(), minuteur = null;
-    new MutationObserver(muts => {
-        muts.forEach(m => {
-            if (m.type === 'characterData') { if (m.target.parentElement) file.add(m.target.parentElement); }
-            else m.addedNodes.forEach(n => { if (n.nodeType === 1) file.add(n); else if (n.nodeType === 3 && n.parentElement) file.add(n.parentElement); });
-        });
-        if (!file.size || minuteur) return;
-        minuteur = setTimeout(() => {
-            const aTraiter = [...file]; file = new Set(); minuteur = null;
-            aTraiter.forEach(el => { if (el.isConnected) remplacerEmojisParPhotos(el); });
-        }, 120);
-    }).observe(document.body, { childList: true, subtree: true, characterData: true });
-});
