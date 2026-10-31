@@ -942,3 +942,4 @@ body.mode-recherche .section-hdr > div { flex-wrap: wrap; }
 #btn-recherche-photo .cat-icon, #search-compact-btn .cat-icon { width: 26px; height: 26px; margin: 0; vertical-align: middle; }
 .header-search-tip .cat-icon { width: 16px; height: 16px; margin-right: 4px; vertical-align: -0.25em; }
 footer .cat-icon, .footer .cat-icon { width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; }
+h1 .cat-icon, h2 .cat-icon, h3 .cat-icon { width: 1.05em; height: 1.05em; margin-right: 8px; vertical-align: -0.18em; }

@@ -52,7 +52,9 @@ const CONFIG = {
         "🔎": { id: "photo-1626148749358-5b3b3f45b41a", alt: "Loupe de recherche" },
         "🔍": { id: "photo-1626148749358-5b3b3f45b41a", alt: "Loupe de recherche" },
         "📷": { id: "photo-1516852294404-5423eaa0d4a9", alt: "Appareil photo" },
-        "📞": { id: "photo-1499159058454-75067059248a", alt: "Téléphone" }
+        "📞": { id: "photo-1499159058454-75067059248a", alt: "Téléphone" },
+        "🛒": { id: "photo-1601598505513-7489a6272d2a", alt: "Chariot d'achat" },
+        "🚚": { id: "photo-1579992822406-2092a7bd5a36", alt: "Camionnette de livraison" }
     }
 };
 
